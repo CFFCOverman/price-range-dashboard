@@ -40,8 +40,44 @@ const LOGIN_ONLY = process.argv.includes('--login');
 const HEADLESS = false;                            // FactSet 登录/SSO 建议始终有头运行
 // ========================================
 
-const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
+/* ============ 进度条(TTY 动态刷新;无终端时打印里程碑) ============ */
+const isTTY = !!process.stdout.isTTY;
+let barState = null;
+function drawBar() {
+  if (!barState || !isTTY) return;
+  const { done, total, label } = barState;
+  const W = 26, f = Math.min(W, Math.round(done / total * W));
+  const pct = String(Math.round(done / total * 100)).padStart(3);
+  process.stdout.write('\r[' + '█'.repeat(f) + '░'.repeat(W - f) + '] ' + pct + '% (' + done + '/' + total + ') ' + String(label).slice(0, 50) + '    ');
+}
+function barClear() { if (isTTY && barState) process.stdout.write('\r' + ' '.repeat(110) + '\r'); }
+function bar(done, total, label) {
+  barState = { done, total, label };
+  if (isTTY) drawBar();
+  else console.log(`[进度 ${Math.round(done / total * 100)}%] (${done}/${total}) ${label}`);
+}
+function barEnd() { if (isTTY && barState) { drawBar(); process.stdout.write('\n'); } barState = null; }
+const log = (...a) => { barClear(); console.log(new Date().toISOString().slice(11, 19), ...a); drawBar(); };
 fs.mkdirSync(OUT_DIR, { recursive: true });
+
+/* ============ 源出清单:fetcher/sources.txt(第二个管理文件,自动维护 文件↔FactSet源头 对照) ============ */
+const SOURCES_FILE = path.join(SCRIPT_DIR, 'sources.txt');
+const sourceMap = new Map();
+try {
+  if (fs.existsSync(SOURCES_FILE)) {
+    for (const line of fs.readFileSync(SOURCES_FILE, 'utf8').split(/\r?\n/)) {
+      if (!line.trim() || line.startsWith('#')) continue;
+      const i = line.indexOf(' | ');
+      if (i > 0) sourceMap.set(line.slice(0, i).trim(), line);
+    }
+  }
+} catch {}
+function recordSource(file, src) { sourceMap.set(file, file + ' | ' + src); }
+function writeSources() {
+  const head = '# 数据源出清单 — 由 factset-fetch 自动维护(每次拉取更新对应条目,勿手改格式)\n'
+    + '# 格式: 文件名 | FactSet 页签路径 | 财年/内容 | 表格说明 | URL | 抓取时间(UTC)\n';
+  fs.writeFileSync(SOURCES_FILE, head + [...sourceMap.values()].sort().join('\n') + '\n');
+}
 
 /* --selftest:不开浏览器,验证核心逻辑(财年判定/标签位移/xlsx 写读回) */
 if (process.argv.includes('--selftest')) {
@@ -103,16 +139,22 @@ if (!LOGIN_ONLY && process.stdin.isTTY) {   /* 无终端(如定时任务)时跳�
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const ask = q => Promise.race([rl.question(q), new Promise(res => rl.once('close', () => res('')))]);
   printList(TICKERS);
-  console.log('操作:输代码添加(可多个,逗号/空格分隔)| -代码 删除 | edit 用记事本编辑 | 回车 开始拉取');
+  console.log('操作:输代码添加(可多个,逗号/空格分隔)| -代码 删除 | edit 编辑清单 | sources 查看源出台账 | 回车 开始拉取');
   while (true) {
     const ans = (await ask('> ')).trim();
     if (!ans) break;
     if (/^edit$/i.test(ans)) {
       saveTickers(TICKERS);
       exec(`start notepad "${TICKERS_FILE}"`);
-      await ask('已打开记事本 —— 编辑保存后回到这里按回车刷新清单 ');
+      await ask('已打开记事本(tickers.txt)—— 编辑保存后回到这里按回车刷新清单 ');
       TICKERS = loadTickers();
       printList(TICKERS);
+      continue;
+    }
+    if (/^(sources|src)$/i.test(ans)) {
+      if (!fs.existsSync(SOURCES_FILE)) writeSources();
+      exec(`start notepad "${SOURCES_FILE}"`);
+      console.log('已打开源出台账(sources.txt,只读性质——每次拉取自动更新,手改会被覆盖)');
       continue;
     }
     for (let tok of ans.split(/[,,;\s]+/).filter(Boolean)) {
@@ -247,7 +289,7 @@ function saveEstimateXlsx(ticker, fyTag, rows, srcInfo) {
   XLSX.writeFile(wb, f);
   const span = data.length > 1 ? `${data[data.length - 1][0]} ~ ${data[0][0]}` : data[0][0];
   log(`  ✔ ${path.basename(f)} (${data.length} 行, ${span})`);
-  log(`     源出: ${src}`);
+  recordSource(path.basename(f), src);
   return true;
 }
 
@@ -292,7 +334,7 @@ async function fetchCharting(ticker) {
     const f = path.join(OUT_DIR, `${ticker} Daily Charting.xlsx`);
     await download.saveAs(f);
     log(`  ✔ ${path.basename(f)}`);
-    log(`     源出: FactSet 页签: Charting > 下载菜单 > Download data to Excel | 表格: 价格/成交量及图上指标序列(频率与年限按你账号保存的图表设置) | ${BASE}/workstation/charting/`);
+    recordSource(path.basename(f), `FactSet 页签: Charting > 下载菜单 > Download data to Excel | ${ticker} | 表格: 价格/成交量及图上指标序列(频率与年限按账号保存的图表设置) | ${BASE}/workstation/charting/ | ${new Date().toISOString().slice(0, 16)}Z`);
     return true;
   } catch (e) {
     log(`  ⚠ ${ticker} Charting 自动导出失败(UI 可能改版),请手动导一次:`, e.message.split('\n')[0]);
@@ -306,21 +348,28 @@ const priceRows = [['ticker', 'name', 'currency', 'price', 'price_date',
 const today = new Date().toISOString().slice(0, 10);
 
 const results = {};
+const TOTAL = TICKERS.length * 4;   /* 每家 4 步:当前财年 / 另一财年 / 价格 / 日线 */
+let done = 0;
 for (const ticker of TICKERS) {
   log(`==== ${ticker} ====`);
   const R = results[ticker] = { FY1: false, FY2: false, 价格: false, 日线: false };
+  const base = done;
   try {
+    bar(done, TOTAL, `${ticker} · 打开 Estimate History…`);
     const { nav, tbl } = await openEstimateHistory(ticker);
     const price = await scrapePrice();
     const p0 = await currentPeriod();
     const tag0 = (p0 ? fyTag(p0) : null) || 'FY1';
+    bar(done, TOTAL, `${ticker} · 抓取 ${tag0}(${p0 || '?'})…`);
     const ehUrl = `${BASE}/workstation/navigator/company-security/estimate-history/${ticker}`;
     const srcOf = lbl => `FactSet 页签: Company/Security > Estimates > Estimate History | 财年 ${lbl} | 表格: 逐月一致预期(Mean/Low/High/上调下调家数/P⁄E) | ${ehUrl} | 抓取于 ${new Date().toISOString().slice(0, 16)}Z`;
     log(`  当前财年: ${p0}(${tag0})  价格: ${price}`);
     R[tag0] = saveEstimateXlsx(ticker, tag0, await scrapeTable(tbl), srcOf(p0 || tag0));
+    bar(++done, TOTAL, `${ticker} · ${tag0} 完成`);
     /* 切到"另一个"财年:当前是 FY1 → +1 年;当前是 FY2 → −1 年 */
     if (p0 && (tag0 === 'FY1' || tag0 === 'FY2')) {
       const other = shiftLabel(p0, tag0 === 'FY1' ? 1 : -1);
+      bar(done, TOTAL, `${ticker} · 切换财年 → ${other}…`);
       if (await switchPeriod(other)) {
         const tblO = nav.frameLocator('iframe[src*="estimate-reports"]');
         await page.waitForTimeout(1500);
@@ -329,22 +378,29 @@ for (const ticker of TICKERS) {
         log(`  ⚠ 财年切换到 ${other} 失败,本轮只有 ${tag0};可在 FactSet 手动切换后重跑`);
       }
     }
+    bar(++done, TOTAL, `${ticker} · 财年数据完成`);
     if (isFinite(price)) {
       priceRows.push([ticker, ticker, 'USD', price, today, '', '', '', '', '', '']);
       R.价格 = true;
-      log(`     源出: Estimate History 页头价格标签 (${ehUrl})`);
     }
+    bar(++done, TOTAL, `${ticker} · Charting 日线导出…`);
     R.日线 = await fetchCharting(ticker);
+    bar(++done, TOTAL, `${ticker} · 完成`);
   } catch (e) {
     log(`  ✖ ${ticker} 失败:`, e.message.split('\n')[0]);
+    done = base + 4;
+    bar(done, TOTAL, `${ticker} · 跳过`);
   }
 }
+barEnd();
 
 if (priceRows.length > 1) {
   fs.writeFileSync(path.join(OUT_DIR, 'companies.csv'), priceRows.map(r => r.join(',')).join('\n'));
   log('✔ companies.csv(价格汇总;EPS 列留空由 Estimate History 补全)');
-  log('   源出: 各公司 Estimate History 页头实时价格,汇总生成');
+  recordSource('companies.csv', `FactSet 页签: Company/Security > Estimates > Estimate History | 各公司页头实时价格汇总 | ${priceRows.length - 1} 家 | ${BASE}/workstation/navigator/company-security/estimate-history/ | ${new Date().toISOString().slice(0, 16)}Z`);
 }
+writeSources();
+log(`✔ 源出清单已更新: ${SOURCES_FILE}`);
 /* ============ 拉取结果清单 ============ */
 console.log('\n================ 拉取结果 ================');
 for (const [tk, R] of Object.entries(results)) {
