@@ -1,0 +1,1709 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="author" content="Xuhao Chao">
+<title>股价区间仪表盘 · Price Range Dashboard</title>
+<style>
+:root { color-scheme: light dark; }
+.app {
+  color-scheme: light;
+  --page:         #f9f9f7;
+  --surface-1:    #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary:#52514e;
+  --text-muted:   #898781;
+  --grid:         #e1e0d9;
+  --axis:         #c3c2b7;
+  --border:       rgba(11,11,11,0.10);
+  --series-1:     #2a78d6;
+  --series-2:     #eb6834;
+  --delta-up:     #006300;
+  --delta-down:   #d03b3b;
+  --wash:         rgba(42,120,214,0.10);
+  --wash-strong:  rgba(42,120,214,0.28);
+  --ghost:        rgba(11,11,11,0.045);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .app {
+    color-scheme: dark;
+    --page:         #0d0d0d;
+    --surface-1:    #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary:#c3c2b7;
+    --text-muted:   #898781;
+    --grid:         #2c2c2a;
+    --axis:         #383835;
+    --border:       rgba(255,255,255,0.10);
+    --series-1:     #3987e5;
+    --series-2:     #d95926;
+    --delta-up:     #0ca30c;
+    --delta-down:   #e66767;
+    --wash:         rgba(57,135,229,0.14);
+    --wash-strong:  rgba(57,135,229,0.34);
+    --ghost:        rgba(255,255,255,0.06);
+  }
+}
+:root[data-theme="dark"] .app {
+  color-scheme: dark;
+  --page:         #0d0d0d;
+  --surface-1:    #1a1a19;
+  --text-primary: #ffffff;
+  --text-secondary:#c3c2b7;
+  --text-muted:   #898781;
+  --grid:         #2c2c2a;
+  --axis:         #383835;
+  --border:       rgba(255,255,255,0.10);
+  --series-1:     #3987e5;
+  --series-2:     #d95926;
+  --delta-up:     #0ca30c;
+  --delta-down:   #e66767;
+  --wash:         rgba(57,135,229,0.14);
+  --wash-strong:  rgba(57,135,229,0.34);
+  --ghost:        rgba(255,255,255,0.06);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.app[data-lang="en"] .lz { display: none !important; }
+.app:not([data-lang="en"]) .le { display: none !important; }
+html, body { margin: 0; padding: 0; }
+.app {
+  min-height: 100vh;
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 20px 24px 64px; }
+header.top { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 10px 0 18px; }
+header.top h1 { font-size: 20px; font-weight: 650; margin: 0; }
+header.top .sub { color: var(--text-secondary); font-size: 13px; }
+.spacer { flex: 1; }
+button, .btn {
+  font: inherit; color: var(--text-primary);
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+button:hover, .btn:hover { background: var(--ghost); }
+button.primary { background: var(--series-1); color: #fff; border-color: transparent; }
+button.primary:hover { filter: brightness(1.06); }
+a.dl { color: var(--series-1); text-decoration: none; border-bottom: 1px solid var(--border); }
+.card {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 20px; margin-bottom: 18px;
+}
+.card h2 { font-size: 15px; font-weight: 650; margin: 0 0 4px; }
+.card .hint { color: var(--text-muted); font-size: 12.5px; margin: 0 0 12px; }
+.drop {
+  border: 1.5px dashed var(--axis); border-radius: 10px;
+  padding: 18px; text-align: center; color: var(--text-secondary);
+  transition: background .15s;
+}
+.drop.over { background: var(--wash); border-color: var(--series-1); }
+.drop input { display: none; }
+.loadrow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.status { font-size: 12.5px; color: var(--text-secondary); }
+.status .ok { color: var(--delta-up); font-weight: 600; }
+.status .warn { color: var(--delta-down); font-weight: 600; }
+details.help { margin-top: 12px; font-size: 12.5px; color: var(--text-secondary); }
+details.help summary { cursor: pointer; color: var(--text-primary); font-weight: 600; }
+details.help code {
+  background: var(--ghost); border-radius: 4px; padding: 1px 5px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px;
+}
+details.help table { border-collapse: collapse; margin: 8px 0; }
+details.help th, details.help td { border: 1px solid var(--grid); padding: 4px 9px; text-align: left; }
+/* ---- overview table ---- */
+table.ov { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+table.ov th {
+  text-align: right; font-size: 12px; font-weight: 600; color: var(--text-muted);
+  padding: 6px 10px; border-bottom: 1px solid var(--grid); cursor: pointer; user-select: none;
+  white-space: nowrap;
+}
+table.ov th:first-child, table.ov td:first-child { text-align: left; }
+table.ov th.sorted { color: var(--text-primary); }
+table.ov td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+table.ov tr.rowc { cursor: pointer; }
+table.ov tr.rowc:hover td { background: var(--ghost); }
+table.ov tr.sel td { background: var(--wash); }
+table.ov td .nm { font-weight: 600; }
+table.ov td .tk { color: var(--text-muted); font-size: 12px; margin-left: 6px; }
+.pos { color: var(--delta-up); } .neg { color: var(--delta-down); }
+/* mini range track in table rows */
+.mini { display: inline-block; width: 130px; height: 14px; position: relative; vertical-align: middle; }
+.mini .track { position: absolute; left: 0; right: 0; top: 6px; height: 2px; background: var(--grid); border-radius: 1px; }
+.mini .band { position: absolute; top: 4px; height: 6px; background: var(--wash-strong); border-radius: 3px; }
+.mini .now { position: absolute; top: 2px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--series-2); border: 2px solid var(--surface-1); transform: translateX(-50%); }
+/* ---- detail ---- */
+.detrow { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.detcol { flex: 1 1 420px; min-width: 320px; }
+.dethead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.dethead .price { font-size: 30px; font-weight: 650; }
+.dethead .cur { color: var(--text-muted); font-size: 12px; }
+select, input[type="number"] {
+  font: inherit; color: var(--text-primary); background: var(--surface-1);
+  border: 1px solid var(--axis); border-radius: 7px; padding: 5px 8px;
+}
+input[type="number"] { width: 86px; text-align: right; font-variant-numeric: tabular-nums; }
+.tabs { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.tabs button { border: 0; border-radius: 0; padding: 5px 14px; background: transparent; }
+.tabs button.on { background: var(--series-1); color: #fff; }
+.formrow { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin: 10px 0 4px; }
+.formrow label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 3px; }
+.kpis { display: flex; gap: 12px; flex-wrap: wrap; margin: 14px 0 6px; }
+.tile { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; min-width: 148px; }
+.tile .lb { font-size: 12px; color: var(--text-muted); }
+.tile .vl { font-size: 21px; font-weight: 650; margin-top: 2px; }
+.tile .dt { font-size: 12px; margin-top: 2px; }
+/* matrix */
+table.mx { border-collapse: collapse; font-variant-numeric: tabular-nums; margin-top: 8px; width: 100%; }
+table.mx th, table.mx td { padding: 7px 10px; text-align: right; border: 1px solid var(--grid); font-size: 13px; }
+table.mx th { font-weight: 600; color: var(--text-muted); font-size: 12px; }
+table.mx th:first-child { text-align: left; }
+table.mx td:first-child { text-align: left; color: var(--text-secondary); font-size: 12.5px; white-space: nowrap; }
+table.mx td .sub { display: block; font-size: 11px; }
+table.mx td.med { font-weight: 650; }
+table.mx td.base { outline: 2px solid var(--series-1); outline-offset: -2px; border-radius: 2px; }
+/* charts */
+.chartbox { position: relative; margin-top: 10px; }
+.chartbox svg { display: block; width: 100%; height: auto; }
+.tip {
+  position: absolute; pointer-events: none; z-index: 5; display: none;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 10px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.13);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.tip .v { font-weight: 650; font-size: 13px; }
+.tip .k { color: var(--text-secondary); }
+.tip .key { display: inline-block; width: 12px; height: 2.5px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.legendline { display: flex; gap: 16px; align-items: center; font-size: 12px; color: var(--text-secondary); margin-top: 6px; flex-wrap: wrap; }
+.legendline .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+.legendline .ln { display: inline-block; width: 14px; height: 2.5px; border-radius: 2px; vertical-align: 3px; margin-right: 5px; }
+.legendline .dt2 { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: -1px; margin-right: 5px; }
+.footnote { color: var(--text-muted); font-size: 12px; margin-top: 14px; }
+.empty { color: var(--text-muted); padding: 22px 0; text-align: center; }
+svg text { font-family: inherit; }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+<div class="wrap">
+
+<header class="top">
+  <h1><span class="lz">股价区间仪表盘</span><span class="le">Price Range Dashboard</span></h1>
+  <span class="sub"><span class="lz">乘数法:EPS 预测区间 × 历史估值分位 → 隐含价格区间</span><span class="le">Multiples method: EPS forecast range × historical valuation percentiles → implied price range</span></span>
+  <span class="spacer"></span>
+  <button id="langBtn" title="Switch language">EN</button>
+  <button id="themeBtn" title="切换主题"></button>
+</header>
+
+<section class="card">
+  <h2><span class="lz">数据导入</span><span class="le">Data import</span></h2>
+  <p class="hint"><span class="lz">从 FactSet 导出文件拖到下方即可,支持 CSV 和多种 xlsx 导出,可混合拖入。重复导入同名公司会互相补全。</span><span class="le">Drag FactSet exports below — CSV and several xlsx formats are recognized and can be mixed. Re-importing the same ticker merges data.</span></p>
+  <div class="drop" id="drop">
+    <span class="lz">将 <strong>companies.csv</strong> / <strong>history.csv</strong> / FactSet <strong>.xlsx</strong>(模型 / Estimate History / Snapshot)拖到这里,或</span>
+    <span class="le">Drop <strong>companies.csv</strong> / <strong>history.csv</strong> / FactSet <strong>.xlsx</strong> (model / Estimate History / Snapshot) here, or</span>
+    <label style="color:var(--series-1);cursor:pointer;text-decoration:underline"><span class="lz">点击选择文件</span><span class="le">browse files</span><input type="file" id="fileInput" accept=".csv,.xlsx,.xls,text/csv" multiple></label>
+  </div>
+  <div class="loadrow">
+    <button class="primary" id="dirBtn"><span class="lz">连接文件夹</span><span class="le">Connect folder</span></button>
+    <button id="rescanBtn" hidden><span class="lz">重新扫描</span><span class="le">Rescan</span></button>
+    <button id="reconnectBtn" hidden><span class="lz">重连上次文件夹</span><span class="le">Reconnect last folder</span></button>
+    <button id="demoBtn"><span class="lz">载入演示数据</span><span class="le">Load demo data</span></button>
+    <a class="dl" id="dlCompanies" download="companies_template.csv"><span class="lz">下载 companies 模板</span><span class="le">companies template</span></a>
+    <a class="dl" id="dlHistory" download="history_template.csv"><span class="lz">下载 history 模板</span><span class="le">history template</span></a>
+    <span class="status" id="status"><span class="lz">尚未载入数据。</span><span class="le">No data loaded yet.</span></span>
+  </div>
+  <details class="help">
+    <summary><span class="lz">CSV 字段说明 &amp; FactSet 取数提示 &amp; 方法说明</span><span class="le">File formats, FactSet field hints &amp; methodology notes</span></summary>
+    <div class="le">
+      <p><strong>companies.csv</strong> (one row per company): <code>ticker, name, currency, price, price_date, eps_fy1_low/_mean/_high, eps_fy2_low/_mean/_high</code>. FactSet: <code>FG_PRICE</code>, <code>FE_ESTIMATE("EPS","LOW|MEAN|HIGH",…)</code>.</p>
+      <p><strong>history.csv</strong> (one row per month, 5–10y recommended): <code>ticker, date, pe_ntm</code> (or <code>price</code> + <code>eps_ntm</code>; a <code>price</code> column also feeds the volatility band). FactSet: <code>FG_PE_NTM</code>.</p>
+      <p><strong>FactSet model .xlsx</strong> ("Earnings Per Share" block): reads FY1/FY2 annual EPS means; derives price from the Valuation block's FY1 forward PE.</p>
+      <p><strong>Estimate History .xlsx</strong>: reads latest consensus EPS low/mean/high and the monthly P/E series. It tracks a <strong>fixed fiscal year</strong>, so only the most recent 24 months are used for percentiles — for a true 5–10y valuation band export an NTM PE monthly series. The full price series (P/E × mean) still feeds the volatility band.</p>
+      <p><strong>Snapshot .xlsx</strong> ("Previous Close"): real closing price, 52-week range, analyst target/rating, annual PE references. Price precedence: manual &gt; snapshot/CSV &gt; model-derived.</p>
+      <p><strong>Other methods not computed here:</strong> DCF + sensitivity (needs cash-flow assumptions; unstable when near-term FCF is depressed by heavy capex), option-implied volatility bands (needs option IV data), technical support/resistance (needs daily price history). The statistical volatility band in the comparison panel uses realized monthly volatility: price × e<sup>±σ</sup> over one year, a 68% band under a lognormal assumption.</p>
+    </div>
+    <div class="lz">
+    <p><strong>companies.csv</strong>(每家公司一行):</p>
+    <table>
+      <tr><th>列</th><th>含义</th><th>FactSet 参考字段(以你的版本/授权为准)</th></tr>
+      <tr><td><code>ticker</code></td><td>代码(两个文件需一致)</td><td>—</td></tr>
+      <tr><td><code>name</code> <code>currency</code></td><td>名称、币种</td><td>—</td></tr>
+      <tr><td><code>price</code> <code>price_date</code></td><td>现价及日期</td><td><code>FG_PRICE</code></td></tr>
+      <tr><td><code>eps_fy1_low / _mean / _high</code></td><td>FY1 一致预期 EPS 低/均值/高</td><td><code>FE_ESTIMATE("EPS","LOW|MEAN|HIGH",…,+1)</code></td></tr>
+      <tr><td><code>eps_fy2_low / _mean / _high</code></td><td>FY2 同上</td><td>同上,期数 +2</td></tr>
+    </table>
+    <p><strong>history.csv</strong>(每家公司每月一行,建议 5–10 年):</p>
+    <table>
+      <tr><th>列</th><th>含义</th><th>FactSet 参考字段</th></tr>
+      <tr><td><code>ticker</code> <code>date</code></td><td>代码、月末日期 (YYYY-MM-DD)</td><td>—</td></tr>
+      <tr><td><code>pe_ntm</code></td><td>NTM 市盈率;也可改为提供 <code>price</code> + <code>eps_ntm</code> 两列,由 app 计算</td><td><code>FG_PE_NTM</code></td></tr>
+    </table>
+    <p>没有历史序列时,可以在公司详情里手动输入估值分位(P25/P50/P75)。</p>
+    <p><strong>FactSet 公司模型 .xlsx</strong>(含 "Earnings Per Share" 区块):自动读取 FY1/FY2 年度 EPS 预测均值,并用 Valuation 区块的 FY1 PE 反推现价。</p>
+    <p><strong>FactSet Estimate History .xlsx</strong>(含 "Estimate History" 表格):自动读取最新一致预期的 EPS 低/均/高,以及月度 P/E 序列并计算分位。注意:Estimate History 跟踪的是<strong>固定财年</strong>,窗口拉太长时早期 P/E 是"当时股价 ÷ 多年后盈利",口径与近期不可比,因此 app 最多采用最近 24 个月;真正的 5–10 年估值带请导出 <strong>NTM PE 月度序列</strong>(history.csv 格式)。</p>
+    <p><strong>FactSet Snapshot .xlsx</strong>(含 "Previous Close" 的快照页):自动读取真实收盘价、52 周区间、分析师目标价/评级和年度 PE 参考。现价来源优先级:手动输入 &gt; 快照/CSV 实价 &gt; 模型反推。所有文件可以同时拖入,互相补全同一家公司。首次解析 xlsx 需联网加载解析库。</p>
+    <p><strong>本工具未计算的其他测算方法:</strong>DCF + 敏感性矩阵(需现金流假设;近期 FCF 被大额资本开支压低的公司结果极不稳定)、期权隐含波动率区间(需期权 IV 数据)、技术面支撑/阻力(需日线价格)。方法对比面板里的"波动率统计区间"用已实现月度波动率计算:现价 × e<sup>±σ</sup>(一年期),对数正态假设下约 68% 概率带。history.csv 若含 <code>price</code> 列,也会用于波动率计算。</p>
+    </div>
+  </details>
+</section>
+
+<section class="card" id="ovCard" hidden>
+  <h2><span class="lz">公司总览 · 隐含上行/下行空间</span><span class="le">Overview · implied upside / downside</span></h2>
+  <p class="hint"><span class="lz">核心区间 = 悲观 EPS × PE 25 分位 ~ 乐观 EPS × PE 75 分位;中枢 = 基准 EPS × PE 中位数。点击行查看详情,点击表头排序。</span><span class="le">Core range = low EPS × P25 PE ~ high EPS × P75 PE; mid = mean EPS × median PE. Click a row for detail, click headers to sort.</span></p>
+  <div id="ovTableWrap"></div>
+  <div class="chartbox" id="ovChartBox">
+    <div id="ovChart"></div>
+    <div class="tip" id="ovTip"></div>
+  </div>
+  <div class="legendline">
+    <span><span class="sw" style="background:var(--wash-strong)"></span><span class="lz">核心区间(相对现价 %)</span><span class="le">Core range (% vs price)</span></span>
+    <span><span class="dt2" style="background:var(--series-1)"></span><span class="lz">中枢</span><span class="le">Mid</span></span>
+    <span><span class="lz">竖线 = 现价 (0%)</span><span class="le">Vertical line = current price (0%)</span></span>
+  </div>
+</section>
+
+<section class="card" id="detCard" hidden>
+  <h2><span class="lz">公司详情</span><span class="le">Company detail</span></h2>
+  <div class="formrow">
+    <div><label><span class="lz">公司</span><span class="le">Company</span></label><select id="coSel"></select></div>
+    <div><label><span class="lz">现价</span><span class="le">Price</span></label><input type="number" step="0.01" id="pxInput" placeholder="必填"></div>
+    <div><label><span class="lz">预测期</span><span class="le">Horizon</span></label>
+      <span class="tabs" id="hzTabs">
+        <button data-h="fy1" class="on">FY1</button><button data-h="fy2">FY2</button>
+      </span>
+    </div>
+    <div><label><span class="lz">EPS 悲观</span><span class="le">EPS low</span></label><input type="number" step="0.01" id="epsLow"></div>
+    <div><label><span class="lz">EPS 基准</span><span class="le">EPS base</span></label><input type="number" step="0.01" id="epsMean"></div>
+    <div><label><span class="lz">EPS 乐观</span><span class="le">EPS high</span></label><input type="number" step="0.01" id="epsHigh"></div>
+    <button id="epsReset"><span class="lz">重置 EPS</span><span class="le">Reset EPS</span></button>
+  </div>
+  <div class="formrow" id="peManualRow" hidden>
+    <span class="status warn-note" style="color:var(--delta-down)"><span class="lz">该公司无历史估值序列,请手动输入分位:</span><span class="le">No PE history for this company — enter percentiles manually:</span></span>
+    <div><label><span class="lz">PE 25分位</span><span class="le">PE P25</span></label><input type="number" step="0.1" id="peP25"></div>
+    <div><label><span class="lz">PE 中位数</span><span class="le">PE median</span></label><input type="number" step="0.1" id="peP50"></div>
+    <div><label><span class="lz">PE 75分位</span><span class="le">PE P75</span></label><input type="number" step="0.1" id="peP75"></div>
+  </div>
+
+  <div class="dethead" id="detHead"></div>
+  <div class="kpis" id="detKpis"></div>
+
+  <div class="detrow">
+    <div class="detcol">
+      <h2 style="font-size:13.5px;margin-top:10px"><span class="lz">情景矩阵:EPS × 估值分位 → 隐含股价</span><span class="le">Scenario matrix: EPS × PE percentile → implied price</span></h2>
+      <div id="mxWrap"></div>
+    </div>
+    <div class="detcol">
+      <h2 style="font-size:13.5px;margin-top:10px"><span class="lz">区间全景(现价所处位置)</span><span class="le">Range overview (where price sits)</span></h2>
+      <div class="chartbox"><div id="bulletChart"></div></div>
+      <div class="legendline">
+        <span><span class="sw" style="background:var(--wash)"></span><span class="lz">极端区间 P10–P90</span><span class="le">Extreme P10–P90</span></span>
+        <span><span class="sw" style="background:var(--wash-strong)"></span><span class="lz">核心区间 P25–P75</span><span class="le">Core P25–P75</span></span>
+        <span><span class="ln" style="background:var(--series-1)"></span><span class="lz">中枢</span><span class="le">Mid</span></span>
+        <span><span class="dt2" style="background:var(--series-2)"></span><span class="lz">现价</span><span class="le">Price</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="cmpSec" hidden>
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">方法对比(同一把价格尺)</span><span class="le">Method comparison (one shared price axis)</span></h2>
+    <div class="chartbox"><div id="cmpChart"></div></div>
+    <p class="hint" id="cmpNote" style="margin-top:6px"></p>
+  </div>
+
+  <div id="dirSec" hidden>
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">走向概率(六维信号 → 情景加权蒙特卡洛,6 个月)</span><span class="le">Direction probability (six-factor scenario-weighted Monte Carlo, 6 months)</span></h2>
+    <div class="formrow" id="dirChips"></div>
+    <div class="formrow">
+      <div><label title="FactSet: Markets→Economics;看10Y利率3个月趋势(降=+)、美元趋势、FOMC路径"><span class="lz">宏观面</span><span class="le">Macro</span></label><select id="dirMacro"></select></div>
+      <div><label title="FactSet: Charting加SOX指数看其与MA200关系;AMD/AVGO/TSM的Estimate History修正方向"><span class="lz">行业面</span><span class="le">Industry</span></label><select id="dirInd"></select></div>
+      <div><label title="FactSet: 债券指数页看高收益利差趋势(收窄=+);Options页看Put/Call与IV skew"><span class="lz">流动性/期权情绪</span><span class="le">Liquidity / options</span></label><select id="dirLiq"></select></div>
+    </div>
+    <div class="kpis" id="dirOut"></div>
+    <p class="hint" id="dirNote"></p>
+  </div>
+  <div id="peBandSec">
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">NTM 市盈率历史带(分位为水平参考线)</span><span class="le">NTM P/E history band (percentiles as reference lines)</span></h2>
+    <div class="chartbox" id="peBandBox">
+      <div id="peBandChart"></div>
+      <div class="tip" id="peTip"></div>
+    </div>
+    <p class="hint" id="peStatsLine" style="margin-top:6px"></p>
+  </div>
+
+  <p class="footnote"><span class="lz">方法说明:隐含价 = EPS 情景 × 历史 NTM PE 分位。区间反映"盈利预测不确定性 × 估值波动范围"的组合,不构成投资建议;估值分位基于导入的历史窗口,窗口选择本身即是假设。</span><span class="le">Method: implied price = EPS scenario × historical PE percentile. Ranges combine earnings uncertainty with valuation volatility; not investment advice. Percentiles depend on the imported history window — the window itself is an assumption.</span></p>
+</section>
+
+<p class="footnote" style="text-align:center;margin-top:26px">© 2026 Xuhao Chao · Price Range Dashboard v10 · MIT License · <span class="lz">所有数据仅在你的浏览器本地处理,不会上传</span><span class="le">All data is processed locally in your browser — nothing is uploaded</span></p>
+
+</div>
+</div>
+<script>
+'use strict';
+/* ================= utils ================= */
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+const NS = 'http://www.w3.org/2000/svg';
+const svgEl = (tag, attrs, text) => {
+  const n = document.createElementNS(NS, tag);
+  for (const k in (attrs || {})) n.setAttribute(k, attrs[k]);
+  if (text != null) n.textContent = text;
+  return n;
+};
+function percentile(sorted, p) {
+  if (!sorted.length) return NaN;
+  const idx = (sorted.length - 1) * p, lo = Math.floor(idx), hi = Math.ceil(idx);
+  return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+function rankPct(sorted, v) {
+  let c = 0; for (const x of sorted) if (x <= v) c++;
+  return Math.round(100 * c / sorted.length);
+}
+const fmtN = v => {
+  if (!isFinite(v)) return '—';
+  const a = Math.abs(v);
+  const d = a >= 1000 ? 0 : a >= 100 ? 1 : 2;
+  return v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+};
+const fmtPct = v => isFinite(v) ? (v > 0 ? '+' : '') + v.toFixed(1) + '%' : '—';
+const fmtX = v => isFinite(v) ? v.toFixed(1) + 'x' : '—';
+
+/* ================= CSV parsing ================= */
+function parseCSV(text) {
+  text = text.replace(/^﻿/, '');
+  const rows = []; let row = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else if (c === '"') inQ = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(field); field = '';
+      if (row.some(f => f.trim() !== '')) rows.push(row);
+      row = [];
+    } else field += c;
+  }
+  row.push(field);
+  if (row.some(f => f.trim() !== '')) rows.push(row);
+  if (!rows.length) return [];
+  const head = rows[0].map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+  return rows.slice(1).map(r => {
+    const o = {};
+    head.forEach((h, i) => o[h] = (r[i] || '').trim());
+    return o;
+  });
+}
+
+/* ================= state ================= */
+const SRC_RANK = { user: 3, file: 2, derived: 1 };   /* 现价来源优先级:手填 > 文件实价 > 模型反推 */
+const state = {
+  companies: new Map(),   // ticker -> {ticker,name,currency,price,priceSrc,priceDate,eps,extra}
+  history: new Map(),     // ticker -> [{date, pe}] sorted by date
+  priceHist: new Map(),   // ticker -> [{date, price}] sorted by date(用于波动率区间)
+  overrides: new Map(),   // `${ticker}|${hz}` -> {low,mean,high}
+  peManual: new Map(),    // ticker -> {p25,p50,p75}
+  dirManual: new Map(),   // ticker -> {m,i,l} 宏观/行业/流动性手动打分
+  selected: null,
+  horizon: 'fy1',
+  sortKey: 'midPct',
+  sortDir: -1,
+};
+
+/* ================= i18n(动态字符串;静态文本用 .lz/.le 成对元素) ================= */
+let LANG = 'zh';
+const I18N = {
+  zh: {
+    colCompany: '公司', colPrice: '现价', colLow: '核心下沿', colHigh: '核心上沿', colMid: '中枢空间', colPos: '现价位置(核心区间)',
+    rowNoCalc: '缺少估值分位或 EPS ≤ 0 — 点击行补充', noPx: '缺现价', priceZero: '现价 0%',
+    tipCore: '核心区间 ', tipMid: '中枢 ', tipPrice: '现价 ',
+    tMid: '中枢(基准 EPS × PE 中位)', tCore: '核心区间 P25–P75', tExt: '极端区间 P10–P90', tPe: '当前 NTM PE', tTgt: '分析师目标价(参考)',
+    vsPrice: ' vs 现价', histPct: n => '历史 ' + n + '% 分位',
+    needPct: '请在上方输入该公司的估值分位(P25 / P50 / P75)。', needEps: '缺少 EPS 预测(或基准 EPS ≤ 0),无法测算。',
+    mxCorner: 'EPS \\ 估值', mxMedian: 'PE 中位', mxOpt: '乐观 EPS ', mxBase: '基准 EPS ', mxPes: '悲观 EPS ',
+    mxUnit: cur => '单位:' + cur + ' · 括注为相对现价空间;方框标记 = 基准 × 中位数。',
+    blMid: '中枢 ', blPrice: '现价 ', peCur: '当前 ',
+    peStats: (n, a, b) => '样本 ' + n + ' 个月(' + a + ' ~ ' + b + ')', peMedianShort: '中位',
+    peShortWin: ' · ⚠ 样本不足 3 年,分位代表性有限', pctOf: n => '(' + n + '% 分位)',
+    stTotal: (n, m) => ' 当前:' + n + ' 家公司,' + m + ' 家有历史估值序列。',
+    demoLoaded: '已载入演示数据(数值为示意,非真实行情)。',
+    priceManual: '手动输入', priceSnap: '快照收盘价', priceDerived: '由模型 PE 反推', priceWait: '现价待输入',
+    themeNames: { auto: '主题:自动', light: '主题:亮色', dark: '主题:暗色' },
+    cmpCoreM: '乘数法核心 P25–P75', cmpExtM: '乘数法极端 P10–P90',
+    cmpVol: n => '波动率 ±1σ(1年,' + n + ' 个月价格)', cmpW52: '52周实际区间', cmpTgt: '分析师目标价',
+    cmpNote: '各方法回答的问题不同:乘数法是"值多少",波动率是"一年通常晃多远",52周是"实际走过哪里",目标价是"卖方怎么看"。多条带子重叠的价位,信息量最高。',
+    fsUnsupported: '此环境不支持文件夹访问(需 Chrome/Edge 本地打开);请继续用拖拽导入。',
+    fsScanned: (dir, n) => '已扫描文件夹 "' + dir + '":' + n + ' 个数据文件,按修改时间从旧到新导入(最新生效)。',
+    fsNoFiles: dir => '文件夹 "' + dir + '" 里没有 csv/xlsx 文件。',
+    fsDenied: '未获得文件夹读取权限。',
+    chartMsg: (tk, n, a, b) => tk + ' 价格序列 ' + n + ' 个点(' + a + ' ~ ' + b + ',用于波动率区间)',
+    chartLtm: v => ';当前 LTM PE ' + v + 'x(LTM 序列是趋势性口径,不用于分位测算,仅参考)',
+    chartNoTicker: 'Charting 文件无法确定属于哪家公司 — 请把 ticker 写进文件名(如 "NVDA-US Charting.xlsx")后重导',
+    psNoTicker: 'Price Summary 无法确定属于哪家公司 — 请把 ticker 写进文件名后重导',
+    psMsg: (tk, p) => tk + ' 最新价格 ' + p + '(Price Summary)',
+    dirOptions: [['+1', '明显利多'], ['+0.5', '偏多'], ['0', '中性/未评估'], ['-0.5', '偏空'], ['-1', '明显利空']],
+    dirChipRev: (u, d) => '修正动量 ' + u + '↑/' + d + '↓', dirChipVal: p => '估值位 ' + p + '% 分位',
+    dirChipTech: (a, b) => '技术 ' + (a ? 'MA50上' : 'MA50下') + '·' + (b ? 'MA200上' : 'MA200下'),
+    dirChipNA: '(缺数据)',
+    dirPUp: 'P(6个月后上涨)', dirPUp10: 'P(涨超 +10%)', dirPDn10: 'P(跌超 -10%)', dirMedian: '终点中位数',
+    dirWeights: (b, m, u) => '情景权重 熊 ' + b + '% / 中 ' + m + '% / 牛 ' + u + '%',
+    dirNote: (lo, md, hi) => '情景锚:熊 ' + lo + '(P10×悲观EPS)· 中 ' + md + '(现价,零重估)· 牛 ' + hi + '(PE中位×FY2均值)。自动信号来自已导入数据;三个手动维度默认中性,鼠标悬停标签查看 FactSet 取数指引。财报日前后请重新评估。不构成投资建议。',
+    dirNeedData: '需要现价与价格历史(日线/月度均可)才能计算方向概率。',
+    mEmptyFile: ':空文件或无法解析', mHistRows: n => ':读入 ' + n + ' 行历史估值', mCoRows: n => ':读入 ' + n + ' 家公司',
+    mBadCols: ':无法识别列名(需要 companies 或 history 模板格式)',
+    mXlsxNone: ':未识别(需含 "Earnings Per Share" / "Estimate History" / Snapshot "Previous Close" 之一)',
+    mNeedNet: '无法加载 xlsx 解析库(首次解析 xlsx 需联网)', mParseFail: ':解析失败 ',
+    gaapNote: (a, b) => ';注意 GAAP ' + a + ' 与 Non-GAAP ' + b + ' 差异较大,请确认与 PE 口径一致',
+    derivedNote: (p, pe) => ';现价 ≈ ' + p + '(FY1 PE ' + pe + 'x 反推,可手动修正)',
+    peRefNote: s => ';历史年度 PE 参考:' + s + '(点数太少,分位仍需月度序列或手动输入)',
+    estHead: (tk, d) => tk + ' 一致预期(' + d + ')EPS 低 ', estMid: ' / 均 ', estHigh: ' / 高 ',
+    peSeries: (n, a, b) => ';P/E 月度序列 ' + n + ' 个点(' + a + ' ~ ' + b + ')',
+    truncNote: n => '【原始 ' + n + ' 点,仅采用最近 24 个月:Estimate History 跟踪固定财年,早期 P/E 是"当时股价 ÷ 多年后盈利",与近期口径不可比;要用真正的多年估值带,请导出 NTM PE 月度序列(history.csv)】',
+    shortWin: ',窗口较短,分位代表性有限', keepLonger: n => ';已有更长的 PE 序列(' + n + ' 点),未覆盖',
+    jumpNote: p => ';注意:最新一致预期较上月变动 ' + p + ',可能含一次性损益,请核对口径',
+    snapHead: tk => tk + ' 快照:现价 ', snapClose: '(收盘)', snapW52: ' · 52周 ', snapTgt: ' · 分析师目标价 ',
+    snapPeRef: s => ';年度 PE 参考:' + s,
+    modelEpsNote: '(EPS 高低值缺失时用均值代替,可在详情里补)',
+  },
+  en: {
+    colCompany: 'Company', colPrice: 'Price', colLow: 'Core low', colHigh: 'Core high', colMid: 'Mid upside', colPos: 'Position in core range',
+    rowNoCalc: 'Missing PE percentiles or EPS ≤ 0 — click row to fill in', noPx: 'no price', priceZero: 'Price 0%',
+    tipCore: 'Core ', tipMid: 'Mid ', tipPrice: 'Price ',
+    tMid: 'Mid (base EPS × median PE)', tCore: 'Core range P25–P75', tExt: 'Extreme range P10–P90', tPe: 'Current NTM P/E', tTgt: 'Analyst target (ref)',
+    vsPrice: ' vs price', histPct: n => n + '% of history',
+    needPct: 'Enter PE percentiles (P25 / P50 / P75) above.', needEps: 'No EPS forecast (or base EPS ≤ 0) — cannot compute.',
+    mxCorner: 'EPS \\ multiple', mxMedian: 'Median PE', mxOpt: 'High EPS ', mxBase: 'Base EPS ', mxPes: 'Low EPS ',
+    mxUnit: cur => 'Unit: ' + cur + ' · sub-notes are % vs current price; box = base × median.',
+    blMid: 'Mid ', blPrice: 'Price ', peCur: 'Now ',
+    peStats: (n, a, b) => n + ' monthly obs (' + a + ' ~ ' + b + ')', peMedianShort: 'Median',
+    peShortWin: ' · ⚠ under 3y of data — percentiles are tentative', pctOf: n => ' (' + n + '%ile)',
+    stTotal: (n, m) => ' Now: ' + n + ' companies, ' + m + ' with PE history.',
+    demoLoaded: 'Demo data loaded (illustrative, not real quotes).',
+    priceManual: 'manual', priceSnap: 'snapshot close', priceDerived: 'derived from model PE', priceWait: 'price needed',
+    themeNames: { auto: 'Theme: Auto', light: 'Theme: Light', dark: 'Theme: Dark' },
+    cmpCoreM: 'Multiples core P25–P75', cmpExtM: 'Multiples extreme P10–P90',
+    cmpVol: n => 'Volatility ±1σ (1y, ' + n + ' monthly prices)', cmpW52: '52-week actual range', cmpTgt: 'Analyst target',
+    cmpNote: 'Each method answers a different question: multiples = what it is worth; volatility = how far a year typically swings; 52-week = where it actually traded; target = the sell side\'s view. Prices where several bands overlap carry the most information.',
+    fsUnsupported: 'Folder access is not available here (needs Chrome/Edge opening the local file); keep using drag & drop.',
+    fsScanned: (dir, n) => 'Scanned folder "' + dir + '": ' + n + ' data files, imported oldest→newest (latest wins).',
+    fsNoFiles: dir => 'No csv/xlsx files in folder "' + dir + '".',
+    fsDenied: 'Folder read permission was not granted.',
+    chartMsg: (tk, n, a, b) => tk + ' price series: ' + n + ' points (' + a + ' ~ ' + b + ', feeds the volatility band)',
+    chartLtm: v => '; current LTM PE ' + v + 'x (LTM series is trend-drifting — reference only, not used for percentiles)',
+    chartNoTicker: 'Cannot tell which company this Charting file belongs to — put the ticker in the filename (e.g. "NVDA-US Charting.xlsx") and re-import',
+    psNoTicker: 'Cannot tell which company this Price Summary belongs to — put the ticker in the filename and re-import',
+    psMsg: (tk, p) => tk + ' latest price ' + p + ' (Price Summary)',
+    dirOptions: [['+1', 'clearly bullish'], ['+0.5', 'lean bullish'], ['0', 'neutral / not assessed'], ['-0.5', 'lean bearish'], ['-1', 'clearly bearish']],
+    dirChipRev: (u, d) => 'Revisions ' + u + '↑/' + d + '↓', dirChipVal: p => 'Valuation ' + p + '%ile',
+    dirChipTech: (a, b) => 'Tech ' + (a ? '>MA50' : '<MA50') + '·' + (b ? '>MA200' : '<MA200'),
+    dirChipNA: '(no data)',
+    dirPUp: 'P(up in 6 months)', dirPUp10: 'P(gain > +10%)', dirPDn10: 'P(loss > -10%)', dirMedian: 'Median endpoint',
+    dirWeights: (b, m, u) => 'Scenario weights: bear ' + b + '% / base ' + m + '% / bull ' + u + '%',
+    dirNote: (lo, md, hi) => 'Anchors: bear ' + lo + ' (P10 × low EPS) · base ' + md + ' (current price, no repricing) · bull ' + hi + ' (median PE × FY2 mean). Auto signals come from imported data; the three manual factors default to neutral — hover their labels for FactSet sourcing hints. Re-assess around earnings. Not investment advice.',
+    dirNeedData: 'Needs current price and a price history (daily or monthly) to compute direction probability.',
+    mEmptyFile: ': empty or unparsable', mHistRows: n => ': read ' + n + ' PE history rows', mCoRows: n => ': read ' + n + ' companies',
+    mBadCols: ': unrecognized columns (need the companies or history template)',
+    mXlsxNone: ': unrecognized (needs "Earnings Per Share" / "Estimate History" / snapshot "Previous Close")',
+    mNeedNet: 'could not load xlsx parser (network needed on first xlsx)', mParseFail: ': parse failed ',
+    gaapNote: (a, b) => '; note: GAAP ' + a + ' vs non-GAAP ' + b + ' differ materially — check consistency with the PE series',
+    derivedNote: (p, pe) => '; price ≈ ' + p + ' (derived from FY1 PE ' + pe + 'x, adjustable)',
+    peRefNote: s => '; annual PE refs: ' + s + ' (too few points — percentiles still need a monthly series or manual input)',
+    estHead: (tk, d) => tk + ' consensus (' + d + ') EPS low ', estMid: ' / mean ', estHigh: ' / high ',
+    peSeries: (n, a, b) => '; P/E monthly series: ' + n + ' points (' + a + ' ~ ' + b + ')',
+    truncNote: n => ' [of ' + n + ' raw points only the last 24 months are used: Estimate History tracks a fixed fiscal year, so early P/E points price earnings many years out and are not comparable; for a true multi-year band export an NTM PE monthly series (history.csv)]',
+    shortWin: ', short window — percentiles are tentative', keepLonger: n => '; kept the existing longer PE series (' + n + ' points)',
+    jumpNote: p => '; note: latest consensus moved ' + p + ' vs prior month — possibly one-off items, check the basis',
+    snapHead: tk => tk + ' snapshot: price ', snapClose: ' (close)', snapW52: ' · 52wk ', snapTgt: ' · analyst target ',
+    snapPeRef: s => '; annual PE refs: ' + s,
+    modelEpsNote: ' (missing EPS low/high fall back to the mean — editable in detail)',
+  },
+};
+const t = k => (I18N[LANG][k] !== undefined ? I18N[LANG][k] : I18N.zh[k]);
+
+function ingestCompanies(recs) {
+  let n = 0;
+  for (const r of recs) {
+    const t = (r.ticker || '').toUpperCase();
+    if (!t || !r.price) continue;
+    const num = k => { const v = parseFloat(r[k]); return isFinite(v) ? v : NaN; };
+    const prev = state.companies.get(t);
+    const userPx = prev && prev.priceSrc === 'user';
+    state.companies.set(t, {
+      ticker: t,
+      name: r.name || t,
+      fullName: prev ? prev.fullName : undefined,
+      currency: (r.currency || '').toUpperCase(),
+      price: userPx ? prev.price : num('price'),
+      priceSrc: userPx ? 'user' : 'file',
+      priceDate: userPx ? prev.priceDate : (r.price_date || ''),
+      extra: prev ? prev.extra : undefined,
+      eps: (() => {   /* 合并语义:CSV 里留空的 EPS 不覆盖已有值 */
+        const keep = (k, pv) => { const v = num(k); return isFinite(v) ? v : (prev ? pv : NaN); };
+        const pe1 = prev ? prev.eps.fy1 : {}, pe2 = prev ? prev.eps.fy2 : {};
+        return {
+          fy1: { low: keep('eps_fy1_low', pe1.low), mean: keep('eps_fy1_mean', pe1.mean), high: keep('eps_fy1_high', pe1.high) },
+          fy2: { low: keep('eps_fy2_low', pe2.low), mean: keep('eps_fy2_mean', pe2.mean), high: keep('eps_fy2_high', pe2.high) },
+        };
+      })(),
+    });
+    n++;
+  }
+  return n;
+}
+function ingestHistory(recs) {
+  let n = 0;
+  const buf = new Map(), pbuf = new Map();
+  for (const r of recs) {
+    const tk = (r.ticker || '').toUpperCase();
+    if (!tk || !r.date) continue;
+    const px = parseFloat(r.price);
+    if (isFinite(px) && px > 0) {
+      if (!pbuf.has(tk)) pbuf.set(tk, []);
+      pbuf.get(tk).push({ date: r.date, price: px });
+    }
+    let pe = parseFloat(r.pe_ntm);
+    if (!isFinite(pe)) {
+      const e = parseFloat(r.eps_ntm);
+      if (isFinite(px) && isFinite(e) && e > 0) pe = px / e;
+    }
+    if (!isFinite(pe) || pe <= 0) continue;
+    if (!buf.has(tk)) buf.set(tk, []);
+    buf.get(tk).push({ date: r.date, pe });
+    n++;
+  }
+  for (const [tk, arr] of buf) {
+    arr.sort((a, b) => a.date < b.date ? -1 : 1);
+    state.history.set(tk, arr);   // replace whole series for that ticker
+  }
+  for (const [tk, arr] of pbuf) {
+    arr.sort((a, b) => a.date < b.date ? -1 : 1);
+    if (arr.length > (state.priceHist.get(tk) || []).length) state.priceHist.set(tk, arr);
+  }
+  return n;
+}
+
+/* ================= PE stats & core calc ================= */
+function peStats(ticker) {
+  const h = state.history.get(ticker);
+  if (h && h.length >= 12) {
+    const sorted = h.map(d => d.pe).slice().sort((a, b) => a - b);
+    return {
+      src: 'history', series: h, sorted,
+      p10: percentile(sorted, .10), p25: percentile(sorted, .25), p50: percentile(sorted, .50),
+      p75: percentile(sorted, .75), p90: percentile(sorted, .90),
+      current: h[h.length - 1].pe,
+    };
+  }
+  const m = state.peManual.get(ticker);
+  if (m && isFinite(m.p25) && isFinite(m.p50) && isFinite(m.p75)) {
+    return { src: 'manual', p10: NaN, p25: m.p25, p50: m.p50, p75: m.p75, p90: NaN };
+  }
+  return null;
+}
+function epsFor(ticker, hz) {
+  const ov = state.overrides.get(ticker + '|' + hz);
+  if (ov) return ov;
+  const co = state.companies.get(ticker);
+  return co ? co.eps[hz] : null;
+}
+function calcRange(co, hz) {
+  const eps = epsFor(co.ticker, hz), pe = peStats(co.ticker);
+  if (!eps || !pe || !isFinite(eps.mean) || eps.mean <= 0) return null;
+  const lo = isFinite(eps.low) ? eps.low : eps.mean;
+  const hi = isFinite(eps.high) ? eps.high : eps.mean;
+  const r = {
+    eps, pe,
+    mid: eps.mean * pe.p50,
+    coreLow: lo * pe.p25, coreHigh: hi * pe.p75,
+    extLow: isFinite(pe.p10) ? lo * pe.p10 : NaN,
+    extHigh: isFinite(pe.p90) ? hi * pe.p90 : NaN,
+  };
+  r.midPct = (r.mid / co.price - 1) * 100;
+  r.downPct = (r.coreLow / co.price - 1) * 100;
+  r.upPct = (r.coreHigh / co.price - 1) * 100;
+  return r;
+}
+
+/* ================= demo data ================= */
+function loadDemo() {
+  const cos = [
+    ['DEMO-TECH', '示例科技(演示)', 'USD', 152.00, '2026-07-23', [5.10, 5.60, 6.20], [6.00, 6.70, 7.40], 24, 4.5, 0.02, 0.8],
+    ['DEMO-CONS', '示例消费(演示)', 'USD', 84.00, '2026-07-23', [4.20, 4.60, 5.00], [4.80, 5.30, 5.80], 18, 2.8, 0.0, 2.1],
+    ['DEMO-PHRM', '示例医药(演示)', 'USD', 46.50, '2026-07-23', [1.60, 1.90, 2.20], [1.95, 2.30, 2.70], 27, 6.0, -0.04, 4.4],
+  ];
+  const months = [];
+  for (let y = 2020; y <= 2026; y++)
+    for (let m = 1; m <= 12; m++) {
+      if (y === 2026 && m > 6) break;
+      months.push(y + '-' + String(m).padStart(2, '0') + '-28');
+    }
+  for (const [t, name, cur, price, pd, f1, f2, base, amp, trend, ph] of cos) {
+    state.companies.set(t, {
+      ticker: t, name, currency: cur, price, priceDate: pd,
+      eps: { fy1: { low: f1[0], mean: f1[1], high: f1[2] }, fy2: { low: f2[0], mean: f2[1], high: f2[2] } },
+    });
+    const series = months.map((d, i) => ({
+      date: d,
+      pe: +(base + trend * i + amp * Math.sin(i / 5.1 + ph) + amp * 0.55 * Math.sin(i / 2.3 + ph * 2.7)).toFixed(2),
+    }));
+    state.history.set(t, series);
+    state.priceHist.set(t, series.map(s => ({ date: s.date, price: +(s.pe * f1[1]).toFixed(2) })));
+  }
+  state.selected = 'DEMO-TECH';
+  renderAll(t('demoLoaded'));
+}
+
+/* ================= xlsx (FactSet 公司模型导出) ================= */
+let xlsxPromise = null;
+function ensureXLSX() {
+  if (window.XLSX) return Promise.resolve();
+  if (!xlsxPromise) xlsxPromise = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = res;
+    s.onerror = () => { xlsxPromise = null; rej(new Error(t('mNeedNet'))); };
+    document.head.appendChild(s);
+  });
+  return xlsxPromise;
+}
+function findSection(aoa, title) {
+  for (let i = 0; i < aoa.length; i++) {
+    if (String((aoa[i] || [])[0] || '').trim() === title) {
+      return { dates: aoa[i + 1] || [], quarters: aoa[i + 2] || [], start: i + 3 };
+    }
+  }
+  return null;
+}
+function annualCols(sec, withE) {
+  const out = [];
+  for (let j = 1; j < sec.dates.length; j++) {
+    const dh = String(sec.dates[j] || '').trim(), q = String(sec.quarters[j] || '').trim();
+    if (q) continue;
+    if (withE ? /E$/.test(dh) : /'\d{2}$/.test(dh)) out.push({ col: j, label: dh });
+  }
+  return out;
+}
+function findRows(aoa, start, labels, maxScan) {
+  const out = {};
+  for (let i = start; i < Math.min(aoa.length, start + (maxScan || 30)); i++) {
+    const lb = String((aoa[i] || [])[0] || '').trim();
+    if (labels.includes(lb) && !(lb in out)) out[lb] = aoa[i];
+  }
+  return out;
+}
+function ingestModelSheet(sheetName, aoa) {
+  const es = findSection(aoa, 'Earnings Per Share');
+  if (!es) return null;
+  const annualE = annualCols(es, true);
+  if (!annualE.length) return null;
+  const rows = findRows(aoa, es.start, ['EPS', 'EPS - Non GAAP'], 18);
+  const src = rows['EPS'] || rows['EPS - Non GAAP'];
+  if (!src) return null;
+  const g = (row, c) => { const v = parseFloat(row[c.col]); return isFinite(v) ? v : NaN; };
+  let ticker = String((aoa[0] || [])[0] || sheetName).trim().toUpperCase();
+  if (!ticker) ticker = sheetName.toUpperCase();
+  const fy1 = annualE[0], fy2 = annualE[1] || null;
+  const epsFy1 = g(src, fy1);
+  /* Valuation 区块:用 FY1 forward PE 反推现价;历史年度 PE 作参考 */
+  let priceCalc = NaN, peFy1 = NaN, histPE = [];
+  const vs = findSection(aoa, 'Valuation');
+  if (vs) {
+    const peRow = findRows(aoa, vs.start, ['Price/Earnings (x)'], 30)['Price/Earnings (x)'];
+    if (peRow) {
+      const vAnnE = annualCols(vs, true), vAnnH = annualCols(vs, false);
+      if (vAnnE.length) peFy1 = g(peRow, vAnnE[0]);
+      if (isFinite(peFy1) && peFy1 > 0 && isFinite(epsFy1) && epsFy1 > 0) priceCalc = +(peFy1 * epsFy1).toFixed(2);
+      histPE = vAnnH.map(c => ({ label: c.label, pe: g(peRow, c) })).filter(x => isFinite(x.pe) && x.pe > 0);
+    }
+  }
+  const prev = state.companies.get(ticker);
+  const curRank = prev ? (SRC_RANK[prev.priceSrc] || 0) : 0;
+  const useDerived = isFinite(priceCalc) && curRank <= 1;   /* 反推价只在没有更可靠来源时使用 */
+  const pf = (a, b) => isFinite(a) ? a : b;   /* 已有值优先,模型只补空缺(Estimate History 的一致预期更新、更完整) */
+  state.companies.set(ticker, {
+    ticker,
+    name: prev ? prev.name : ticker,
+    fullName: prev ? prev.fullName : undefined,
+    currency: prev ? prev.currency : '',
+    price: useDerived ? priceCalc : (prev ? prev.price : NaN),
+    priceSrc: useDerived ? 'derived' : (prev ? prev.priceSrc : undefined),
+    priceDate: useDerived ? '@derived' : (prev ? prev.priceDate : ''),
+    extra: prev ? prev.extra : undefined,
+    eps: {
+      fy1: prev ? { low: prev.eps.fy1.low, mean: pf(prev.eps.fy1.mean, epsFy1), high: prev.eps.fy1.high }
+                : { low: NaN, mean: epsFy1, high: NaN },
+      fy2: prev ? { low: prev.eps.fy2.low, mean: pf(prev.eps.fy2.mean, fy2 ? g(src, fy2) : NaN), high: prev.eps.fy2.high }
+                : { low: NaN, mean: fy2 ? g(src, fy2) : NaN, high: NaN },
+    },
+  });
+  let note = '';
+  if (rows['EPS'] && rows['EPS - Non GAAP']) {
+    const a = g(rows['EPS'], fy1), b = g(rows['EPS - Non GAAP'], fy1);
+    if (isFinite(a) && isFinite(b) && Math.abs(a - b) / Math.abs(a) > 0.05) {
+      note = t('gaapNote')(a.toFixed(2), b.toFixed(2));
+    }
+  }
+  if (useDerived) {
+    note += t('derivedNote')(priceCalc.toFixed(2), peFy1.toFixed(2));
+  }
+  if (histPE.length) {
+    note += t('peRefNote')(histPE.map(h => h.label + ' ' + h.pe.toFixed(1) + 'x').join('、'));
+  }
+  return {
+    ticker,
+    text: ticker + ' FY1(' + fy1.label + ') EPS ' + epsFy1.toFixed(2)
+      + (fy2 ? ' / FY2(' + fy2.label + ') ' + g(src, fy2).toFixed(2) : '') + note,
+  };
+}
+/* Estimate History 导出:月度一致预期(Mean/Low/High)+ 月度 P/E 序列 */
+const MONTHS = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
+function toISODate(v) {
+  if (v instanceof Date) return v.getFullYear() + '-' + String(v.getMonth() + 1).padStart(2, '0') + '-' + String(v.getDate()).padStart(2, '0');
+  const s = String(v == null ? '' : v).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return parseEstDate(v);
+}
+function parseEstDate(v) {
+  if (typeof v === 'number' && isFinite(v)) {      /* Excel 序列日期 */
+    const ms = Math.round((v - 25569) * 86400000);
+    const d = new Date(ms);
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+  }
+  const m = String(v || '').trim().match(/^(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+'?(\d{2,4})$/);
+  if (!m) return null;
+  const mo = MONTHS[m[2].toLowerCase()];
+  if (!mo) return null;
+  const y = m[3].length === 2 ? '20' + m[3] : m[3];
+  return y + '-' + mo + '-' + m[1].padStart(2, '0');
+}
+function ingestEstimateSheet(sheetName, aoa, fileName) {
+  const isFY2 = /FY\s*2/i.test(String(fileName || ''));   /* 文件名含 FY2 → 写入第二财年;PE 序列不入分位库(口径为两年期 forward) */
+  let sec = -1;
+  for (let i = 0; i < aoa.length; i++) {
+    if (String((aoa[i] || [])[0] || '').trim() === 'Estimate History') { sec = i; break; }
+  }
+  if (sec < 0) return null;
+  const head = (aoa[sec + 1] || []).map(h => String(h || '').trim().toLowerCase());
+  const ci = name => head.indexOf(name);
+  const cDate = ci('date'), cMean = ci('mean'), cLow = ci('low'), cHigh = ci('high'), cPE = ci('p/e (x)');
+  const cN = ci('num of est'), cUp = ci('num up'), cDn = ci('num down');
+  if (cDate < 0 || cMean < 0) return null;
+  const recs = [];
+  for (let i = sec + 2; i < aoa.length; i++) {
+    const row = aoa[i] || [];
+    const date = parseEstDate(row[cDate]);
+    if (!date) { if (recs.length) break; else continue; }
+    recs.push({
+      date,
+      mean: parseFloat(row[cMean]),
+      low: cLow >= 0 ? parseFloat(row[cLow]) : NaN,
+      high: cHigh >= 0 ? parseFloat(row[cHigh]) : NaN,
+      pe: cPE >= 0 ? parseFloat(row[cPE]) : NaN,
+    });
+  }
+  if (!recs.length) return null;
+  recs.sort((a, b) => a.date < b.date ? -1 : 1);
+  const latest = recs[recs.length - 1];
+  let ticker = String((aoa[0] || [])[0] || sheetName).trim().toUpperCase();
+  if (!ticker) ticker = sheetName.toUpperCase();
+  const prev = state.companies.get(ticker);
+  const co = prev || {
+    ticker, name: ticker, currency: '', price: NaN, priceDate: '',
+    eps: { fy1: { low: NaN, mean: NaN, high: NaN }, fy2: { low: NaN, mean: NaN, high: NaN } },
+  };
+  co.eps[isFY2 ? 'fy2' : 'fy1'] = { low: latest.low, mean: latest.mean, high: latest.high };
+  if (!isFY2) {   /* 修正动量:最新一期上调/下调家数(方向信号) */
+    const lrow = aoa.map(r => r || []).find(r => parseEstDate(r[cDate]) === latest.date) || [];
+    co.rev = {
+      n: cN >= 0 ? parseFloat(lrow[cN]) : NaN,
+      up: cUp >= 0 ? parseFloat(lrow[cUp]) : NaN,
+      down: cDn >= 0 ? parseFloat(lrow[cDn]) : NaN,
+      date: latest.date,
+    };
+  }
+  state.companies.set(ticker, co);
+  /* 价格序列 = P/E × Mean(逐月恒等还原),用于波动率;不受 24 个月截断影响 */
+  const pxSeries = recs.filter(r => isFinite(r.pe) && r.pe > 0 && isFinite(r.mean) && r.mean > 0)
+    .map(r => ({ date: r.date, price: +(r.pe * r.mean).toFixed(4) }));
+  if (pxSeries.length > (state.priceHist.get(ticker) || []).length) state.priceHist.set(ticker, pxSeries);
+  let peSeries = recs.filter(r => isFinite(r.pe) && r.pe > 0).map(r => ({ date: r.date, pe: r.pe }));
+  let truncNote = '';
+  if (peSeries.length > 24) {
+    truncNote = t('truncNote')(peSeries.length);
+    peSeries = peSeries.slice(-24);
+  }
+  const existing = state.history.get(ticker) || [];
+  let peNote = '';
+  if (isFY2) {
+    peNote = '';   /* FY2 文件:只取 EPS 区间与价格序列,PE 分位仍以 FY1/NTM 口径为准 */
+  } else if (peSeries.length > existing.length) {
+    state.history.set(ticker, peSeries);
+    peNote = t('peSeries')(peSeries.length, peSeries[0].date.slice(0, 7), peSeries[peSeries.length - 1].date.slice(0, 7)) + truncNote
+      + (peSeries.length < 36 ? t('shortWin') : '');
+  } else if (existing.length) {
+    peNote = t('keepLonger')(existing.length);
+  }
+  let jumpNote = '';
+  if (recs.length >= 2) {
+    const prevMean = recs[recs.length - 2].mean;
+    if (isFinite(prevMean) && prevMean > 0 && Math.abs(latest.mean / prevMean - 1) > 0.15) {
+      jumpNote = t('jumpNote')(fmtPct((latest.mean / prevMean - 1) * 100));
+    }
+  }
+  return {
+    ticker,
+    text: (isFY2 ? '[FY2] ' : '') + t('estHead')(ticker, latest.date) + (isFinite(latest.low) ? latest.low.toFixed(2) : '—')
+      + t('estMid') + latest.mean.toFixed(2) + t('estHigh') + (isFinite(latest.high) ? latest.high.toFixed(2) : '—') + peNote + jumpNote,
+  };
+}
+/* Snapshot 导出:真实收盘价 + 52周区间 + 分析师目标价 + 年度 PE 参考 */
+function ingestSnapshotSheet(sheetName, aoa, fileName) {
+  const findKV = label => {
+    for (const row of aoa) {
+      if (!row) continue;
+      for (let j = 0; j < row.length; j++) {
+        if (String(row[j] || '').trim() === label) {
+          for (let k = j + 1; k < row.length; k++) {
+            const v = row[k];
+            if (v != null && String(v).trim() !== '') return String(v).trim();
+          }
+          return null;
+        }
+      }
+    }
+    return null;
+  };
+  const pc = findKV('Previous Close');
+  if (pc == null) return null;
+  const money = s => { const v = parseFloat(String(s == null ? '' : s).replace(/[$,]/g, '')); return isFinite(v) ? v : NaN; };
+  let ticker = (findKV('Primary Ticker') || String((aoa[0] || [])[0] || sheetName)).trim().toUpperCase();
+  if (!ticker) ticker = sheetName.toUpperCase();
+  const price = money(pc);
+  const m52 = String(findKV('52 Week Range') || '').match(/\$?([\d.,]+)\s*-\s*\$?([\d.,]+)/);
+  const target = money(findKV('Target Price'));
+  const rating = String(findKV('Avg Rating') || '');
+  /* 年度 PE 参考:Valuation 表 Price / Earnings 行(排除估计年 E) */
+  const peRefs = [];
+  for (let i = 0; i < aoa.length; i++) {
+    const row = aoa[i] || [];
+    const li = row.findIndex(c => String(c || '').trim() === 'Price / Earnings');
+    if (li < 0) continue;
+    for (let h = i - 1; h >= Math.max(0, i - 4); h--) {
+      const hr = aoa[h] || [];
+      const hi = hr.findIndex(c => String(c || '').trim() === '5Yr Avg');
+      if (hi < 0) continue;
+      for (let j = hi; j < hr.length; j++) {
+        const lb = String(hr[j] || '').trim(), v = parseFloat(row[j]);
+        if (!isFinite(v) || v <= 0) continue;
+        if (lb === '5Yr Avg' || /'\d{2}$/.test(lb)) peRefs.push({ label: lb, pe: v });
+      }
+      break;
+    }
+    if (peRefs.length) break;
+  }
+  const prev = state.companies.get(ticker);
+  const co = prev || {
+    ticker, name: ticker, currency: '', price: NaN, priceDate: '',
+    eps: { fy1: { low: NaN, mean: NaN, high: NaN }, fy2: { low: NaN, mean: NaN, high: NaN } },
+  };
+  const curRank = SRC_RANK[co.priceSrc] || 0;
+  if (isFinite(price) && curRank <= 2) { co.price = price; co.priceSrc = 'file'; co.priceDate = '@snap'; }
+  const fm = String(fileName || '').match(/snapshot_[^_]+_.*_([A-Za-z0-9]+)\.xlsx?$/i);
+  if (fm) co.fullName = fm[1];   /* 公司全名:供 Charting / Price Summary 文件归属匹配 */
+  co.extra = {
+    target, rating,
+    w52lo: m52 ? parseFloat(m52[1].replace(/,/g, '')) : NaN,
+    w52hi: m52 ? parseFloat(m52[2].replace(/,/g, '')) : NaN,
+    peRefs,
+  };
+  state.companies.set(ticker, co);
+  let text = t('snapHead')(ticker) + fmtN(price) + t('snapClose');
+  if (m52) text += t('snapW52') + m52[1] + ' ~ ' + m52[2];
+  if (isFinite(target)) text += t('snapTgt') + fmtN(target) + (rating ? '(' + rating + ')' : '');
+  if (peRefs.length) text += t('snapPeRef')(peRefs.map(x => x.label + ' ' + x.pe.toFixed(1) + 'x').join('、'));
+  return { ticker, text };
+}
+/* ---- 文件归属解析:文件名 ticker > 公司全名匹配 > 价格接近 > 唯一公司(仅当无名字线索) ---- */
+function normName(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+function resolveTicker(fileName, nameStr, lastPrice) {
+  const m = String(fileName || '').toUpperCase().match(/([A-Z.]{1,6}-[A-Z]{2})(?![A-Z])/);
+  if (m) return m[1];
+  const nn = normName(nameStr);
+  let nameTried = false;
+  if (nn.length >= 5) {
+    nameTried = true;
+    const hits = [...state.companies.values()].filter(c => {
+      const fn = normName(c.fullName || '');
+      return fn.length >= 5 && (fn.startsWith(nn) || nn.startsWith(fn));
+    });
+    if (hits.length === 1) return hits[0].ticker;
+  }
+  if (isFinite(lastPrice)) {
+    const near = [...state.companies.values()].filter(c => isFinite(c.price) && Math.abs(lastPrice / c.price - 1) < 0.03);
+    if (near.length === 1) return near[0].ticker;
+  }
+  if (!nameTried && state.companies.size === 1) return [...state.companies.keys()][0];
+  return null;   /* 有名字但对不上任何公司:宁可不猜 */
+}
+/* Charting 导出:Date + "<公司名> - Close" 周/日价格序列(真实价格 → 波动率);P/E-LTM 列仅作参考 */
+function ingestChartingSheet(sheetName, aoa, fileName) {
+  const hdr = (aoa[0] || []).map(c => String(c || '').trim());
+  const di = hdr.findIndex(h => /^date$/i.test(h));
+  const ci = hdr.findIndex(h => / - Close$/i.test(h));
+  if (di < 0 || ci < 0) return null;
+  const pi = hdr.findIndex(h => /P\/E/i.test(h));
+  const px = []; let lastPE = NaN;
+  for (let i = 1; i < aoa.length; i++) {
+    const r = aoa[i] || [];
+    const d = toISODate(r[di]); const p = parseFloat(r[ci]);
+    if (!d || !isFinite(p) || p <= 0) continue;
+    px.push({ date: d, price: p });
+    if (pi >= 0) { const v = parseFloat(r[pi]); if (isFinite(v) && v > 0) lastPE = v; }
+  }
+  if (px.length < 13) return null;
+  px.sort((a, b) => a.date < b.date ? -1 : 1);
+  const nameStr = hdr[ci].replace(/ - Close$/i, '');
+  const ticker = resolveTicker(fileName, nameStr, px[px.length - 1].price);
+  if (!ticker) return { ticker: null, text: t('chartNoTicker') };
+  if (!state.companies.has(ticker)) {
+    state.companies.set(ticker, {
+      ticker, name: ticker, currency: '', price: NaN, priceDate: '',
+      eps: { fy1: { low: NaN, mean: NaN, high: NaN }, fy2: { low: NaN, mean: NaN, high: NaN } },
+    });
+  }
+  if (px.length > (state.priceHist.get(ticker) || []).length) state.priceHist.set(ticker, px);
+  return {
+    ticker,
+    text: t('chartMsg')(ticker, px.length, px[0].date.slice(0, 7), px[px.length - 1].date.slice(0, 7))
+      + (isFinite(lastPE) ? t('chartLtm')(lastPE.toFixed(1)) : ''),
+  };
+}
+/* Price Summary 导出:实时/最新价格页 */
+function ingestPriceSummarySheet(sheetName, aoa, fileName) {
+  let price = NaN;
+  for (let i = 0; i < Math.min(aoa.length, 12); i++) {
+    const row = aoa[i] || [];
+    for (let j = 0; j < row.length; j++) {
+      if (String(row[j] || '').trim() === 'Latest Price') {
+        for (let k = i + 1; k <= i + 2 && k < aoa.length; k++) {
+          const v = parseFloat(String((aoa[k] || [])[j] == null ? '' : (aoa[k] || [])[j]).replace(/[$,]/g, ''));
+          if (isFinite(v) && v > 0) { price = v; break; }
+        }
+      }
+    }
+  }
+  if (!isFinite(price)) return null;
+  const ticker = resolveTicker(fileName, (aoa[0] || [])[0], price);
+  const co = ticker && state.companies.get(ticker);
+  if (!co) return { ticker: null, text: t('psNoTicker') };
+  if ((SRC_RANK[co.priceSrc] || 0) <= 2) { co.price = price; co.priceSrc = 'file'; co.priceDate = '@snap'; }
+  return { ticker, text: t('psMsg')(ticker, fmtN(price)) };
+}
+/* ================= file handling(顺序导入,保证"新文件覆盖旧文件"确定性) ================= */
+async function handleFiles(files) {
+  const msgs = [];
+  /* 归属类文件(Charting / Price Summary)排到主数据文件之后,保证公司先建立再归属 */
+  const isSecondary = f => /price\s*summary|charting/i.test(f.name);
+  files = [...files].sort((a, b) => (isSecondary(a) ? 1 : 0) - (isSecondary(b) ? 1 : 0));
+  for (const f of files) {
+    try {
+      if (/\.xlsx?$/i.test(f.name)) {
+        await ensureXLSX();
+        const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+        const got = [];
+        for (const sn of wb.SheetNames) {
+          const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true });
+          const r = ingestModelSheet(sn, aoa) || ingestEstimateSheet(sn, aoa, f.name) || ingestSnapshotSheet(sn, aoa, f.name)
+            || ingestChartingSheet(sn, aoa, f.name) || ingestPriceSummarySheet(sn, aoa, f.name);
+          if (r) got.push(r);
+        }
+        msgs.push(f.name + (got.length ? ':' + got.map(x => x.text).join(';') : t('mXlsxNone')));
+      } else {
+        const recs = parseCSV(await f.text());
+        if (!recs.length) msgs.push(f.name + t('mEmptyFile'));
+        else {
+          const h = Object.keys(recs[0]);
+          if (h.includes('pe_ntm') || (h.includes('eps_ntm') && h.includes('date'))) {
+            msgs.push(f.name + t('mHistRows')(ingestHistory(recs)));
+          } else if (h.includes('price') && h.some(k => k.startsWith('eps_fy1'))) {
+            msgs.push(f.name + t('mCoRows')(ingestCompanies(recs)));
+          } else {
+            msgs.push(f.name + t('mBadCols'));
+          }
+        }
+      }
+    } catch (e) { msgs.push(f.name + t('mParseFail') + ((e && e.message) || e)); }
+  }
+  if (!state.selected && state.companies.size) state.selected = [...state.companies.keys()][0];
+  renderAll(msgs.join(' · '));
+}
+
+/* ================= 文件夹连接(File System Access API;记忆通过 IndexedDB,不可用时静默降级) ================= */
+let dirHandle = null;
+function idbOpen() {
+  return new Promise((res, rej) => {
+    try {
+      const rq = indexedDB.open('prd-db', 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore('handles');
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = () => rej(rq.error);
+    } catch (e) { rej(e); }
+  });
+}
+async function idbSet(k, v) {
+  try {
+    const db = await idbOpen();
+    await new Promise((res, rej) => {
+      const tx = db.transaction('handles', 'readwrite');
+      tx.objectStore('handles').put(v, k);
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) { /* 存储不可用(如 artifact 沙箱)时静默跳过 */ }
+}
+async function idbGet(k) {
+  try {
+    const db = await idbOpen();
+    return await new Promise((res, rej) => {
+      const rq = db.transaction('handles', 'readonly').objectStore('handles').get(k);
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = () => rej(rq.error);
+    });
+  } catch (e) { return null; }
+}
+async function collectDirFiles(handle, depth, out) {
+  for await (const entry of handle.values()) {
+    if (entry.kind === 'file' && /\.(csv|xlsx|xls)$/i.test(entry.name)) out.push(await entry.getFile());
+    else if (entry.kind === 'directory' && depth < 3) await collectDirFiles(entry, depth + 1, out);
+  }
+}
+async function scanFolder() {
+  if (!dirHandle) return;
+  const files = [];
+  try { await collectDirFiles(dirHandle, 0, files); } catch (e) { renderAll(t('fsDenied')); return; }
+  if (!files.length) { renderAll(t('fsNoFiles')(dirHandle.name)); return; }
+  files.sort((a, b) => a.lastModified - b.lastModified);   /* 旧→新:最新文件最后导入、覆盖生效 */
+  await handleFiles(files);
+  const st = $('status');
+  st.insertBefore(el('span', 'ok', t('fsScanned')(dirHandle.name, files.length) + ' '), st.firstChild);
+  $('rescanBtn').hidden = false;
+  $('reconnectBtn').hidden = true;
+}
+$('dirBtn').addEventListener('click', async () => {
+  if (!window.showDirectoryPicker) { renderAll(t('fsUnsupported')); return; }
+  try { dirHandle = await window.showDirectoryPicker({ mode: 'read' }); } catch (e) { return; /* 用户取消 */ }
+  idbSet('dir', dirHandle);
+  scanFolder();
+});
+$('rescanBtn').addEventListener('click', scanFolder);
+$('reconnectBtn').addEventListener('click', async () => {
+  const h = await idbGet('dir');
+  if (!h) { $('reconnectBtn').hidden = true; return; }
+  try {
+    if (h.requestPermission && await h.requestPermission({ mode: 'read' }) !== 'granted') { renderAll(t('fsDenied')); return; }
+  } catch (e) { renderAll(t('fsDenied')); return; }
+  dirHandle = h;
+  scanFolder();
+});
+idbGet('dir').then(h => { if (h && window.showDirectoryPicker) $('reconnectBtn').hidden = false; });
+/* ================= render: overview ================= */
+function overviewRows() {
+  const rows = [];
+  for (const co of state.companies.values()) {
+    const r = calcRange(co, state.horizon);
+    rows.push({ co, r });
+  }
+  const k = state.sortKey, d = state.sortDir;
+  rows.sort((a, b) => {
+    if (k === 'name') return d * a.co.name.localeCompare(b.co.name, 'zh');
+    let va = a.r ? (k === 'price' ? a.co.price : a.r[k]) : -Infinity;
+    let vb = b.r ? (k === 'price' ? b.co.price : b.r[k]) : -Infinity;
+    if (!isFinite(va)) va = -Infinity;
+    if (!isFinite(vb)) vb = -Infinity;
+    return d * (va - vb);
+  });
+  return rows;
+}
+const OV_COLS = [
+  ['name', 'colCompany'], ['price', 'colPrice'], ['downPct', 'colLow'], ['upPct', 'colHigh'],
+  ['midPct', 'colMid'], ['pos', 'colPos'],
+];
+function renderOvTable(rows) {
+  const wrap = $('ovTableWrap'); wrap.replaceChildren();
+  const tb = el('table', 'ov'), thead = el('thead'), trh = el('tr');
+  for (const [key, labelKey] of OV_COLS) {
+    const th = el('th', state.sortKey === key ? 'sorted' : '', t(labelKey) + (state.sortKey === key ? (state.sortDir < 0 ? ' ↓' : ' ↑') : ''));
+    if (key !== 'pos') th.addEventListener('click', () => {
+      if (state.sortKey === key) state.sortDir *= -1; else { state.sortKey = key; state.sortDir = key === 'name' ? 1 : -1; }
+      renderAll();
+    });
+    trh.appendChild(th);
+  }
+  thead.appendChild(trh); tb.appendChild(thead);
+  const tbody = el('tbody');
+  for (const { co, r } of rows) {
+    const tr = el('tr', 'rowc' + (state.selected === co.ticker ? ' sel' : ''));
+    const td0 = el('td'); td0.appendChild(el('span', 'nm', co.name)); td0.appendChild(el('span', 'tk', co.ticker));
+    tr.appendChild(td0);
+    tr.appendChild(el('td', '', fmtN(co.price)));
+    if (r) {
+      const pc = v => isFinite(v) ? (v >= 0 ? 'pos' : 'neg') : '';
+      const cLow = el('td', pc(r.downPct), fmtN(r.coreLow) + ' (' + fmtPct(r.downPct) + ')');
+      const cHigh = el('td', pc(r.upPct), fmtN(r.coreHigh) + ' (' + fmtPct(r.upPct) + ')');
+      const cMid = el('td', pc(r.midPct), fmtPct(r.midPct));
+      cMid.style.fontWeight = '650';
+      tr.append(cLow, cHigh, cMid);
+      const tdm = el('td');
+      if (isFinite(co.price)) {
+        const lo = Math.min(r.coreLow, co.price), hi = Math.max(r.coreHigh, co.price);
+        const span = (hi - lo) || 1, pad = span * 0.06;
+        const x = v => ((v - lo + pad) / (span + 2 * pad)) * 100;
+        const mini = el('span', 'mini');
+        mini.appendChild(el('span', 'track'));
+        const band = el('span', 'band');
+        band.style.left = x(r.coreLow) + '%'; band.style.width = (x(r.coreHigh) - x(r.coreLow)) + '%';
+        mini.appendChild(band);
+        const now = el('span', 'now'); now.style.left = x(co.price) + '%';
+        mini.appendChild(now);
+        tdm.appendChild(mini);
+      } else {
+        tdm.textContent = t('noPx');
+        tdm.style.color = 'var(--text-muted)';
+      }
+      tr.appendChild(tdm);
+    } else {
+      const td = el('td', '', t('rowNoCalc')); td.colSpan = 4; td.style.color = 'var(--text-muted)';
+      tr.appendChild(td);
+    }
+    tr.addEventListener('click', () => { state.selected = co.ticker; renderAll(); $('detCard').scrollIntoView({ behavior: 'smooth' }); });
+    tbody.appendChild(tr);
+  }
+  tb.appendChild(tbody); wrap.appendChild(tb);
+}
+function renderOvChart(rows) {
+  const box = $('ovChart'); box.replaceChildren();
+  const usable = rows.filter(x => x.r && isFinite(x.r.downPct) && isFinite(x.r.upPct) && isFinite(x.r.midPct));
+  if (!usable.length) return;
+  const W = 1100, GL = 190, GR = 70, rowH = 36, top = 8;
+  const H = top + usable.length * rowH + 12;
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '各公司隐含上行下行空间' });
+  let mn = 0, mx = 0;
+  for (const { r } of usable) { mn = Math.min(mn, r.downPct, r.midPct); mx = Math.max(mx, r.upPct, r.midPct); }
+  const span = (mx - mn) || 1; mn -= span * .10; mx += span * .10;
+  const x = v => GL + (v - mn) / (mx - mn) * (W - GL - GR);
+  svg.appendChild(svgEl('line', { x1: x(0), x2: x(0), y1: top, y2: H - 10, stroke: 'var(--axis)', 'stroke-width': 1 }));
+  svg.appendChild(svgEl('text', { x: x(0), y: H - 1, 'text-anchor': 'middle', 'font-size': 10.5, fill: 'var(--text-muted)' }, t('priceZero')));
+  const tip = $('ovTip');
+  usable.forEach(({ co, r }, i) => {
+    const yc = top + i * rowH + rowH / 2;
+    const nm = svgEl('text', { x: GL - 12, y: yc - 2, 'text-anchor': 'end', 'font-size': 12.5, 'font-weight': 600, fill: 'var(--text-primary)' });
+    nm.textContent = co.name.length > 12 ? co.name.slice(0, 12) + '…' : co.name;
+    svg.appendChild(nm);
+    svg.appendChild(svgEl('text', { x: GL - 12, y: yc + 11, 'text-anchor': 'end', 'font-size': 10.5, fill: 'var(--text-muted)' }, co.ticker));
+    const bx = x(Math.min(r.downPct, r.upPct)), bw = Math.max(2, Math.abs(x(r.upPct) - x(r.downPct)));
+    svg.appendChild(svgEl('rect', { x: bx, y: yc - 6, width: bw, height: 12, rx: 4, fill: 'var(--wash-strong)' }));
+    svg.appendChild(svgEl('text', { x: bx - 6, y: yc + 4, 'text-anchor': 'end', 'font-size': 11, fill: 'var(--text-secondary)' }, fmtPct(r.downPct)));
+    svg.appendChild(svgEl('text', { x: bx + bw + 6, y: yc + 4, 'font-size': 11, fill: 'var(--text-secondary)' }, fmtPct(r.upPct)));
+    svg.appendChild(svgEl('circle', { cx: x(r.midPct), cy: yc, r: 5, fill: 'var(--series-1)', stroke: 'var(--surface-1)', 'stroke-width': 2 }));
+    const hit = svgEl('rect', { x: 0, y: yc - rowH / 2, width: W, height: rowH, fill: 'transparent' });
+    hit.style.cursor = 'pointer';
+    hit.addEventListener('pointermove', ev => {
+      tip.replaceChildren();
+      tip.appendChild(el('div', 'v', co.name + ' ' + co.ticker));
+      tip.appendChild(el('div', 'k', t('tipCore') + fmtN(r.coreLow) + ' ~ ' + fmtN(r.coreHigh) + '(' + fmtPct(r.downPct) + ' ~ ' + fmtPct(r.upPct) + ')'));
+      tip.appendChild(el('div', 'k', t('tipMid') + fmtN(r.mid) + '(' + fmtPct(r.midPct) + ')· ' + t('tipPrice') + fmtN(co.price)));
+      const bb = $('ovChartBox').getBoundingClientRect();
+      tip.style.display = 'block';
+      tip.style.left = Math.min(ev.clientX - bb.left + 14, bb.width - 300) + 'px';
+      tip.style.top = (ev.clientY - bb.top + 14) + 'px';
+    });
+    hit.addEventListener('pointerleave', () => tip.style.display = 'none');
+    hit.addEventListener('click', () => { state.selected = co.ticker; renderAll(); $('detCard').scrollIntoView({ behavior: 'smooth' }); });
+    svg.appendChild(hit);
+  });
+  box.appendChild(svg);
+}
+
+/* ================= render: detail ================= */
+function renderDetail() {
+  const co = state.companies.get(state.selected);
+  if (!co) { $('detCard').hidden = true; return; }
+  $('detCard').hidden = false;
+  const sel = $('coSel'); sel.replaceChildren();
+  for (const c of state.companies.values()) {
+    const o = el('option', '', c.name + ' (' + c.ticker + ')'); o.value = c.ticker;
+    if (c.ticker === state.selected) o.selected = true;
+    sel.appendChild(o);
+  }
+  for (const b of $('hzTabs').children) b.classList.toggle('on', b.dataset.h === state.horizon);
+  const eps = epsFor(co.ticker, state.horizon) || {};
+  $('epsLow').value = isFinite(eps.low) ? eps.low : '';
+  $('epsMean').value = isFinite(eps.mean) ? eps.mean : '';
+  $('epsHigh').value = isFinite(eps.high) ? eps.high : '';
+  const pe = peStats(co.ticker);
+  const manual = !state.history.has(co.ticker) || (state.history.get(co.ticker) || []).length < 12;
+  $('peManualRow').hidden = !manual;
+  if (manual) {
+    const m = state.peManual.get(co.ticker) || {};
+    $('peP25').value = isFinite(m.p25) ? m.p25 : '';
+    $('peP50').value = isFinite(m.p50) ? m.p50 : '';
+    $('peP75').value = isFinite(m.p75) ? m.p75 : '';
+  }
+  $('pxInput').value = isFinite(co.price) ? co.price : '';
+  renderHead(co);
+  const r = calcRange(co, state.horizon);
+  renderKpis(co, r);
+  renderMatrix(co, r);
+  renderBullet(co, r);
+  renderCompare(co, r);
+  renderDirection(co, r);
+  renderPEBand(co, pe);
+}
+const PRICE_DATE_KEYS = { '@snap': 'priceSnap', '@derived': 'priceDerived', '@manual': 'priceManual' };
+function renderHead(co) {
+  const head = $('detHead'); head.replaceChildren();
+  head.appendChild(el('span', 'price', isFinite(co.price) ? fmtN(co.price) : t('priceWait')));
+  const pd = PRICE_DATE_KEYS[co.priceDate] ? t(PRICE_DATE_KEYS[co.priceDate]) : co.priceDate;
+  head.appendChild(el('span', 'cur', (co.currency || '—') + (pd ? ' · ' + pd : '') + ' · ' + co.name + ' ' + co.ticker));
+}
+function renderKpis(co, r) {
+  const pe = peStats(co.ticker);
+  const kp = $('detKpis'); kp.replaceChildren();
+  const tile = (lb, vl, dt, cls) => {
+    const t = el('div', 'tile'); t.appendChild(el('div', 'lb', lb)); t.appendChild(el('div', 'vl', vl));
+    if (dt) t.appendChild(el('div', 'dt ' + (cls || ''), dt));
+    kp.appendChild(t);
+  };
+  if (r) {
+    tile(t('tMid'), fmtN(r.mid), fmtPct(r.midPct) + t('vsPrice'), isFinite(r.midPct) && r.midPct >= 0 ? 'pos' : isFinite(r.midPct) ? 'neg' : '');
+    tile(t('tCore'), fmtN(r.coreLow) + ' ~ ' + fmtN(r.coreHigh), fmtPct(r.downPct) + ' ~ ' + fmtPct(r.upPct), '');
+    if (isFinite(r.extLow)) tile(t('tExt'), fmtN(r.extLow) + ' ~ ' + fmtN(r.extHigh), fmtPct((r.extLow / co.price - 1) * 100) + ' ~ ' + fmtPct((r.extHigh / co.price - 1) * 100), '');
+    if (pe && isFinite(pe.current)) tile(t('tPe'), fmtX(pe.current), t('histPct')(rankPct(pe.sorted, pe.current)), '');
+    const ex = co.extra;
+    if (ex && isFinite(ex.target)) {
+      const d = isFinite(co.price) ? (ex.target / co.price - 1) * 100 : NaN;
+      tile(t('tTgt'), fmtN(ex.target), (ex.rating ? ex.rating + ' · ' : '') + fmtPct(d) + t('vsPrice'), isFinite(d) && d >= 0 ? 'pos' : isFinite(d) ? 'neg' : '');
+    }
+  } else {
+    const manual = !state.history.has(co.ticker) || (state.history.get(co.ticker) || []).length < 12;
+    kp.appendChild(el('div', 'empty', manual && !peStats(co.ticker) ? t('needPct') : t('needEps')));
+  }
+}
+function partialRefresh() {
+  const rows = overviewRows(); renderOvTable(rows); renderOvChart(rows);
+  const co = state.companies.get(state.selected); if (!co) return;
+  const r = calcRange(co, state.horizon);
+  renderHead(co); renderKpis(co, r); renderMatrix(co, r); renderBullet(co, r); renderCompare(co, r); renderDirection(co, r);
+}
+function renderMatrix(co, r) {
+  const wrap = $('mxWrap'); wrap.replaceChildren();
+  if (!r) { wrap.appendChild(el('div', 'empty', '—')); return; }
+  const pe = r.pe, eps = r.eps;
+  const cols = [['p10', 'PE P10'], ['p25', 'PE P25'], ['p50', t('mxMedian')], ['p75', 'PE P75'], ['p90', 'PE P90']]
+    .filter(([k]) => isFinite(pe[k]));
+  const rows = [[t('mxOpt'), eps.high, false], [t('mxBase'), eps.mean, true], [t('mxPes'), eps.low, false]];
+  const tb = el('table', 'mx'), trh = el('tr');
+  trh.appendChild(el('th', '', t('mxCorner')));
+  for (const [k, lb] of cols) trh.appendChild(el('th', '', lb + ' ' + fmtX(pe[k])));
+  tb.appendChild(trh);
+  for (const [lb, e, isBase] of rows) {
+    const tr = el('tr');
+    tr.appendChild(el('td', '', lb + fmtN(e)));
+    for (const [k] of cols) {
+      const v = e * pe[k], d = (v / co.price - 1) * 100;
+      const td = el('td', k === 'p50' ? 'med' : '');
+      if (isBase && k === 'p50') td.classList.add('base');
+      td.appendChild(document.createTextNode(fmtN(v)));
+      td.appendChild(el('span', 'sub ' + (isFinite(d) ? (d >= 0 ? 'pos' : 'neg') : ''), fmtPct(d)));
+      tr.appendChild(td);
+    }
+    tb.appendChild(tr);
+  }
+  wrap.appendChild(tb);
+  wrap.appendChild(el('p', 'hint', t('mxUnit')(co.currency || '—')));
+}
+function renderBullet(co, r) {
+  const box = $('bulletChart'); box.replaceChildren();
+  if (!r) return;
+  const W = 560, H = 118, L = 14, R = 14, yc = 56;
+  const cand = [r.coreLow, r.coreHigh, r.extLow, r.extHigh, co.price].filter(isFinite);
+  const lo0 = Math.min(...cand), hi0 = Math.max(...cand);
+  const span = (hi0 - lo0) || 1, mn = lo0 - span * .08, mx = hi0 + span * .08;
+  const x = v => L + (v - mn) / (mx - mn) * (W - L - R);
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '价格区间与现价位置' });
+  svg.appendChild(svgEl('line', { x1: L, x2: W - R, y1: yc, y2: yc, stroke: 'var(--grid)', 'stroke-width': 1 }));
+  if (isFinite(r.extLow)) {
+    svg.appendChild(svgEl('rect', { x: x(r.extLow), y: yc - 11, width: x(r.extHigh) - x(r.extLow), height: 22, rx: 4, fill: 'var(--wash)' }));
+    svg.appendChild(svgEl('text', { x: x(r.extLow), y: yc + 34, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--text-muted)' }, fmtN(r.extLow)));
+    svg.appendChild(svgEl('text', { x: x(r.extHigh), y: yc + 34, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--text-muted)' }, fmtN(r.extHigh)));
+  }
+  svg.appendChild(svgEl('rect', { x: x(r.coreLow), y: yc - 11, width: Math.max(2, x(r.coreHigh) - x(r.coreLow)), height: 22, rx: 4, fill: 'var(--wash-strong)' }));
+  svg.appendChild(svgEl('text', { x: x(r.coreLow), y: yc - 18, 'text-anchor': 'middle', 'font-size': 11.5, fill: 'var(--text-secondary)' }, fmtN(r.coreLow)));
+  svg.appendChild(svgEl('text', { x: x(r.coreHigh), y: yc - 18, 'text-anchor': 'middle', 'font-size': 11.5, fill: 'var(--text-secondary)' }, fmtN(r.coreHigh)));
+  svg.appendChild(svgEl('line', { x1: x(r.mid), x2: x(r.mid), y1: yc - 14, y2: yc + 14, stroke: 'var(--series-1)', 'stroke-width': 2.5 }));
+  svg.appendChild(svgEl('text', { x: x(r.mid), y: yc - 18, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 650, fill: 'var(--text-primary)' }, t('blMid') + fmtN(r.mid)));
+  if (isFinite(co.price)) {
+    svg.appendChild(svgEl('circle', { cx: x(co.price), cy: yc, r: 6, fill: 'var(--series-2)', stroke: 'var(--surface-1)', 'stroke-width': 2 }));
+    svg.appendChild(svgEl('text', { x: x(co.price), y: yc + 34, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 650, fill: 'var(--text-primary)' }, t('blPrice') + fmtN(co.price)));
+  }
+  box.appendChild(svg);
+}
+/* ================= 波动率统计 & 方法对比 ================= */
+function volStats(ticker) {
+  const ph = state.priceHist.get(ticker);
+  if (!ph || ph.length < 13) return null;
+  const rets = [], gaps = [];
+  for (let i = 1; i < ph.length; i++) {
+    if (ph[i - 1].price > 0 && ph[i].price > 0) rets.push(Math.log(ph[i].price / ph[i - 1].price));
+    const g = (new Date(ph[i].date) - new Date(ph[i - 1].date)) / 86400000;
+    if (isFinite(g) && g > 0) gaps.push(g);
+  }
+  if (rets.length < 12) return null;
+  /* 按日期中位间隔判断数据频率 → 年化系数 */
+  gaps.sort((a, b) => a - b);
+  const medGap = gaps[Math.floor(gaps.length / 2)] || 30;
+  const perYear = medGap <= 2 ? 252 : medGap <= 10 ? 52 : medGap <= 45 ? 12 : 1;
+  const mu = rets.reduce((a, b) => a + b, 0) / rets.length;
+  const va = rets.reduce((a, b) => a + (b - mu) * (b - mu), 0) / (rets.length - 1);
+  return { sigma: Math.sqrt(va) * Math.sqrt(perYear), n: rets.length + 1 };
+}
+function renderCompare(co, r) {
+  const sec = $('cmpSec'), box = $('cmpChart'); box.replaceChildren();
+  const rows = [];
+  if (r) {
+    rows.push({ lb: t('cmpCoreM'), lo: r.coreLow, hi: r.coreHigh, mid: r.mid });
+    if (isFinite(r.extLow)) rows.push({ lb: t('cmpExtM'), lo: r.extLow, hi: r.extHigh });
+  }
+  const vol = volStats(co.ticker);
+  if (vol && isFinite(co.price)) {
+    rows.push({ lb: t('cmpVol')(vol.n), lo: co.price * Math.exp(-vol.sigma), hi: co.price * Math.exp(vol.sigma) });
+  }
+  const ex = co.extra || {};
+  if (isFinite(ex.w52lo) && isFinite(ex.w52hi)) rows.push({ lb: t('cmpW52'), lo: ex.w52lo, hi: ex.w52hi });
+  if (isFinite(ex.target)) rows.push({ lb: t('cmpTgt') + (ex.rating ? '(' + ex.rating + ')' : ''), point: ex.target });
+  if (rows.length < 2) { sec.hidden = true; return; }
+  sec.hidden = false;
+  const W = 1100, GL = 250, GR = 70, rowH = 38, top = 8;
+  const H = top + rows.length * rowH + 26;
+  const cand = [co.price];
+  for (const rw of rows) { if (rw.point != null) cand.push(rw.point); else cand.push(rw.lo, rw.hi); }
+  const fin = cand.filter(isFinite);
+  let mn = Math.min(...fin), mx = Math.max(...fin);
+  const pad = (mx - mn) * 0.07 || 1; mn -= pad; mx += pad;
+  const x = v => GL + (v - mn) / (mx - mn) * (W - GL - GR);
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'method comparison' });
+  rows.forEach((rw, i) => {
+    const yc = top + i * rowH + rowH / 2;
+    const nm = svgEl('text', { x: GL - 12, y: yc + 4, 'text-anchor': 'end', 'font-size': 12, fill: 'var(--text-secondary)' });
+    nm.textContent = rw.lb;
+    svg.appendChild(nm);
+    if (rw.point != null) {
+      svg.appendChild(svgEl('circle', { cx: x(rw.point), cy: yc, r: 5.5, fill: 'var(--series-1)', stroke: 'var(--surface-1)', 'stroke-width': 2 }));
+      svg.appendChild(svgEl('text', { x: x(rw.point) + 10, y: yc + 4, 'font-size': 11.5, 'font-weight': 650, fill: 'var(--text-primary)' }, fmtN(rw.point)));
+    } else {
+      const bx = x(rw.lo), bw = Math.max(2, x(rw.hi) - bx);
+      svg.appendChild(svgEl('rect', { x: bx, y: yc - 7, width: bw, height: 14, rx: 4, fill: 'var(--wash-strong)' }));
+      svg.appendChild(svgEl('text', { x: bx - 6, y: yc + 4, 'text-anchor': 'end', 'font-size': 11, fill: 'var(--text-secondary)' }, fmtN(rw.lo)));
+      svg.appendChild(svgEl('text', { x: bx + bw + 6, y: yc + 4, 'font-size': 11, fill: 'var(--text-secondary)' }, fmtN(rw.hi)));
+      if (isFinite(rw.mid)) svg.appendChild(svgEl('line', { x1: x(rw.mid), x2: x(rw.mid), y1: yc - 9, y2: yc + 9, stroke: 'var(--series-1)', 'stroke-width': 2.5 }));
+    }
+  });
+  if (isFinite(co.price)) {
+    svg.appendChild(svgEl('line', { x1: x(co.price), x2: x(co.price), y1: top, y2: H - 22, stroke: 'var(--series-2)', 'stroke-width': 2 }));
+    svg.appendChild(svgEl('text', { x: x(co.price), y: H - 8, 'text-anchor': 'middle', 'font-size': 11.5, 'font-weight': 650, fill: 'var(--text-primary)' }, t('blPrice') + fmtN(co.price)));
+  }
+  box.appendChild(svg);
+  $('cmpNote').textContent = t('cmpNote');
+}
+/* ================= 走向概率:六维信号 → 情景权重 → MC ================= */
+function dirScores(co, r) {
+  const s = { rev: null, val: null, tech: null };
+  if (co.rev && isFinite(co.rev.up) && isFinite(co.rev.down) && isFinite(co.rev.n) && co.rev.n > 0) {
+    s.rev = Math.max(-1, Math.min(1, (co.rev.up - co.rev.down) / co.rev.n * 2));
+  }
+  const pe = peStats(co.ticker);
+  if (pe && pe.src === 'history' && isFinite(pe.current)) {
+    const p = rankPct(pe.sorted, pe.current);
+    s.val = p <= 20 ? 1 : p <= 40 ? 0.5 : p < 60 ? 0 : p < 80 ? -0.5 : -1;   /* 低分位=便宜=+ */
+    s.valPct = p;
+  }
+  const ph = state.priceHist.get(co.ticker);
+  if (ph && ph.length >= 60 && isFinite(co.price)) {
+    const c = ph.map(x => x.price);
+    const ma = k => c.slice(-k).reduce((a, b) => a + b, 0) / k;
+    const kS = Math.min(50, Math.floor(c.length / 4)), kL = Math.min(200, c.length);
+    s.aboveS = co.price > ma(kS); s.aboveL = co.price > ma(kL);
+    s.tech = (s.aboveS ? 0.5 : -0.5) + (s.aboveL ? 0.5 : -0.5);
+  }
+  return s;
+}
+function renderDirection(co, r) {
+  const sec = $('dirSec'), chips = $('dirChips'), out = $('dirOut');
+  const ph = state.priceHist.get(co.ticker);
+  if (!isFinite(co.price) || !ph || ph.length < 30) { sec.hidden = true; return; }
+  sec.hidden = false;
+  /* 手动打分器(重建并恢复值) */
+  const man = state.dirManual.get(co.ticker) || { m: 0, i: 0, l: 0 };
+  for (const [id, key] of [['dirMacro', 'm'], ['dirInd', 'i'], ['dirLiq', 'l']]) {
+    const sel = $(id); sel.replaceChildren();
+    for (const [v, lb] of t('dirOptions')) {
+      const o = el('option', '', lb + ' (' + v + ')'); o.value = v;
+      if (parseFloat(v) === man[key]) o.selected = true;
+      sel.appendChild(o);
+    }
+  }
+  /* 自动信号 chips */
+  const s = dirScores(co, r);
+  chips.replaceChildren();
+  const chip = (txt, sc) => {
+    const d = el('div', 'tile'); d.style.minWidth = '0'; d.style.padding = '6px 12px';
+    d.appendChild(el('div', 'lb', txt));
+    d.appendChild(el('div', 'dt ' + (sc > 0 ? 'pos' : sc < 0 ? 'neg' : ''), sc == null ? t('dirChipNA') : (sc > 0 ? '+' : '') + sc.toFixed(1)));
+    chips.appendChild(d);
+  };
+  chip(s.rev != null && co.rev ? t('dirChipRev')(co.rev.up, co.rev.down) : t('dirChipRev')('—', '—'), s.rev);
+  chip(s.val != null ? t('dirChipVal')(s.valPct) : t('dirChipVal')('—'), s.val);
+  chip(s.tech != null ? t('dirChipTech')(s.aboveS, s.aboveL) : t('dirChipTech')(false, false), s.tech);
+  /* 综合倾斜度:基本面0.35 技术0.20 宏观0.15 行业0.20 流动性0.10 */
+  const fund = (s.rev != null && s.val != null) ? (s.rev + s.val) / 2 : (s.rev != null ? s.rev : (s.val != null ? s.val : 0));
+  const tilt = 0.35 * fund + 0.20 * (s.tech || 0) + 0.15 * man.m + 0.20 * man.i + 0.10 * man.l;
+  let wBull = 0.30 + 0.25 * tilt, wBear = 0.30 - 0.25 * tilt;
+  wBull = Math.max(0.05, Math.min(0.55, wBull)); wBear = Math.max(0.05, Math.min(0.55, wBear));
+  const wMid = 1 - wBull - wBear;
+  /* 情景锚 */
+  const pe = peStats(co.ticker), eps1 = epsFor(co.ticker, 'fy1') || {}, eps2 = epsFor(co.ticker, 'fy2') || {};
+  const vol = volStats(co.ticker); const sig = vol ? vol.sigma : 0.40;
+  const bull = (pe && isFinite(pe.p50) && isFinite(eps2.mean) && eps2.mean > 0) ? pe.p50 * eps2.mean : co.price * Math.exp(0.9 * sig * Math.sqrt(0.5));
+  const bear = (pe && isFinite(pe.p10) && isFinite(eps1.low) && eps1.low > 0) ? pe.p10 * eps1.low : co.price * Math.exp(-0.9 * sig * Math.sqrt(0.5));
+  const mid = co.price;
+  /* MC:6000路径×126日,历史收益去均值 bootstrap + 情景漂移 */
+  const c = ph.map(x => x.price);
+  const rets = [];
+  for (let i = 1; i < c.length; i++) if (c[i - 1] > 0 && c[i] > 0) rets.push(Math.log(c[i] / c[i - 1]));
+  const use = rets.slice(-504);
+  const mur = use.reduce((a, b) => a + b, 0) / use.length;
+  /* 频率→每日:若数据非日线,把收益缩放到日尺度 */
+  const gaps = []; for (let i = 1; i < ph.length; i++) { const g = (new Date(ph[i].date) - new Date(ph[i - 1].date)) / 86400000; if (g > 0) gaps.push(g); }
+  gaps.sort((a, b) => a - b); const med = gaps[Math.floor(gaps.length / 2)] || 1;
+  const perStep = med <= 2 ? 1 : med <= 10 ? 5 : 21;   /* 交易日/样本 */
+  const H = Math.max(6, Math.round(126 / perStep));
+  const rz = use.map(x => x - mur);
+  const NP = 6000, anchors = [[bear, wBear], [mid, wMid], [bull, wBull]];
+  let up = 0, up10 = 0, dn10 = 0; const ends = new Array(NP);
+  for (let k = 0; k < NP; k++) {
+    const rnd = Math.random(); let acc = 0, tgt = mid;
+    for (const [a, w] of anchors) { acc += w; if (rnd <= acc) { tgt = a; break; } }
+    const drift = Math.log(tgt / co.price) / H;
+    let p = co.price;
+    for (let d = 0; d < H; d++) p *= Math.exp(rz[(Math.random() * rz.length) | 0] + drift);
+    ends[k] = p;
+    if (p > co.price) up++;
+    if (p > co.price * 1.10) up10++;
+    if (p < co.price * 0.90) dn10++;
+  }
+  ends.sort((a, b) => a - b);
+  out.replaceChildren();
+  const tile = (lb, vl, cls) => {
+    const d = el('div', 'tile'); d.appendChild(el('div', 'lb', lb));
+    const v = el('div', 'vl', vl); if (cls) v.classList.add(cls);
+    d.appendChild(v); out.appendChild(d);
+  };
+  const pu = up / NP * 100;
+  tile(t('dirPUp'), pu.toFixed(0) + '%', pu >= 55 ? 'pos' : pu <= 45 ? 'neg' : '');
+  tile(t('dirPUp10'), (up10 / NP * 100).toFixed(0) + '%', '');
+  tile(t('dirPDn10'), (dn10 / NP * 100).toFixed(0) + '%', '');
+  tile(t('dirMedian'), fmtN(ends[(NP / 2) | 0]), '');
+  const d2 = el('div', 'tile'); d2.appendChild(el('div', 'lb', t('dirWeights')((wBear * 100).toFixed(0), (wMid * 100).toFixed(0), (wBull * 100).toFixed(0))));
+  d2.appendChild(el('div', 'dt', 'tilt ' + (tilt > 0 ? '+' : '') + tilt.toFixed(2)));
+  out.appendChild(d2);
+  $('dirNote').textContent = t('dirNote')(fmtN(bear), fmtN(mid), fmtN(bull));
+}
+function renderPEBand(co, pe) {
+  const sec = $('peBandSec'), box = $('peBandChart'); box.replaceChildren();
+  if (!pe || pe.src !== 'history') { sec.hidden = true; return; }
+  sec.hidden = false;
+  const h = pe.series, W = 1100, H = 300, L = 46, R = 84, T = 16, B = 30;
+  let mn = Math.min(...h.map(d => d.pe), pe.p10), mx = Math.max(...h.map(d => d.pe), pe.p90);
+  const pad = (mx - mn) * .08 || 1; mn -= pad; mx += pad;
+  const x = i => L + i / (h.length - 1) * (W - L - R);
+  const y = v => T + (mx - v) / (mx - mn) * (H - T - B);
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'NTM 市盈率历史序列与分位参考线' });
+  /* y ticks */
+  const step = Math.max(1, Math.round((mx - mn) / 5));
+  for (let v = Math.ceil(mn / step) * step; v <= mx; v += step) {
+    svg.appendChild(svgEl('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: 'var(--grid)', 'stroke-width': 1 }));
+    svg.appendChild(svgEl('text', { x: L - 8, y: y(v) + 4, 'text-anchor': 'end', 'font-size': 11, fill: 'var(--text-muted)' }, String(v)));
+  }
+  /* x year ticks */
+  h.forEach((d, i) => {
+    if (d.date.slice(5, 7) === '01' || i === 0) {
+      svg.appendChild(svgEl('text', { x: x(i), y: H - 8, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--text-muted)' }, d.date.slice(0, 4)));
+    }
+  });
+  /* percentile hairlines + right labels(标签垂直防碰撞:最小间距 12px) */
+  const plabs = [['p10', 'P10'], ['p25', 'P25'], ['p50', 'P50'], ['p75', 'P75'], ['p90', 'P90']].map(([k, lb]) => ({ k, lb, ly: y(pe[k]) }));
+  for (const pl of plabs) {
+    svg.appendChild(svgEl('line', { x1: L, x2: W - R, y1: y(pe[pl.k]), y2: y(pe[pl.k]), stroke: 'var(--axis)', 'stroke-width': 1 }));
+  }
+  plabs.sort((a, b) => a.ly - b.ly);
+  for (let i = 1; i < plabs.length; i++) {
+    if (plabs[i].ly < plabs[i - 1].ly + 12) plabs[i].ly = plabs[i - 1].ly + 12;
+  }
+  for (const pl of plabs) {
+    svg.appendChild(svgEl('text', { x: W - R + 8, y: pl.ly + 4, 'font-size': 11, fill: 'var(--text-secondary)' }, pl.lb + ' ' + fmtX(pe[pl.k])));
+  }
+  /* line */
+  let dstr = '';
+  h.forEach((d, i) => { dstr += (i ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(d.pe).toFixed(1); });
+  svg.appendChild(svgEl('path', { d: dstr, fill: 'none', stroke: 'var(--series-1)', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+  /* current dot + label */
+  const li = h.length - 1;
+  svg.appendChild(svgEl('circle', { cx: x(li), cy: y(h[li].pe), r: 4.5, fill: 'var(--series-1)', stroke: 'var(--surface-1)', 'stroke-width': 2 }));
+  svg.appendChild(svgEl('text', { x: x(li) - 8, y: y(h[li].pe) - 12, 'text-anchor': 'end', 'font-size': 11.5, 'font-weight': 650, fill: 'var(--text-primary)' }, t('peCur') + fmtX(h[li].pe)));
+  /* crosshair + tooltip */
+  const cross = svgEl('line', { y1: T, y2: H - B, stroke: 'var(--axis)', 'stroke-width': 1, visibility: 'hidden' });
+  svg.appendChild(cross);
+  const hit = svgEl('rect', { x: L, y: T, width: W - L - R, height: H - T - B, fill: 'transparent' });
+  const tip = $('peTip');
+  hit.addEventListener('pointermove', ev => {
+    const bb = $('peBandBox').getBoundingClientRect();
+    const svgX = (ev.clientX - bb.left) / bb.width * W;
+    const i = Math.max(0, Math.min(h.length - 1, Math.round((svgX - L) / (W - L - R) * (h.length - 1))));
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i));
+    cross.setAttribute('visibility', 'visible');
+    tip.replaceChildren();
+    tip.appendChild(el('div', 'v', fmtX(h[i].pe)));
+    const k = el('div', 'k');
+    const key = el('span', 'key'); key.style.background = 'var(--series-1)';
+    k.appendChild(key);
+    k.appendChild(document.createTextNode(h[i].date.slice(0, 7) + ' · ' + t('histPct')(rankPct(pe.sorted, h[i].pe))));
+    tip.appendChild(k);
+    tip.style.display = 'block';
+    tip.style.left = Math.min(ev.clientX - bb.left + 14, bb.width - 190) + 'px';
+    tip.style.top = (ev.clientY - bb.top - 48) + 'px';
+  });
+  hit.addEventListener('pointerleave', () => { tip.style.display = 'none'; cross.setAttribute('visibility', 'hidden'); });
+  svg.appendChild(hit);
+  box.appendChild(svg);
+  const s = $('peStatsLine');
+  s.textContent = t('peStats')(h.length, h[0].date.slice(0, 7), h[li].date.slice(0, 7)) + '· P10 ' + fmtX(pe.p10)
+    + ' · P25 ' + fmtX(pe.p25) + ' · ' + t('peMedianShort') + ' ' + fmtX(pe.p50) + ' · P75 ' + fmtX(pe.p75) + ' · P90 ' + fmtX(pe.p90)
+    + ' · ' + t('peCur') + fmtX(pe.current) + t('pctOf')(rankPct(pe.sorted, pe.current))
+    + (h.length < 36 ? t('peShortWin') : '');
+}
+
+/* ================= render root ================= */
+let lastStatusMsg = null;
+function renderAll(statusMsg) {
+  const has = state.companies.size > 0;
+  $('ovCard').hidden = !has;
+  if (statusMsg != null) lastStatusMsg = statusMsg;
+  if (lastStatusMsg != null || has) {
+    const st = $('status'); st.replaceChildren();
+    if (lastStatusMsg != null) st.appendChild(el('span', 'ok', lastStatusMsg + ' '));
+    if (has) {
+      const withHist = [...state.companies.keys()].filter(k => (state.history.get(k) || []).length >= 12).length;
+      st.appendChild(el('span', '', t('stTotal')(state.companies.size, withHist)));
+    }
+  }
+  if (has) {
+    const rows = overviewRows();
+    renderOvTable(rows);
+    renderOvChart(rows);
+    renderDetail();
+  } else {
+    $('detCard').hidden = true;
+  }
+}
+
+/* ================= events ================= */
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', ev => handleFiles([...ev.dataTransfer.files]));
+$('fileInput').addEventListener('change', ev => { handleFiles([...ev.target.files]); ev.target.value = ''; });
+$('demoBtn').addEventListener('click', loadDemo);
+$('coSel').addEventListener('change', ev => { state.selected = ev.target.value; renderAll(); });
+$('hzTabs').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  state.horizon = b.dataset.h; renderAll();
+});
+function bindEps(id, key) {
+  $(id).addEventListener('input', ev => {
+    const t = state.selected; if (!t) return;
+    const k = t + '|' + state.horizon;
+    const cur = state.overrides.get(k) || { ...epsFor(t, state.horizon) };
+    cur[key] = parseFloat(ev.target.value);
+    state.overrides.set(k, cur);
+    partialRefresh();   /* 不重建输入框,避免打断输入 */
+  });
+}
+bindEps('epsLow', 'low'); bindEps('epsMean', 'mean'); bindEps('epsHigh', 'high');
+$('epsReset').addEventListener('click', () => {
+  if (state.selected) { state.overrides.delete(state.selected + '|' + state.horizon); renderAll(); }
+});
+function bindPe(id, key) {
+  $(id).addEventListener('input', ev => {
+    const t = state.selected; if (!t) return;
+    const m = state.peManual.get(t) || {};
+    m[key] = parseFloat(ev.target.value);
+    state.peManual.set(t, m);
+    partialRefresh();
+  });
+}
+bindPe('peP25', 'p25'); bindPe('peP50', 'p50'); bindPe('peP75', 'p75');
+for (const [id, key] of [['dirMacro', 'm'], ['dirInd', 'i'], ['dirLiq', 'l']]) {
+  $(id).addEventListener('change', ev => {
+    const tk = state.selected; if (!tk) return;
+    const man = state.dirManual.get(tk) || { m: 0, i: 0, l: 0 };
+    man[key] = parseFloat(ev.target.value) || 0;
+    state.dirManual.set(tk, man);
+    const co = state.companies.get(tk);
+    renderDirection(co, calcRange(co, state.horizon));
+  });
+}
+$('pxInput').addEventListener('input', ev => {
+  const co = state.companies.get(state.selected); if (!co) return;
+  co.price = parseFloat(ev.target.value);
+  co.priceSrc = 'user'; co.priceDate = '@manual';
+  partialRefresh();
+});
+
+/* theme toggle */
+const THEME_KEYS = ['auto', 'light', 'dark'];
+let themeIdx = 0;
+function applyThemeBtn() { $('themeBtn').textContent = t('themeNames')[THEME_KEYS[themeIdx]]; }
+$('themeBtn').addEventListener('click', () => {
+  themeIdx = (themeIdx + 1) % 3;
+  const k = THEME_KEYS[themeIdx];
+  if (k === 'auto') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = k;
+  applyThemeBtn();
+});
+applyThemeBtn();
+
+/* language toggle */
+$('langBtn').addEventListener('click', () => {
+  LANG = LANG === 'zh' ? 'en' : 'zh';
+  const app = $('app');
+  if (LANG === 'en') app.dataset.lang = 'en'; else delete app.dataset.lang;
+  $('langBtn').textContent = LANG === 'zh' ? 'EN' : '中文';
+  document.documentElement.lang = LANG === 'zh' ? 'zh-CN' : 'en';
+  applyThemeBtn();
+  renderAll();   /* 重绘所有动态文本与图表标签 */
+});
+
+/* template downloads */
+const T_CO = 'ticker,name,currency,price,price_date,eps_fy1_low,eps_fy1_mean,eps_fy1_high,eps_fy2_low,eps_fy2_mean,eps_fy2_high\nAAPL-US,Apple Inc.,USD,231.50,2026-07-23,7.10,7.45,7.80,7.60,8.15,8.70\n';
+const T_HI = 'ticker,date,pe_ntm\nAAPL-US,2021-01-31,33.2\nAAPL-US,2021-02-28,31.8\n';
+$('dlCompanies').href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(T_CO);
+$('dlHistory').href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(T_HI);
+
+</script>
+</body>
+</html>

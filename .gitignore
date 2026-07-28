@@ -1,0 +1,17 @@
+# FactSet exports are licensed market data — never publish them
+Assets/
+*.xlsx
+*.xls
+*.csv
+!companies_template.csv
+!history_template.csv
+
+# OS / editor noise
+Thumbs.db
+.DS_Store
+~$*
+
+# workaround junk
+_to_delete/
+
+fetcher/node_modules/

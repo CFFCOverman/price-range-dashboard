@@ -1,0 +1,7 @@
+# Price Range Dashboard 拉取清单 — 一行一个代码(如 NVDA-US),# 开头为注释
+# 可直接用记事本编辑保存;也可在运行时的控制台里增删。
+NVDA-US
+GOOGL-US
+AMD-US
+ASML-US
+MSFT-US
