@@ -135,19 +135,30 @@ function printList(list) {
 }
 let TICKERS = loadTickers();
 if (!fs.existsSync(TICKERS_FILE)) saveTickers(TICKERS);
-if (!LOGIN_ONLY && process.stdin.isTTY) {   /* 无终端(如定时任务)时跳过交互,直接按清单拉取 */
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const ask = q => Promise.race([rl.question(q), new Promise(res => rl.once('close', () => res('')))]);
+const RL = (!LOGIN_ONLY && process.stdin.isTTY)
+  ? readline.createInterface({ input: process.stdin, output: process.stdout })
+  : null;   /* 无终端(如定时任务):跳过所有交互 */
+const ask = q => RL
+  ? Promise.race([RL.question(q), new Promise(res => RL.once('close', () => res('')))])
+  : Promise.resolve('');
+/** 清单菜单。round=0 首轮(回车=开始);round>0 完成后(回车=退出,有改动才继续拉)。返回是否继续拉取 */
+async function manageMenu(round) {
+  if (!RL) return round === 0;
+  let changed = false;
   printList(TICKERS);
-  console.log('操作:输代码添加(可多个,逗号/空格分隔)| -代码 删除 | edit 编辑清单 | sources 查看源出台账 | 回车 开始拉取');
+  console.log(round === 0
+    ? '操作:输代码添加(可多个,逗号/空格分隔)| -代码 删除 | edit 编辑清单 | sources 源出台账 | 回车 开始拉取'
+    : '本轮完成。想继续:输代码添加/删除后回车(未过期的公司不会重复拉)| edit / sources 可用 | 直接回车 = 退出');
   while (true) {
     const ans = (await ask('> ')).trim();
     if (!ans) break;
     if (/^edit$/i.test(ans)) {
       saveTickers(TICKERS);
+      const before = TICKERS.join(',');
       exec(`start notepad "${TICKERS_FILE}"`);
       await ask('已打开记事本(tickers.txt)—— 编辑保存后回到这里按回车刷新清单 ');
       TICKERS = loadTickers();
+      if (TICKERS.join(',') !== before) changed = true;
       printList(TICKERS);
       continue;
     }
@@ -161,46 +172,54 @@ if (!LOGIN_ONLY && process.stdin.isTTY) {   /* 无终端(如定时任务)时跳�
       tok = tok.toUpperCase();
       if (tok.startsWith('-')) {
         const t = tok.slice(1);
-        if (TICKERS.includes(t)) { TICKERS = TICKERS.filter(x => x !== t); console.log('  已删除', t); }
+        if (TICKERS.includes(t)) { TICKERS = TICKERS.filter(x => x !== t); changed = true; console.log('  已删除', t); }
         else console.log('  ⚠ 清单里没有', t);
       } else if (!VALID.test(tok)) {
         console.log('  ⚠ 跳过无法识别的代码:', tok, '(格式应如 AMZN-US / ASML-US)');
       } else if (!TICKERS.includes(tok)) {
-        TICKERS.push(tok); console.log('  已添加', tok);
+        TICKERS.push(tok); changed = true; console.log('  已添加', tok);
       } else console.log('  已在清单中:', tok);
     }
     saveTickers(TICKERS);
     printList(TICKERS);
-    console.log('继续增删,或回车开始拉取');
+    console.log(round === 0 ? '继续增删,或回车开始拉取' : '继续增删,或回车开始拉取新增(回车前无改动则退出)');
   }
-  rl.close();
   saveTickers(TICKERS);
-  if (!TICKERS.length) { console.log('清单为空,已退出。'); process.exit(0); }
+  if (!TICKERS.length) { console.log('清单为空,退出。'); return false; }
+  return round === 0 ? true : changed;
 }
 
-const ctx = await chromium.launchPersistentContext(PROFILE, {
-  channel: 'chrome', headless: HEADLESS, viewport: { width: 1600, height: 900 },
-  acceptDownloads: true,
-});
-const page = ctx.pages()[0] || await ctx.newPage();
+/* ============ 浏览器按需启动:菜单先出现,按回车开始拉取时才弹 Chrome 窗口 ============ */
+let ctx = null, page = null;
+async function ensureBrowser() {
+  if (ctx) return;
+  log('⏳ 正在启动浏览器……会弹出一个 Chrome 窗口用于访问 FactSet(那不是仪表盘),拉取期间请不要关闭或操作它。');
+  ctx = await chromium.launchPersistentContext(PROFILE, {
+    channel: 'chrome', headless: HEADLESS, viewport: { width: 1600, height: 900 },
+    acceptDownloads: true,
+  });
+  page = ctx.pages()[0] || await ctx.newPage();
 
-if (LOGIN_ONLY) {
-  await page.goto(BASE);
-  log('请在打开的浏览器里完成 FactSet 登录,然后关闭浏览器窗口。登录态会被记住。');
-  await page.waitForEvent('close', { timeout: 0 }).catch(() => {});
-  await ctx.close();
-  process.exit(0);
-}
+  if (LOGIN_ONLY) {
+    await page.goto(BASE);
+    log('请在打开的浏览器里完成 FactSet 登录,然后关闭浏览器窗口。登录态会被记住。');
+    await page.waitForEvent('close', { timeout: 0 }).catch(() => {});
+    await ctx.close();
+    process.exit(0);
+  }
 
-/* 自动登录检测:未登录时在同一窗口等你登完,自动继续(无需单独 login 命令) */
-await page.goto(BASE + '/workstation/', { waitUntil: 'domcontentloaded' }).catch(() => {});
-await page.waitForTimeout(5000);
-if (!/my\.apps\.factset\.com/.test(page.url()) || /login|auth|id\.factset/i.test(page.url())) {
-  log('检测到未登录 —— 请在打开的窗口里登录 FactSet,登录完成后脚本会自动继续……');
-  await page.waitForURL(u => /my\.apps\.factset\.com/.test(u.href) && !/login|auth/i.test(u.href), { timeout: 0 });
-  await page.waitForTimeout(6000);
-  log('登录成功,开始抓取。');
+  /* 自动登录检测:未登录时在同一窗口等你登完,自动继续(无需单独 login 命令) */
+  log('⏳ 正在检查 FactSet 登录状态,请稍等……');
+  await page.goto(BASE + '/workstation/', { waitUntil: 'domcontentloaded' }).catch(() => {});
+  await page.waitForTimeout(5000);
+  if (!/my\.apps\.factset\.com/.test(page.url()) || /login|auth|id\.factset/i.test(page.url())) {
+    log('检测到未登录 —— 请在打开的窗口里登录 FactSet,登录完成后脚本会自动继续……');
+    await page.waitForURL(u => /my\.apps\.factset\.com/.test(u.href) && !/login|auth/i.test(u.href), { timeout: 0 });
+    await page.waitForTimeout(6000);
+  }
+  log('✔ 已登录 FactSet。');
 }
+if (LOGIN_ONLY) await ensureBrowser();   /* --login 模式无需菜单,直接开窗 */
 
 /** 进入某 ticker 的 Estimate History 页,返回 {navFrame, tableFrame} */
 async function openEstimateHistory(ticker) {
@@ -343,33 +362,55 @@ async function fetchCharting(ticker) {
 }
 
 // ================= 主流程 =================
-const priceRows = [['ticker', 'name', 'currency', 'price', 'price_date',
-  'eps_fy1_low', 'eps_fy1_mean', 'eps_fy1_high', 'eps_fy2_low', 'eps_fy2_mean', 'eps_fy2_high']];
 const today = new Date().toISOString().slice(0, 10);
+const FRESH_HOURS = 20;   /* 文件在此小时数内视为最新,跳过重复拉取 */
+function isFresh(file) {
+  try { return (Date.now() - fs.statSync(path.join(OUT_DIR, file)).mtimeMs) < FRESH_HOURS * 3600e3; } catch { return false; }
+}
+/* companies.csv 增量维护:先载入已有行,拉到新价格才覆盖对应公司 */
+const CSV_HEADER = 'ticker,name,currency,price,price_date,eps_fy1_low,eps_fy1_mean,eps_fy1_high,eps_fy2_low,eps_fy2_mean,eps_fy2_high';
+const COMPANIES_CSV = path.join(OUT_DIR, 'companies.csv');
+const priceMap = new Map();
+try {
+  if (fs.existsSync(COMPANIES_CSV)) {
+    for (const line of fs.readFileSync(COMPANIES_CSV, 'utf8').split(/\r?\n/).slice(1)) {
+      const tk = (line.split(',')[0] || '').trim().toUpperCase();
+      if (tk) priceMap.set(tk, line);
+    }
+  }
+} catch {}
 
-const results = {};
-const TOTAL = TICKERS.length * 4;   /* 每家 4 步:当前财年 / 另一财年 / 价格 / 日线 */
-let done = 0;
-for (const ticker of TICKERS) {
+async function fetchTicker(ticker, R, adv) {
+  const freshFy1 = isFresh(`${ticker} FY1 Estimate History.xlsx`);
+  const freshFy2 = isFresh(`${ticker} FY2 Estimate History.xlsx`);
+  const freshCh  = isFresh(`${ticker} Daily Charting.xlsx`);
+  if (freshFy1 && freshFy2 && freshCh && priceMap.has(ticker)) {
+    R.FY1 = R.FY2 = R.价格 = R.日线 = true; R.fresh = true;
+    log(`==== ${ticker} ==== 本地数据未过期(<${FRESH_HOURS}h),整体跳过`);
+    adv(4, `${ticker} · 已最新`);
+    return;
+  }
   log(`==== ${ticker} ====`);
-  const R = results[ticker] = { FY1: false, FY2: false, 价格: false, 日线: false };
-  const base = done;
-  try {
-    bar(done, TOTAL, `${ticker} · 打开 Estimate History…`);
+  if (freshFy1 && freshFy2) {
+    R.FY1 = R.FY2 = true;
+    if (priceMap.has(ticker)) R.价格 = true;
+    log(`  估值数据未过期,跳过 Estimate History 页`);
+    adv(3, `${ticker} · 估值已最新`);
+  } else {
+    adv(0, `${ticker} · 打开 Estimate History…`);
     const { nav, tbl } = await openEstimateHistory(ticker);
     const price = await scrapePrice();
     const p0 = await currentPeriod();
     const tag0 = (p0 ? fyTag(p0) : null) || 'FY1';
-    bar(done, TOTAL, `${ticker} · 抓取 ${tag0}(${p0 || '?'})…`);
     const ehUrl = `${BASE}/workstation/navigator/company-security/estimate-history/${ticker}`;
     const srcOf = lbl => `FactSet 页签: Company/Security > Estimates > Estimate History | 财年 ${lbl} | 表格: 逐月一致预期(Mean/Low/High/上调下调家数/P⁄E) | ${ehUrl} | 抓取于 ${new Date().toISOString().slice(0, 16)}Z`;
     log(`  当前财年: ${p0}(${tag0})  价格: ${price}`);
     R[tag0] = saveEstimateXlsx(ticker, tag0, await scrapeTable(tbl), srcOf(p0 || tag0));
-    bar(++done, TOTAL, `${ticker} · ${tag0} 完成`);
+    adv(1, `${ticker} · ${tag0} 完成`);
     /* 切到"另一个"财年:当前是 FY1 → +1 年;当前是 FY2 → −1 年 */
     if (p0 && (tag0 === 'FY1' || tag0 === 'FY2')) {
       const other = shiftLabel(p0, tag0 === 'FY1' ? 1 : -1);
-      bar(done, TOTAL, `${ticker} · 切换财年 → ${other}…`);
+      adv(0, `${ticker} · 切换财年 → ${other}…`);
       if (await switchPeriod(other)) {
         const tblO = nav.frameLocator('iframe[src*="estimate-reports"]');
         await page.waitForTimeout(1500);
@@ -378,43 +419,76 @@ for (const ticker of TICKERS) {
         log(`  ⚠ 财年切换到 ${other} 失败,本轮只有 ${tag0};可在 FactSet 手动切换后重跑`);
       }
     }
-    bar(++done, TOTAL, `${ticker} · 财年数据完成`);
+    adv(1, `${ticker} · 财年数据完成`);
     if (isFinite(price)) {
-      priceRows.push([ticker, ticker, 'USD', price, today, '', '', '', '', '', '']);
+      priceMap.set(ticker, [ticker, ticker, 'USD', price, today, '', '', '', '', '', ''].join(','));
       R.价格 = true;
     }
-    bar(++done, TOTAL, `${ticker} · Charting 日线导出…`);
+    adv(1, `${ticker} · 价格记录`);
+  }
+  if (freshCh) {
+    R.日线 = true;
+    log(`  日线未过期,跳过 Charting`);
+    adv(1, `${ticker} · 日线已最新`);
+  } else {
+    adv(0, `${ticker} · Charting 日线导出…`);
     R.日线 = await fetchCharting(ticker);
-    bar(++done, TOTAL, `${ticker} · 完成`);
-  } catch (e) {
-    log(`  ✖ ${ticker} 失败:`, e.message.split('\n')[0]);
-    done = base + 4;
-    bar(done, TOTAL, `${ticker} · 跳过`);
+    adv(1, `${ticker} · 完成`);
   }
 }
-barEnd();
 
-if (priceRows.length > 1) {
-  fs.writeFileSync(path.join(OUT_DIR, 'companies.csv'), priceRows.map(r => r.join(',')).join('\n'));
-  log('✔ companies.csv(价格汇总;EPS 列留空由 Estimate History 补全)');
-  recordSource('companies.csv', `FactSet 页签: Company/Security > Estimates > Estimate History | 各公司页头实时价格汇总 | ${priceRows.length - 1} 家 | ${BASE}/workstation/navigator/company-security/estimate-history/ | ${new Date().toISOString().slice(0, 16)}Z`);
+let appOpened = false;
+async function runRound() {
+  await ensureBrowser();
+  const results = {};
+  const TOTAL = TICKERS.length * 4;   /* 每家 4 步:当前财年 / 另一财年 / 价格 / 日线 */
+  log(`⏳ 开始拉取 ${TICKERS.length} 家公司的数据(每家最多 4 项),请稍等……本地 ${FRESH_HOURS} 小时内的最新数据会自动跳过。`);
+  let done = 0;
+  const adv = (n, label) => { done = Math.min(done + n, TOTAL); bar(done, TOTAL, label); };
+  for (const ticker of TICKERS) {
+    const R = results[ticker] = { FY1: false, FY2: false, 价格: false, 日线: false };
+    const base = done;
+    try { await fetchTicker(ticker, R, adv); }
+    catch (e) { log(`  ✖ ${ticker} 失败:`, e.message.split('\n')[0]); }
+    if (done < base + 4) adv(base + 4 - done, `${ticker} · 完成`);
+  }
+  barEnd();
+  fs.writeFileSync(COMPANIES_CSV, CSV_HEADER + '\n' + [...priceMap.values()].join('\n') + '\n');
+  log(`✔ companies.csv 已更新(${priceMap.size} 家)`);
+  recordSource('companies.csv', `FactSet 页签: Company/Security > Estimates > Estimate History | 各公司页头实时价格汇总 | ${priceMap.size} 家 | ${BASE}/workstation/navigator/company-security/estimate-history/ | ${new Date().toISOString().slice(0, 16)}Z`);
+  writeSources();
+  log(`✔ 源出清单已更新: ${SOURCES_FILE}`);
+  console.log('\n================ 拉取结果 ================');
+  for (const [tk, R] of Object.entries(results)) {
+    console.log('  ' + tk.padEnd(10)
+      + Object.entries(R).filter(([k]) => k !== 'fresh').map(([k, v]) => (v ? ' ✔' : ' ✖') + k).join('  ')
+      + (R.fresh ? '  (本地最新,未重拉)' : ''));
+  }
+  const misses = Object.values(results).reduce((a, R) => a + ['FY1', 'FY2', '价格', '日线'].filter(k => !R[k]).length, 0);
+  console.log(misses === 0 ? '全部完成 ✔' : `有 ${misses} 项未完成(✖),可重跑或按提示手动补。`);
+  console.log('==========================================');
+  if (!appOpened && process.platform === 'win32' && fs.existsSync(APP_HTML)) {
+    appOpened = true;
+    log('正在打开 Price Range Dashboard……点「重连上次文件夹」→「允许」载入数据(之后再拉取只需在页面里点「重新扫描」)。');
+    exec(`start "" "${APP_HTML}"`);
+  }
 }
-writeSources();
-log(`✔ 源出清单已更新: ${SOURCES_FILE}`);
-/* ============ 拉取结果清单 ============ */
-console.log('\n================ 拉取结果 ================');
-for (const [tk, R] of Object.entries(results)) {
-  console.log('  ' + tk.padEnd(10) + Object.entries(R).map(([k, v]) => (v ? ' ✔' : ' ✖') + k).join('  '));
-}
-const misses = Object.values(results).reduce((a, R) => a + Object.values(R).filter(v => !v).length, 0);
-console.log(misses === 0 ? '全部完成 ✔' : `有 ${misses} 项未完成(✖),可重跑或按提示手动补。`);
-console.log('==========================================');
-await ctx.close();
 
-/* ============ 自动打开 Price Range Dashboard ============ */
-if (process.platform === 'win32' && fs.existsSync(APP_HTML)) {
-  log('正在打开 Price Range Dashboard……浏览器里点「重连上次文件夹」→「允许」即可载入最新数据(首次使用请点「连接文件夹」选择 Assets)。');
-  exec(`start "" "${APP_HTML}"`);
-} else {
-  log('完成。打开仪表盘 → 连接文件夹/重新扫描 即可。');
+/* ============ 轮次循环:拉取 → 回菜单(可加新公司)→ 只拉新增/过期 → 回车退出 ============ */
+console.log('============ FactSet 数据拉取 · Price Range Dashboard ============');
+console.log('  输出目录: ' + OUT_DIR);
+console.log('  流程: 确认清单 → 回车开始 → 自动弹出 Chrome 拉取(请勿操作该窗口)→ 打开仪表盘');
+console.log('==================================================================');
+let round = 0;
+while (true) {
+  if (round > 0 || RL) {
+    const proceed = await manageMenu(round);
+    if (!proceed) break;
+  }
+  await runRound();
+  round++;
+  if (!RL) break;   /* 无终端(定时任务):单轮结束 */
 }
+if (RL) RL.close();
+if (ctx) await ctx.close();
+log('已退出。');
