@@ -115,6 +115,43 @@ details.help code {
 }
 details.help table { border-collapse: collapse; margin: 8px 0; }
 details.help th, details.help td { border: 1px solid var(--grid); padding: 4px 9px; text-align: left; }
+/* ---- 窄视口:帮助表格改成堆叠卡片,别让它把整页撑出横向滚动条 ----------------
+ * 病灶:这两张表没有 width,走 shrink-to-fit;可用宽度 = 380 − 48(.wrap) − 42(.card)
+ * = 290px,但它们的 **min-content 是 444px** —— 第三列里 `FE_ESTIMATE("EPS",
+ * "LOW|MEAN|HIGH",…,+1)` 是一个不含空格的 token,word-break 默认不拆,于是那一列
+ * 的最小宽度被这条 code 顶到 ~299px。shrink-to-fit 取 max(min-content, available),
+ * 结果表格死死占住 444px,右边缘伸出视口 109.2px(表格自己不滚,是**整页**在滚)。
+ *
+ * 为什么选"堆叠"而不是给表格套 overflow-x:auto 横滚:
+ *   1. 横滚只是把 444px 藏进一个滚动容器 —— 单元格的 border box 仍然停在视口外,
+ *      "#app 子树里最靠右的元素不伸出视口"这条断言照样红;真正读的时候也还是
+ *      每读一行就要左右拉一次,三列表格横滚的可读性很差;
+ *   2. 堆叠让 code token **整条不折行**地显示(`eps_fy1_low / _mean / _high`、
+ *      `FE_ESTIMATE(...)` 都完整),而第三种方案 table-layout:fixed + code 允许
+ *      任意断行会把标识符从中间劈开(`eps_fy1_lo` / `w / _mean`)—— 一个被截断的
+ *      字段名比排版难看危险得多,它会被照抄进 CSV 表头。
+ *   放弃横滚的代价:失去三列对齐的扫读性。290px 宽下三列各 ~96px 本来也扫不动,
+ *   所以这个代价是名义上的。
+ * 断点 560px:表格 min-content 444 + 48 + 42 = 534px 时刚好放得下,留一点余量。
+ * 桌面宽度完全不进这个 media block —— 1280px 下仍是原样的三列表格。 */
+@media (max-width: 560px) {
+  details.help table, details.help tbody, details.help tr,
+  details.help th, details.help td { display: block; }
+  details.help table { width: 100%; }
+  details.help tr { border: 1px solid var(--grid); border-radius: 6px; margin: 6px 0; padding: 3px 0; }
+  /* 表头三格竖着排是三行没有宾语的标签,纯噪音;第三列的语境改用 ::before 补回来 */
+  details.help tr:first-child { display: none; }
+  details.help th, details.help td { border: 0; padding: 2px 9px; }
+  details.help td:nth-child(3)::before {
+    content: "FactSet:"; color: var(--text-muted); margin-right: 5px;
+  }
+  /* 堆叠之后只剩一条 token 还是放不下:`FE_ESTIMATE("EPS","LOW|MEAN|HIGH",…,+1)`
+   * 单独就有 280px,而单元格净宽只有 270px。用 break-word 而不是 anywhere:
+   * break-word 只在"这一个词单独一行也放不下"时才强拆,列名类短 token
+   * (eps_fy1_low、FG_PE_NTM)一个都不会被劈开;anywhere 还会参与 min-content
+   * 计算,等于允许到处拆。这里被拆的是一条函数调用示例,不是要照抄的列名。 */
+  details.help code { overflow-wrap: break-word; }
+}
 /* ---- overview table ---- */
 table.ov { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 table.ov th {
@@ -137,6 +174,13 @@ table.ov td .tk { color: var(--text-muted); font-size: 12px; margin-left: 6px; }
 .mini .band { position: absolute; top: 4px; height: 6px; background: var(--wash-strong); border-radius: 3px; }
 .mini .now { position: absolute; top: 2px; width: 10px; height: 10px; border-radius: 50%;
   background: var(--series-2); border: 2px solid var(--surface-1); transform: translateX(-50%); }
+/* 表格下方"另有 N 家不在拉取清单里"的开关。做得像一行说明而不是按钮:
+   它是一条状态提示,顺带可以点开——不该抢主表格的注意力。 */
+.offroster {
+  margin-top: 8px; padding: 6px 10px; font-size: 12px; color: var(--text-muted);
+  cursor: pointer; user-select: none; border-top: 1px dashed var(--grid);
+}
+.offroster:hover { color: var(--text-secondary); background: var(--ghost); }
 /* ---- detail ---- */
 .detrow { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
 .detcol { flex: 1 1 420px; min-width: 320px; }
@@ -167,6 +211,121 @@ table.mx td:first-child { text-align: left; color: var(--text-secondary); font-s
 table.mx td .sub { display: block; font-size: 11px; }
 table.mx td.med { font-weight: 650; }
 table.mx td.base { outline: 2px solid var(--series-1); outline-offset: -2px; border-radius: 2px; }
+table.mx td.core { outline: 2px dashed var(--series-2); outline-offset: -2px; border-radius: 2px; font-weight: 650; cursor: help; }
+.mxKey { display: inline-block; width: 11px; height: 11px; vertical-align: -1px; margin-right: 4px; border-radius: 2px; }
+.mxKey.base { border: 2px solid var(--series-1); }
+.mxKey.core { border: 2px dashed var(--series-2); }
+.hint.warn { color: var(--delta-down); margin: 6px 0 0; }
+/* pressure / support levels */
+.plh { font-size: 12.5px; font-weight: 650; margin: 12px 0 0; letter-spacing: .02em; }
+.plh.up { color: var(--delta-down); }        /* 上方压力 = 挡住上涨,用告警色 */
+.plh.down { color: var(--delta-up); }        /* 下方支撑 = 托住下跌 */
+table.mx.pl td:first-child { color: var(--text-primary); font-weight: 600; }
+table.mx.pl td, table.mx.pl th { padding: 5px 8px; font-size: 12px; }
+/* 表头不折行:「本期触及概率」「证据等级」断成两行以后,列宽会随数据抖动 */
+table.mx.pl th { white-space: nowrap; }
+/* 这里曾经有 6 条 .plbar / .plbarf* —— 随 strength 一起整组删除。
+ * 不留空壳类名:留着,下一个人只要写一行 <span class="plbar"> 就能把 0–100 分请回来,
+ * 而进度条这个视觉隐喻本身就在宣称「越长越可信」,那正是被回测否掉的那件事。 */
+.pltag { display: inline-block; padding: 1px 6px; border-radius: 9px; font-size: 10.5px; line-height: 1.5;
+  border: 1px solid var(--border); color: var(--text-secondary); cursor: help; white-space: nowrap; margin-right: 4px; }
+.pltag.opt { border-color: var(--delta-down); color: var(--delta-down); }
+.pltag.tech { border-color: var(--series-1); color: var(--series-1); }
+
+/* ---- 持有期切换器(静态标签在 index.html 的 #plSec 里) ---- */
+.plholdrow { display: flex; align-items: center; gap: 10px; margin: 8px 0 2px; }
+.plholdrow label { font-size: 11.5px; color: var(--text-muted); letter-spacing: .02em; }
+.plholdrow .tabs button { font-size: 11.5px; padding: 4px 11px; }
+
+/* ---- 证据等级徽章:五档只用既有变量区分,不引入新色值 ----
+ * verified 是唯一允许旁边出现百分比的一档,所以只有它给正色描边;
+ * pending / descriptive / inconclusive 一律走灰,falsified 走告警色 ——
+ * 视觉上必须一眼能看出「这条没验过」。inconclusive 跟着灰而不是跟着告警色是有意的:
+ * 「样本不够,判不出」不是一个坏消息,是一个空白,给它红色等于替它宣告了一个没有的结论。 */
+.plev { display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 10.5px; line-height: 1.5;
+  border: 1px solid var(--border); color: var(--text-muted); cursor: help; white-space: nowrap; }
+.plev.verified { border-color: var(--delta-up); color: var(--delta-up); }
+.plev.pending { border-color: var(--axis); color: var(--text-muted); background: var(--ghost); }
+.plev.descriptive { border-color: var(--axis); color: var(--text-muted); }
+.plev.inconclusive { border-color: var(--axis); color: var(--text-muted); }
+.plev.falsified { border-color: var(--delta-down); color: var(--delta-down); }
+/* 未验证腿的「概率」格:这里永远不会有百分号,只有 plOptPending 的文案 */
+.plpend { color: var(--text-muted); font-size: 11.5px; cursor: help; }
+.plreach { font-variant-numeric: tabular-nums; font-weight: 650; }
+td.pldist { font-variant-numeric: tabular-nums; }
+
+/* ---- 表格下方的常驻正文:plBounceNote / plNoStrength / plHorizonNote ----
+ * 这三段**不是 tooltip**。少掉一个功能而把理由藏进悬浮提示,用户只会读成「你们做少了」。 */
+.plsay { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.plsay p { margin: 0 0 6px; font-size: 11.5px; line-height: 1.55; color: var(--text-secondary); }
+.plsay p:last-child { margin-bottom: 0; }
+.plsay strong { color: var(--text-primary); font-weight: 650; }
+
+/* 图下方的估值参考线图例:虚线样式与 SVG 里那几条一致 */
+.plleg { margin: 6px 0 0; font-size: 11px; color: var(--text-muted); cursor: help; display: flex; align-items: center; gap: 6px; }
+.plleg i { display: inline-block; width: 22px; height: 0; border-top: 1px dashed var(--axis); }
+/* #plNote 里每条说明各占一行:挤成一段以后 why 的四五句话没人读得完 */
+.plnl { display: block; margin-top: 4px; }
+.plnl:first-child { margin-top: 0; }
+/* ================= 买入逻辑模拟面板 =================
+ * 排版上只有两条非商量不可的规矩,别的都可以调:
+ *   ① 随机对照的胜率与 z **和胜率并排**,同一个格子里、同样的字号量级 —— 不许缩成 tooltip。
+ *      一个没有对照的胜率在单边行情里永远好看,把对照藏起来等于把"这可能只是行情"藏起来。
+ *   ② 触发时点表**不分页、不折叠、不截断**。用户要的就是"每一次触发的时间点";
+ *      这里只给一个 max-height + 滚动,行数一条不减。 */
+
+.simrow { align-items: flex-end; }
+.simrow .simrulecell { flex: 1 1 320px; min-width: 240px; }
+.simrow .simrulecell input { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
+.simrow input:disabled { opacity: .5; cursor: not-allowed; }
+#simRun { align-self: flex-end; }
+
+/* 文法提示 / 解析错误。错误态是**一行红字**,不是 alert、不是抛异常 —— 见 events.js 那段注释。 */
+#simHint { margin-top: 2px; line-height: 1.55; }
+#simHint code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px; padding: 0 3px; border-radius: 3px; background: var(--ghost); color: var(--text-secondary); }
+#simHint .simerr { color: var(--delta-down); font-weight: 600; }
+#simHint .simok { color: var(--delta-up); }
+
+/* KPI 格沿用 .kpis 的栅格;胜率那一格里塞了对照,所以单独给它三行的行高。
+ *
+ * ---- 三个数**同号同重**,这条声明不许拆 ----
+ * 原来是:处理组 21px/650 的近黑,对照 11px/400 的灰,区间 10.5px 的灰。
+ * 三个数在字面上确实"并排"了,第 ① 条的字面要求算是满足了 —— 可它同一句话里
+ * 还写着「同样的字号量级」,而 21 : 11 : 10.5 不是同一个量级,是主标题配脚注。
+ * 这件事的代价是具体的:supportBuy 的处理组 45.0% 对上对照 62.5%,
+ * z ≈ −0.93;拿 1260 个样本的无条件 5 日胜率 52.4% 做基线,处理组根本没跑赢过什么。
+ * 再把对照重抽 200 次,它自己的 sd 就有 7.9pp —— 那个 62.5% 是一次 +1.3σ 的抽签。
+ * 也就是说这一格里唯一被排版捧成"结论"的数字,恰恰是三个数里最没有内容的那个。
+ * 排版会替数字说话,而这句话是假的。所以三行合用同一条声明:字号、字重、颜色
+ * 一起写死在这里,谁都不能单独长大;要改就三个一起改,改完 [13] 那条断言会拦。
+ *
+ * 顺带把胜率从 21px 的展示号降下来:这一行是这排格子里唯一带对照的数,
+ * 而对照说的就是"它不是发现"。它读起来该像三个并列的数,不像一个标题。 */
+#simOut .tile.simwin .vl,
+#simOut .tile.simwin .simctrl,
+#simOut .tile.simwin .simci {
+  font-size: 13.5px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+#simOut .simctrl { display: block; margin-top: 3px; }
+#simOut .simci { display: block; margin-top: 3px; }
+
+/* 触发时点表 */
+#simTrig { margin-top: 10px; }
+#simTrig .simtwrap { max-height: 340px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+table.mx.sim { margin: 0; }
+table.mx.sim th { position: sticky; top: 0; background: var(--surface-1); z-index: 1; white-space: nowrap; }
+table.mx.sim td, table.mx.sim th { padding: 4px 8px; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+table.mx.sim td.pos { color: var(--delta-up); }
+table.mx.sim td.neg { color: var(--delta-down); }
+#simTrig .simcount { font-size: 11px; color: var(--text-muted); margin: 0 0 4px; }
+
+/* 样本太薄时那句话:不是 tooltip,是占一整行的正文 */
+.simthin { color: var(--delta-down); font-size: 11.5px; line-height: 1.55; margin: 6px 0; }
+/* 免责/口径三句话,常驻可见 */
+#simNote { line-height: 1.55; }
+#simNote .simnl { display: block; margin-top: 4px; }
+#simNote .simnl:first-child { margin-top: 0; }
 /* charts */
 .chartbox { position: relative; margin-top: 10px; }
 .chartbox svg { display: block; width: 100%; height: auto; }
@@ -315,17 +474,87 @@ svg text { font-family: inherit; }
     <p class="hint" id="cmpNote" style="margin-top:6px"></p>
   </div>
 
+  <div id="plSec" hidden>
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">上行压力位 / 下行支撑位(技术面 × 估值面 × 期权面三轨)</span><span class="le">Upside pressure / downside support (technical × valuation × options)</span></h2>
+    <!-- 持有期切换:必须是**静态**标签。render/pressure.js 只往上挂 onclick,不新建节点 ——
+         动态建节点会让 app/events.js 顶层的 $('id') 有机会取到 null,而那会把整个脚本块从抛错处炸断。
+         这里选的是 h(5/21/63 个交易日),**不是** 上面那个 FY1/FY2 财年切换,两者不能互相传。 -->
+    <div class="plholdrow">
+      <label><span class="lz">持有期</span><span class="le">Horizon</span></label>
+      <span class="tabs" id="plHoldTabs">
+        <button type="button" data-plh="short"><span class="lz">短线 · 5 日</span><span class="le">Short · 5d</span></button><button type="button" data-plh="mid" class="on"><span class="lz">中线 · 21 日</span><span class="le">Mid · 21d</span></button><button type="button" data-plh="long"><span class="lz">长线 · 63 日</span><span class="le">Long · 63d</span></button>
+      </span>
+    </div>
+    <div class="detrow">
+      <div class="detcol">
+        <div class="chartbox"><div id="plChart"></div></div>
+      </div>
+      <div class="detcol"><div id="plTable"></div></div>
+    </div>
+    <p class="hint" id="plNote" style="margin-top:6px"></p>
+  </div>
+
+  <!-- ================= 买入逻辑模拟(SPEC 3.5) =================
+       这一块的每一个带 id 的节点都**必须**静态写在这里:app/events.js 在顶层直接
+       `$('simRun').addEventListener(...)`,`$()` 取到 null 就是 TypeError,
+       而那会把整个脚本块从抛错处往下全部停掉 —— 页面看起来是白的,控制台只有一行错。
+       (注释里刻意不把那个尖括号标签名写全:build.mjs 拿"产物里恰好一个脚本标签"做硬校验,
+        它是纯字符串计数,注释里出现一次也会被算成两个,构建直接失败。)
+       select 里的 option 也是静态的(值写死,文案由 render/sim.js 按语种填):
+       option 装不下 .lz/.le 成对 span,但它们不是 $() 的目标,静态占位 + 填文案最省事。 -->
+  <div id="simSec" hidden>
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">买入逻辑模拟</span><span class="le">Buy-rule simulation</span></h2>
+    <div class="formrow simrow">
+      <div><label><span class="lz">持有期</span><span class="le">Holding period</span></label>
+        <select id="simHold"><option value="short"></option><option value="mid"></option><option value="long"></option></select></div>
+      <div><label><span class="lz">买入规则</span><span class="le">Buy rule</span></label>
+        <select id="simPreset"><option value="supportBuy"></option><option value="breakoutBuy"></option><option value="dipBuy"></option><option value="trendBuy"></option><option value="roomBuy"></option><option value="custom"></option></select></div>
+      <div class="simrulecell"><label><span class="lz">自定义条件</span><span class="le">Custom condition</span></label>
+        <input id="simRule" disabled autocomplete="off" spellcheck="false" placeholder="nearSupport(0.5) and reachBelow(0.4)"></div>
+      <!-- 唯一触发计算的入口。回放要跑 ~250 根 × 每根一次 pressureLevels,同步几百毫秒,
+           所以它绝不能挂在 input 上 —— 那会把输入框卡死(bindEps 踩过这个坑)。 -->
+      <button id="simRun"><span class="lz">立即模拟</span><span class="le">Run simulation</span></button>
+    </div>
+    <p class="hint" id="simHint"></p>
+    <div class="kpis" id="simOut"></div>
+    <div id="simTrig"></div>
+    <p class="hint" id="simNote"></p>
+  </div>
+
   <div id="dirSec" hidden>
     <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">走向概率(六维信号 → 情景加权蒙特卡洛,6 个月)</span><span class="le">Direction probability (six-factor scenario-weighted Monte Carlo, 6 months)</span></h2>
     <div class="formrow" id="dirChips"></div>
     <div class="formrow">
-      <div><label title="FactSet: Markets→Economics;看10Y利率3个月趋势(降=+)、美元趋势、FOMC路径"><span class="lz">宏观面</span><span class="le">Macro</span></label><select id="dirMacro"></select></div>
-      <div><label title="FactSet: Charting加SOX指数看其与MA200关系;AMD/AVGO/TSM的Estimate History修正方向"><span class="lz">行业面</span><span class="le">Industry</span></label><select id="dirInd"></select></div>
-      <div><label title="FactSet: 债券指数页看高收益利差趋势(收窄=+);Options页看Put/Call与IV skew"><span class="lz">流动性/期权情绪</span><span class="le">Liquidity / options</span></label><select id="dirLiq"></select></div>
+      <div><label title="自动信号=目标价3月动量+买入评级占比变化(Targets Ratings 文件)+空头持仓趋势(short-interest.csv);也可手动覆盖"><span class="lz">情绪面</span><span class="le">Sentiment</span></label><select id="dirSent"></select></div>
+      <div><label title="自动信号=基准ETF趋势+波动率分位+利率ETF趋势(fetcher 的 _MARKET-BENCH/RATES 文件);也可手动覆盖"><span class="lz">宏观面</span><span class="le">Macro</span></label><select id="dirMacro"></select></div>
+      <div><label title="自动信号=行业ETF对基准的3月相对强弱+MA200(_MARKET-SECTOR 文件);也可手动覆盖"><span class="lz">行业面</span><span class="le">Industry</span></label><select id="dirInd"></select></div>
+      <div><label title="自动信号=高收益债ETF 3月趋势+MA200,代理信用/流动性(_MARKET-CREDIT 文件);也可手动覆盖"><span class="lz">流动性面</span><span class="le">Liquidity</span></label><select id="dirLiq"></select></div>
+      <div><label title="同行的 Estimate History 修正动量平均值,并入行业面自动信号(与行业ETF相对强弱各占一半)。把同行加进 tickers.txt 拉一轮即可"><span class="lz">同行分组(行业盈利信号)</span><span class="le">Peer group (industry earnings)</span></label><input id="dirPeers" style="min-width:200px"></div>
     </div>
     <div class="kpis" id="dirOut"></div>
     <p class="hint" id="dirNote"></p>
   </div>
+  <!-- ================= 价格走势(蜡烛 / 收盘折线) =================
+       这一块的每个带 id 的节点同样**必须**静态写在这里 —— 理由与上面 simSec 那段一模一样:
+       动态建节点会让顶层 $() 有机会取到 null,而那会把整个脚本块从抛错处炸断。
+       窗口切换按钮由 render/candles.js 用 onclick 赋值(不是 addEventListener,重绘会叠加)。
+       图上不画任何技术指标:预注册的 12 格全部未过闸,详见面板下方正文与 SPEC 附录 K.8。 -->
+  <div id="klSec" hidden>
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">价格走势(有开/高/低就画蜡烛,没有则为收盘折线)</span><span class="le">Price history (candles when OHLC is present, close-only line otherwise)</span></h2>
+    <div class="plholdrow">
+      <label><span class="lz">窗口</span><span class="le">Window</span></label>
+      <span class="tabs" id="klWinTabs">
+        <button type="button" data-klw="w60"><span class="lz">近 60 根</span><span class="le">Last 60</span></button><button type="button" data-klw="w120" class="on"><span class="lz">近 120 根</span><span class="le">Last 120</span></button><button type="button" data-klw="all"><span class="lz">全部</span><span class="le">All</span></button>
+      </span>
+    </div>
+    <div class="chartbox" id="klBox">
+      <div id="klChart"></div>
+      <div class="tip" id="klTip"></div>
+    </div>
+    <div class="legendline" id="klLegend"></div>
+    <p class="hint" id="klNote" style="margin-top:6px"></p>
+  </div>
+
   <div id="peBandSec">
     <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">NTM 市盈率历史带(分位为水平参考线)</span><span class="le">NTM P/E history band (percentiles as reference lines)</span></h2>
     <div class="chartbox" id="peBandBox">
@@ -338,7 +567,7 @@ svg text { font-family: inherit; }
   <p class="footnote"><span class="lz">方法说明:隐含价 = EPS 情景 × 历史 NTM PE 分位。区间反映"盈利预测不确定性 × 估值波动范围"的组合,不构成投资建议;估值分位基于导入的历史窗口,窗口选择本身即是假设。</span><span class="le">Method: implied price = EPS scenario × historical PE percentile. Ranges combine earnings uncertainty with valuation volatility; not investment advice. Percentiles depend on the imported history window — the window itself is an assumption.</span></p>
 </section>
 
-<p class="footnote" style="text-align:center;margin-top:26px">© 2026 Xuhao Chao · Price Range Dashboard v10 · MIT License · <span class="lz">所有数据仅在你的浏览器本地处理,不会上传</span><span class="le">All data is processed locally in your browser — nothing is uploaded</span></p>
+<p class="footnote" style="text-align:center;margin-top:26px">© 2026 Xuhao Chao · Price Range Dashboard v12 · MIT License · <span class="lz">所有数据仅在你的浏览器本地处理,不会上传</span><span class="le">All data is processed locally in your browser — nothing is uploaded</span></p>
 
 </div>
 </div>
@@ -371,6 +600,8 @@ const fmtN = v => {
 };
 const fmtPct = v => isFinite(v) ? (v > 0 ? '+' : '') + v.toFixed(1) + '%' : '—';
 const fmtX = v => isFinite(v) ? v.toFixed(1) + 'x' : '—';
+/* 大整数(期权 OI)压缩:12345 → 12.3k,只用于表格里的紧凑标注 */
+const fmtInt = v => !isFinite(v) ? '—' : v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e4 ? (v / 1e3).toFixed(1) + 'k' : String(Math.round(v));
 
 /* ================= CSV parsing ================= */
 function parseCSV(text) {
@@ -409,9 +640,24 @@ const state = {
   priceHist: new Map(),   // ticker -> [{date, price}] sorted by date(用于波动率区间)
   overrides: new Map(),   // `${ticker}|${hz}` -> {low,mean,high}
   peManual: new Map(),    // ticker -> {p25,p50,p75}
-  dirManual: new Map(),   // ticker -> {m,i,l} 宏观/行业/流动性手动打分
+  dirManual: new Map(),   // ticker -> {m,i,l} 宏观/行业/流动性打分('a'=跟随自动信号)
+  market: new Map(),      // role(BENCH/SECTOR/CREDIT/RATES) -> {sym, px:[{date,price}]}
+  peerSel: new Map(),     // ticker -> '逗号分隔同行代码'(空 = 其他全部有修正数据的公司)
+  shortInt: new Map(),    // ticker -> [{date,days,pct}] 空头持仓(fetcher 逐日累积)
+  news: new Map(),        // ticker -> [{date,headline}] StreetAccount 新闻标题(fetcher 累积去重)
+  options: new Map(),     // ticker -> [{asof,expiry,strike,callOI,putOI}] 期权链未平仓量(按到期日+行权价取最新 asof)
+  roster: null,           // Set(ticker) 拉取清单(Assets/summary/roster.csv);null = 没有清单文件,不过滤
+  showOffRoster: false,   // 表格下方那个开关:临时把不在清单里的也画出来
   selected: null,
-  horizon: 'fy1',
+  horizon: 'fy1',        // **财年**(fy1/fy2),不是持有期。绝不能喂给 pressureLevels 的第四参。
+  plHold: 'mid',         // 压力位面板的**持有期**('short'|'mid'|'long' → h = 5/21/63),与 horizon 是两回事
+  klWin: 'w120',         // 价格走势面板画多少根('w60'|'w120'|'all');纯显示窗口,不进任何计算
+  /* 买入模拟面板**只**记住用户挑了什么(跨公司切换保留),不缓存任何结果:
+   * 回放结果是纯派生物,重算比缓存便宜,而缓存一旦跟着 state 走,切了票忘了清就会
+   * 把 A 票的触发时点画在 B 票下面 —— 那种错看起来完全像真的。结果放 render/sim.js 的
+   * 模块级 simLast,并且每次渲染都校验 ticker 对不对得上。 */
+  simPref: { hold: 'mid', presetId: 'supportBuy', custom: '' },
+
   sortKey: 'midPct',
   sortDir: -1,
 };
@@ -427,10 +673,142 @@ const I18N = {
     vsPrice: ' vs 现价', histPct: n => '历史 ' + n + '% 分位',
     needPct: '请在上方输入该公司的估值分位(P25 / P50 / P75)。', needEps: '缺少 EPS 预测(或基准 EPS ≤ 0),无法测算。',
     mxCorner: 'EPS \\ 估值', mxMedian: 'PE 中位', mxOpt: '乐观 EPS ', mxBase: '基准 EPS ', mxPes: '悲观 EPS ',
-    mxUnit: cur => '单位:' + cur + ' · 括注为相对现价空间;方框标记 = 基准 × 中位数。',
+    mxUnit: cur => '单位:' + cur + ' · 括注为相对现价空间。',
+    mxBaseGap: (v, d) => '⚠ 估值分位与 EPS 可能不是同一个口径:分位库最新一点 × 基准 EPS = ' + fmtN(v)
+      + ',与现价差 ' + fmtPct(d) + ' —— 多半是载入了别的财年的 Estimate History,此时中枢连正负号都可能是反的。',
+    plV10: 'PE P10', plV25: 'PE P25', plV50: 'PE 中位', plV75: 'PE P75', plV90: 'PE P90',
+    plUp: '上行压力', plDown: '下行支撑', plZone: '价位带', plDist: '距现价', plBasis: '依据',
+    plKind: { tech: '技术', val: '估值', opt: '期权' },
+    plKindTip: {
+      tech: '成交/停留密集区 + 前高前低聚集',
+      val: '基准 EPS × 该 P/E 分位反推的价位',
+      opt: '期权未平仓量(OI)在该行权价堆积 —— 到期前有钉住效应,过了到期日即失效',
+    },
+    /* ---- 压力位面板(SPEC 3.5 第二张表,逐字);表头两条见 plTracks / plEvidenceCol ---- */
+    plHorizon: '持有期',
+    plHorizonNote: '长中短期不是三套算法,是同一把尺子的三个刻度:持有期越长,同一个位置的不确定性越大,带子就越宽(√5 : √21 : √63 ≈ 1 : 2 : 3.6)。',
+    plDistU: '距离(σ)',
+    plReach: '本期触及概率',
+    plReachTip: '未来 N 个交易日内**至少触及一次**的概率。它不是「守得住的概率」,也不是「收盘会落在那里的概率」;它对上下对称,不含任何方向判断。',
+    plNoStrength: '这张表不再给「强度分」。旧版那个 0–100 分与后续走势的相关系数是 +0.01 —— 它看上去像信息,实际上不是,所以整列删掉了。',
+    plBounceNote: '**我们不预测支撑位会不会守住。** 用距离匹配的对照测过,在这份数据上测不出任何优于对照的守位能力(最大 z ≈ 1.2,门槛 2)。这一栏的位置只回答「够不够得着」,不回答「挡不挡得住」。',
+    /* 五档,不是四档:'inconclusive'(测不出)是本轮新加的。它和 'falsified' 的区别是
+     * 「样本不够,不能下结论」对「测够了,结论是没有」—— 把前者写成后者是在冒领一个结论。 */
+    plEvidence: { verified: '已验证', pending: '未验证', descriptive: '仅描述',
+      inconclusive: '测不出', falsified: '已证伪' },
+    plEvidenceTip: {
+      /* 旧文案是「该口径通过了样本外校准检验(见 tools/backtest.mjs G 组)」。那句话在 2026-08-06 变成了
+       * 假话:G 组三个持有期的可靠性图最大偏差是 0.2213 / 0.2035 / 0.2648,全部超过预注册门槛 0.10 ——
+       * 它引用的正是那个判它 miscalibrated 三次的 G 组。现在这一档暂时没有任何一条腿够得上。 */
+      verified: '要拿到这一档,SPEC 3.9 预注册的三条判据必须同时过:样本外 Brier skill 过门槛、'
+        + '10 折 CV 下界 > 0、可靠性图 10 桶最大偏差 ≤ 0.10。本轮(2026-08-06)没有任何一条腿够得上,'
+        + '所以这个徽章现在不会出现在表里',
+      pending: '没有通过、或者还没做完样本外检验 —— 只记录,不下结论,也不出百分比',
+      descriptive: '只是把已知的数画出来,不含任何预测主张',
+      inconclusive: '检验做了,但独立样本不够,判不出有没有 —— 这是空白,不是结论',
+      falsified: '检验过,没通过 —— 面板保留它是为了不让同一个错误再被重新发明',
+    },
+    plValRef: '估值参考线(不是压力位)',
+    plValRefTip: 'P/E 分位反推的价位。本仓库自己的回测已判定它系统性偏低(D 组 valAnchorBias:中位偏离为负,方向命中率低于 50%),所以它只画在图上作参照,不进压力/支撑表。',
+    plOptPending: n => 'OI 墙 ' + n + ' 面 · 未验证',
+    plOptPendingTip: '可回测的期权快照只有 4–5 天(其中一天是残链),没有时间序列就没法检验「这堵墙顶住没有」。这一轨只标注,不参与任何统计。',
+    /* 纯技术轨的位置在 reach 降级之后也走「不出百分比」那条分支,而它一面 OI 墙都没有,
+     * 再套 plOptPending 会印出「OI 墙 0 面」这种既不对也看不懂的话 —— 所以单给一条。 */
+    plReachPending: '未过校准检验 · 不出概率',
+    plReachPendingTip: '触及概率这一轨在 2026-08-06 这一轮被降级:样本外 Brier skill 是正的(+0.24 / +0.11 / +0.39),'
+      + '但可靠性图 10 桶的最大偏差是 0.22 / 0.20 / 0.26,全都超过预注册门槛 0.10 —— 也就是「排序大致对,刻度不对」。'
+      + '刻度不对的概率印成百分数会被当成可以下注的数,所以这一列现在只报位置和 σ 距离,不报概率。'
+      /* 2026-08-06 追记:降级之后又搜了一轮参数。搜完仍然过不了,这件事必须写在面板上 ——
+       * 只写「未验证」会被读成「还没顾上测」,而实际情况是测了、搜了、没测出来。 */
+      + '同一天又按 SPEC 3.9 许可的范围搜过一轮参数(σ 窗口 × 密度半衰期 × 再校准系数 c),'
+      + '用嵌套留一票交叉验证诚实评分:配置只在训练票里挑,留出票不参与挑选。两轮六格无一过线,'
+      + '留出折的最大偏差最好也只到 0.13。这条信号在现有数据下测不出效果,不是还没测。',
+    /* SPEC 3.5 的表里给了 plEvidence(徽章文案)却没给这两个**列名**,而同一份规格的第 4 步
+     * 又要求表里有「来源轨 / 证据等级」两列 —— 缺的两条在这里补齐,措辞照列名原样。 */
+    plTracks: '来源轨',
+    plEvidenceCol: '证据等级',
+    plWall: (oi, dte, side) => 'OI ' + oi + ' · ' + dte + '天' + (side === 'C' ? ' 看涨为主' : ' 看跌为主'),
+    plDte: '天',
+    plOptNote: (list, win) => '期权轨:未平仓量(OI)墙,在 60 天以内的到期日里取窗口内 OI 最重的三个 ' + list
+      + ';只看现价 ±' + win + '% 内的行权价。OI 不区分买卖方,只能读作"此处有阻滞",不能拿来推方向;'
+      + 'max pain 仅作磁吸位参考,未计入压力位。到期日一过该轨即失效,需要重新拉取。',
+    plNone: '缺少足够的日线价格序列(至少 40 个交易日),无法定位压力/支撑位。导入 Charting 日线文件后重试。',
+    plNoneUp: '上方在回看窗口内没有明显密集区 —— 属于"上方无套牢盘"的形态,阻力主要来自估值。',
+    plNoneDown: '下方在回看窗口内没有明显密集区 —— 缺少承接盘,回落时容易走急。',
+    plInBand: p => '⚠ 现价正处在一条密集带内(' + p + '),上下都黏,方向意义要等突破后才明确。',
+    plBasisVol: '成交量加权(真实筹码分布)',
+    plBasisTime: '停留时间加权(Charting 导出没有成交量列 —— 在 FactSet 图表里加一条 Volume 序列再导出即可升级为真实筹码分布)',
+    /* 末句「强度为 0–100 相对刻度」随 strength 一起删除:那一列已经不存在,
+     * 留着这句话会让用户在表里找一个找不到的东西。 */
+    plNote: (basis, n, a, b, hl) => '技术轨:' + basis + ',回看 ' + a + ' ~ ' + b + '(' + n + ' 根),权重半衰期 ' + hl + ' 天 —— 越近的成交权重越高。'
+      + '估值轨:基准 EPS × 历史 P/E 分位(只动估值这一个变量,与核心区间不是同一个问题)。',
+    plAxisWt: '密集度',
+    plSwing: n => n + ' 次前高/前低',
+    plTouch: '触及',
+    /* ---- 买入模拟面板(SPEC 3.5 第一张表,逐字) ---- */
+    simTitle: '买入逻辑模拟',
+    simHold: '持有期',
+    simHoldOpt: { short: '短线(5 个交易日)', mid: '中线(21 个交易日)', long: '长线(63 个交易日)' },
+    simPreset: '买入规则',
+    simCustom: '自定义',
+    simRuleHint: '可用条件:`nearSupport(0.5)` 靠近下方支撑 · `nearResistance(0.5)` 靠近上方压力 · `breakResistance()` 向上突破最近压力 · `pullbackPct(20,0.08)` 20 日内回撤 8% · `maCross(20,60)` 均线金叉 · `reachBelow(0.4)` 上方压力本期够不着。用 and 连接。',
+    simRuleErr: p => '看不懂这一段:' + p + ' —— 只认上面列出的条件名和 and',
+    simRun: '立即模拟',
+    simTrig: '触发次数',
+    simWin: '胜率',
+    simAvgRet: '平均收益',
+    simMedRet: '中位收益',
+    simMaxDD: '最大回撤',
+    simMAE: '平均最大不利偏移',
+    simCtrl: (w, z) => '随机入场对照 ' + w + '%(z=' + z + ')',
+    simMaxDDTip: '最大回撤 = 把每一笔按时间顺序接成一条权益曲线后的最大回撤,不是单笔最大亏损',
+    simThin: n => '只触发了 ' + n + ' 次,少于 8 次 —— 胜率不显示,下面只列触发时点。样本这么少时,胜率是噪声,不是结论。',
+    simNoTrig: '这条规则在这段历史里一次都没触发 —— 先把条件放宽,或者换一只票',
+    simCost: bps => '已扣单边 ' + bps + 'bp 往返成本(假设值,不是实测滑点)',
+    simHead: ['入场日', '入场价', '出场日', '出场价', '收益%', '期间最不利%'],
+    simDisclaim: '这里模拟的是「按这条规则在过去一年会怎样」。一年 × 10 只票在统计上非常薄,而且这一年是单边上行行情 —— 任何「一直买就一直赚」的结果,先怀疑是行情不是规则,所以旁边永远并排放着随机入场的对照。',
+    /* ---- 以下五条不在 SPEC 3.5 的表里,是实现这张面板必须有的话;加进来的理由各写一句 ---- */
+    /* 预设/谓词在 rules.js 里只有 id(labelKey),名字必须由词表给,否则下拉里是一串英文标识符 */
+    simPresetName: { supportBuy: '靠近支撑买', breakoutBuy: '突破压力买', dipBuy: '回撤买', trendBuy: '均线金叉买', roomBuy: '上方够不着才买' },
+    simPredName: { nearSupport: '靠近下方支撑', nearResistance: '靠近上方压力', breakResistance: '向上突破最近压力',
+      pullbackPct: '区间内回撤', maCross: '均线金叉', reachBelow: '上方压力本期够不着' },
+    /* SIM_PRESETS 的 exitKey 指向这里:出场规则必须在面板上写出来,否则"持有期"读起来像"最长持有期" */
+    simExit: { hold: '持有到期平仓,不设止盈止损' },
+    /* 三句话里的第三句(SPEC 3.5 第 7 条)。不能用 simThin 顶替:那句话带实际触发次数,是事后的 */
+    simMinTrigNote: '触发次数少于 8 次时,本面板不显示胜率,只列触发时点 —— 小样本的胜率是噪声。',
+    /* 改了下拉却没按按钮时,屏幕上的数还是上一次的。不说这一句,用户会把旧结果当成新规则的结果 */
+    simStale: '⚠ 选项改过了,下面还是上一次的结果 —— 按「立即模拟」重跑。',
+    simIdle: '选好持有期和买入规则,按「立即模拟」跑一次逐根回放。输入不会自动开跑:一次回放要把这只票的每一根日线都重算一遍压力位,量级在几百毫秒,自动跑会把输入框卡死。',
+    mxCoreTip: '这一格就是上方核心区间的端点(悲观 EPS × P25 = 下沿,乐观 EPS × P75 = 上沿)',
+    mxLegBase: '中枢 = 基准 EPS × PE 中位',
+    mxLegCore: '核心区间两端 = 悲观×P25 / 乐观×P75',
+    mxFlag: {
+      swapped: '⚠ 数据源里的 EPS 低/高值是反的,已自动对调后计算(建议核对 Estimate History 列顺序)。',
+      meanOutside: '⚠ 基准 EPS 落在低/高区间之外,矩阵按原样显示未做修正(数据源口径可能不一致)。',
+      lossLow: '⚠ 悲观情景 EPS ≤ 0(预计亏损),P/E 乘数法在亏损下失效,该行已退回用基准 EPS 计算。',
+      lossHigh: '⚠ 乐观情景 EPS ≤ 0,已退回用基准 EPS 计算。',
+    },
     blMid: '中枢 ', blPrice: '现价 ', peCur: '当前 ',
     peStats: (n, a, b) => '样本 ' + n + ' 个月(' + a + ' ~ ' + b + ')', peMedianShort: '中位',
     peShortWin: ' · ⚠ 样本不足 3 年,分位代表性有限', pctOf: n => '(' + n + '% 分位)',
+    /* ---- 价格走势面板(render/candles.js)。这几条文案是面板的一半:
+     *      颜色不会自己声明"我只是描述",没过闸的指标也不会自己说"我没过闸",全靠这里写出来。 ---- */
+    klWinNames: { w60: '近 60 根', w120: '近 120 根', all: '全部' },
+    klRange: (n, a, b, tot) => '画出 ' + n + ' 根,' + a + ' → ' + b
+      + (tot > n ? '(序列共 ' + tot + ' 根,窗口只截了尾部)' : '') + '。',
+    klModeCandle: '每根蜡烛 = 一个交易日的开/高/低/收:影线是当日最高↔最低,实体是开盘↔收盘。'
+      + '实体的红绿**只描述**"当天收盘高于还是低于开盘"这件已经发生的事,不是买卖信号,也不含任何对之后走势的判断。',
+    klModeLine: '这是**收盘折线,不是 K 线**:画蜡烛需要 Open / High / Low 三列,当前导出只有收盘价,'
+      + '缺一列就画不出实体与影线(SPEC 附录 K.2 判为 pending_no_ohlc)。'
+      + '这里不用"昨收当开"之类的近似把它凑成 K 线 —— 那样每一根都是编的,而且看上去完全像真的。'
+      + '导出带上这三列之后,这张图会自动切回蜡烛。',
+    klNoInd: '**图上不画任何技术指标线,也不给判语。**SPEC 附录 K 预注册的 4 个指标(均线状态 / 55 日突破 / RSI14 / 带量突破)'
+      + ' × 3 个前瞻期(5 / 21 / 63 日)共 12 格,在 2026-08-06 这一跑上**全部未过验收闸门** —— '
+      + '卡住的是 C3 折间一致性与 C4 效应量,不是样本量。按 K.8,过不了闸的东西落成素线、无颜色、无徽章、无判语;'
+      + '这里索性一条都不画。把没过线的指标画成绿色,等于把"回测数字说话"这条规矩作废。',
+    klLegUp: '收 ≥ 开', klLegDown: '收 < 开', klLegClose: '收盘价',
+    klLegDesc: '颜色只描述当日开收方向,不是信号',
+    klTipO: '开 ', klTipH: '高 ', klTipL: '低 ', klTipC: '收 ',
     stTotal: (n, m) => ' 当前:' + n + ' 家公司,' + m + ' 家有历史估值序列。',
     demoLoaded: '已载入演示数据(数值为示意,非真实行情)。',
     priceManual: '手动输入', priceSnap: '快照收盘价', priceDerived: '由模型 PE 反推', priceWait: '现价待输入',
@@ -451,11 +829,33 @@ const I18N = {
     dirChipRev: (u, d) => '修正动量 ' + u + '↑/' + d + '↓', dirChipVal: p => '估值位 ' + p + '% 分位',
     dirChipTech: (a, b) => '技术 ' + (a ? 'MA50上' : 'MA50下') + '·' + (b ? 'MA200上' : 'MA200下'),
     dirChipNA: '(缺数据)',
+    dirAutoOpt: v => '自动·依市场数据 (' + v + ')',
+    dirWhyMacro: (b, up, vp, rsym, r3) => '宏观 ' + b + (up ? '>MA200' : '<MA200') + ' · 波动' + vp + '%分位' + (rsym && isFinite(r3) ? ' · ' + rsym + ' 3月' + (r3 >= 0 ? '+' : '') + r3.toFixed(1) + '%' : ''),
+    dirWhyInd: (s, b, rs, ma) => '行业 ' + s + '−' + b + ' 3月' + (isFinite(rs) ? (rs >= 0 ? '+' : '') + rs.toFixed(1) + '%' : '—') + ' · ' + (ma ? '>MA200' : '<MA200'),
+    dirWhyLiq: (s, t3, ma) => '流动性 ' + s + ' 3月' + (isFinite(t3) ? (t3 >= 0 ? '+' : '') + t3.toFixed(1) + '%' : '—') + ' · ' + (ma ? '>MA200' : '<MA200'),
+    mktMsg: (sym, role, n) => '市场序列 ' + sym + '(' + role + ',' + n + ' 行)已载入',
+    mktRole: { BENCH: '基准', SECTOR: '行业', CREDIT: '信用', RATES: '利率' },
+    dirChipPeers: items => '同行修正 ' + items.slice(0, 4).map(x => x.tk.split('-')[0] + (x.sc >= 0 ? '+' : '') + x.sc.toFixed(1)).join(' ') + (items.length > 4 ? ' 等' + items.length + '家' : ''),
+    dirPeersPh: '如 AMD-US, AVGO-US(空=其他全部)',
+    dirWhyTgt: (chg, buy) => '目标价 3月' + (isFinite(chg) ? (chg >= 0 ? '+' : '') + chg.toFixed(1) + '%' : '—') + ' · 买入类占比' + (isFinite(buy) ? buy.toFixed(0) + '%' : '—'),
+    dirWhySi: (pct, days, hasTrend) => '空头 ' + pct + '%流通盘·回补' + (isFinite(days) ? days : '—') + '天' + (hasTrend ? '' : '(单点,按水平轻打分)'),
+    dirWhyNews: (p, n, tot, prev) => '新闻30日 利多' + p + '/利空' + n + '(共' + tot + '条' + (prev ? ',前60日' + prev + '条' : '') + ')',
+    dirWhyNewsQuiet: prev => '近30日无新闻(前60日 ' + prev + ' 条)',
+    tgtMsg: (tk, n, tgt) => tk + ' 目标价/评级月度历史 ' + n + ' 个点(最新目标价均值 ' + fmtN(tgt) + ')',
+    tgtNoTicker: '目标价历史无法归属公司(请先导入该公司的估值/快照文件)',
+    mSiRows: n => ':空头持仓记录 ' + n + ' 行',
+    mNewsRows: (tk, n) => ':' + tk + ' 新闻 ' + n + ' 条',
+    mNewsNoTicker: ':新闻文件未能归属到清单里的公司(文件名需形如 "NVDA-US News.csv")',
+    mOptRows: (tk, n, e) => ':' + tk + ' 期权链 ' + n + ' 个行权价 / ' + e + ' 个到期日',
+    mOptNoTicker: ':期权文件未能归属到清单里的公司(文件名需形如 "NVDA-US Options.csv")',
     dirPUp: 'P(6个月后上涨)', dirPUp10: 'P(涨超 +10%)', dirPDn10: 'P(跌超 -10%)', dirMedian: '终点中位数',
     dirWeights: (b, m, u) => '情景权重 熊 ' + b + '% / 中 ' + m + '% / 牛 ' + u + '%',
     dirNote: (lo, md, hi) => '情景锚:熊 ' + lo + '(P10×悲观EPS)· 中 ' + md + '(现价,零重估)· 牛 ' + hi + '(PE中位×FY2均值)。自动信号来自已导入数据;三个手动维度默认中性,鼠标悬停标签查看 FactSet 取数指引。财报日前后请重新评估。不构成投资建议。',
     dirNeedData: '需要现价与价格历史(日线/月度均可)才能计算方向概率。',
     mEmptyFile: ':空文件或无法解析', mHistRows: n => ':读入 ' + n + ' 行历史估值', mCoRows: n => ':读入 ' + n + ' 家公司',
+    mRosterRows: n => ':拉取清单 ' + n + ' 家(清单外的公司默认不显示)',
+    ovHidden: n => '另有 ' + n + ' 家不在拉取清单里,已隐藏 —— 点这里展开',
+    ovHiddenOn: n => '正在显示全部,其中 ' + n + ' 家不在拉取清单里(数据可能已停止更新)—— 点这里收起',
     mBadCols: ':无法识别列名(需要 companies 或 history 模板格式)',
     mXlsxNone: ':未识别(需含 "Earnings Per Share" / "Estimate History" / Snapshot "Previous Close" 之一)',
     mNeedNet: '无法加载 xlsx 解析库(首次解析 xlsx 需联网)', mParseFail: ':解析失败 ',
@@ -466,6 +866,7 @@ const I18N = {
     peSeries: (n, a, b) => ';P/E 月度序列 ' + n + ' 个点(' + a + ' ~ ' + b + ')',
     truncNote: n => '【原始 ' + n + ' 点,仅采用最近 24 个月:Estimate History 跟踪固定财年,早期 P/E 是"当时股价 ÷ 多年后盈利",与近期口径不可比;要用真正的多年估值带,请导出 NTM PE 月度序列(history.csv)】',
     shortWin: ',窗口较短,分位代表性有限', keepLonger: n => ';已有更长的 PE 序列(' + n + ' 点),未覆盖',
+    estFarSkip: fy => ';第 ' + fy + ' 个财年,只借它的价格序列 —— EPS 与 P/E 分位仍以 FY1 为准(混用会让中枢反号)',
     jumpNote: p => ';注意:最新一致预期较上月变动 ' + p + ',可能含一次性损益,请核对口径',
     snapHead: tk => tk + ' 快照:现价 ', snapClose: '(收盘)', snapW52: ' · 52周 ', snapTgt: ' · 分析师目标价 ',
     snapPeRef: s => ';年度 PE 参考:' + s,
@@ -479,10 +880,129 @@ const I18N = {
     vsPrice: ' vs price', histPct: n => n + '% of history',
     needPct: 'Enter PE percentiles (P25 / P50 / P75) above.', needEps: 'No EPS forecast (or base EPS ≤ 0) — cannot compute.',
     mxCorner: 'EPS \\ multiple', mxMedian: 'Median PE', mxOpt: 'High EPS ', mxBase: 'Base EPS ', mxPes: 'Low EPS ',
-    mxUnit: cur => 'Unit: ' + cur + ' · sub-notes are % vs current price; box = base × median.',
+    mxUnit: cur => 'Unit: ' + cur + ' · sub-notes are % vs current price.',
+    mxBaseGap: (v, d) => '⚠ The P/E percentiles and the EPS may be on different bases: latest percentile point × base EPS = ' + fmtN(v)
+      + ', which is ' + fmtPct(d) + ' away from the current price — usually an Estimate History for a different fiscal year; the mid can even have the wrong sign.',
+    plV10: 'PE P10', plV25: 'PE P25', plV50: 'Median PE', plV75: 'PE P75', plV90: 'PE P90',
+    plUp: 'Upside pressure', plDown: 'Downside support', plZone: 'Zone', plDist: 'vs price', plBasis: 'Basis',
+    plKind: { tech: 'Technical', val: 'Valuation', opt: 'Options' },
+    plKindTip: {
+      tech: 'Traded-volume / time-at-price congestion plus clustered swing highs and lows',
+      val: 'Price implied by base EPS × this P/E percentile',
+      opt: 'Open interest piled up at this strike — it pins price until expiry, then stops existing',
+    },
+    plHorizon: 'Horizon',
+    plHorizonNote: 'Long/mid/short are not three algorithms but three notches on one ruler: the longer the horizon, the wider the band around the same level (√5 : √21 : √63 ≈ 1 : 2 : 3.6).',
+    plDistU: 'Distance (σ)',
+    plReach: 'Touch probability',
+    plReachTip: 'Probability of touching this level **at least once** within the next N sessions. It is not the probability that the level holds, nor that price closes there; it is symmetric and carries no directional view.',
+    plNoStrength: 'This table no longer shows a "strength" score. The old 0–100 score correlated +0.01 with what happened next — it looked like information and wasn\'t, so the column is gone.',
+    plBounceNote: '**We do not predict whether a level will hold.** Tested against distance-matched controls, no track beat control on any horizon (max z ≈ 1.2 against a threshold of 2). This table answers "can price reach it," not "will it stop there."',
+    plEvidence: { verified: 'Verified', pending: 'Unverified', descriptive: 'Descriptive',
+      inconclusive: 'Inconclusive', falsified: 'Falsified' },
+    plEvidenceTip: {
+      verified: 'Earning this grade requires all three criteria pre-registered in SPEC 3.9 at once: '
+        + 'out-of-sample Brier skill above threshold, 10-fold CV lower bound > 0, and reliability-diagram '
+        + 'max deviation ≤ 0.10 across the 10 buckets. As of 2026-08-06 no track clears all three, '
+        + 'so this badge does not currently appear in the table',
+      pending: 'Either failed out-of-sample testing or not yet tested — recorded, not concluded, no percentage shown',
+      descriptive: 'Just plotting known numbers; makes no predictive claim',
+      inconclusive: 'The test ran but there were too few independent observations to tell either way — a blank, not a result',
+      falsified: 'Tested and failed — kept visible so the same idea does not get reinvented',
+    },
+    plValRef: 'Valuation reference (not a level)',
+    plValRefTip: 'Prices implied by P/E percentiles. This repo\'s own backtest flagged them as systematically low (group D valAnchorBias: negative median deviation, directional hit rate under 50%), so they are drawn as reference only and never enter the level tables.',
+    plOptPending: n => n + ' OI wall(s) · unverified',
+    plOptPendingTip: 'Only 4–5 usable option snapshots exist (one of them a partial chain). Without a time series there is no way to test whether a wall held. This track annotates only; it enters no statistics.',
+    plReachPending: 'Failed calibration · no probability',
+    plReachPendingTip: 'The touch-probability track was downgraded in the 2026-08-06 round: out-of-sample Brier skill is '
+      + 'positive (+0.24 / +0.11 / +0.39), but the reliability diagram\'s max deviation across 10 buckets is '
+      + '0.22 / 0.20 / 0.26, all above the pre-registered threshold of 0.10 — the ranking is roughly right, the scale is not. '
+      + 'A miscalibrated probability printed as a percentage reads like a number you can bet on, so this column now '
+      + 'reports only the level and its σ distance. '
+      + 'The same day, a parameter search was run over the range SPEC 3.9 permits (σ window × density half-life × '
+      + 'recalibration coefficient c), scored by nested leave-one-ticker-out cross-validation: configurations are '
+      + 'chosen inside the training tickers only, and the held-out ticker takes no part in the choice. Zero of six '
+      + 'cells across two rounds cleared the gates; the best held-out max deviation was still 0.13. '
+      + 'This signal cannot be shown to work on the data we have — not "not measured yet".',
+    plTracks: 'Source track',
+    plEvidenceCol: 'Evidence',
+    plWall: (oi, dte, side) => 'OI ' + oi + ' · ' + dte + 'd' + (side === 'C' ? ' call-heavy' : ' put-heavy'),
+    plDte: 'd',
+    plOptNote: (list, win) => 'Options track: open-interest walls for the three expiries within 60 days that carry the most open interest in the window ' + list
+      + '; strikes within ±' + win + '% of spot only. OI does not distinguish buyers from sellers, so read it as friction at that price, never as direction; '
+      + 'max pain is shown as a magnet reference only and is not scored as a level. The whole track expires with the contracts — re-fetch after each expiry.',
+    plNone: 'Not enough daily price history (need at least 40 sessions) to locate pressure levels. Import a Charting daily file and retry.',
+    plNoneUp: 'No meaningful congestion above within the lookback — little trapped supply overhead; resistance is mostly valuation-driven.',
+    plNoneDown: 'No meaningful congestion below within the lookback — thin support, so pullbacks can move fast.',
+    plInBand: p => '⚠ Price is currently inside a congestion zone (' + p + '), so it is sticky in both directions — direction only becomes meaningful after a breakout.',
+    plBasisVol: 'volume-weighted (true volume-at-price)',
+    plBasisTime: 'time-at-price weighted (the Charting export has no Volume column — add a Volume series in the FactSet chart and re-export to upgrade to true volume-at-price)',
+    plNote: (basis, n, a, b, hl) => 'Technical track: ' + basis + ', lookback ' + a + ' ~ ' + b + ' (' + n + ' bars), ' + hl + '-day weight half-life so recent trade counts more. '
+      + 'Valuation track: base EPS × historical P/E percentiles (one variable only — a different question from the core range).',
+    plAxisWt: 'Density',
+    plSwing: n => n + ' swing highs/lows',
+    plTouch: 'touches',
+    /* ---- Buy-rule simulation panel (SPEC 3.5 first table, verbatim) ---- */
+    simTitle: 'Buy-rule simulation',
+    simHold: 'Holding period',
+    simHoldOpt: { short: 'Short (5 sessions)', mid: 'Mid (21 sessions)', long: 'Long (63 sessions)' },
+    simPreset: 'Buy rule',
+    simCustom: 'Custom',
+    simRuleHint: 'Available conditions: `nearSupport(0.5)` near support below · `nearResistance(0.5)` near resistance above · `breakResistance()` breaks the nearest resistance · `pullbackPct(20,0.08)` 8% drawdown within 20 sessions · `maCross(20,60)` golden cross · `reachBelow(0.4)` resistance above is out of reach this period. Join with `and`.',
+    simRuleErr: p => "Can't parse: " + p + ' — only the condition names listed above and `and` are accepted',
+    simRun: 'Run simulation',
+    simTrig: 'Triggers',
+    simWin: 'Win rate',
+    simAvgRet: 'Mean return',
+    simMedRet: 'Median return',
+    simMaxDD: 'Max drawdown',
+    simMAE: 'Mean adverse excursion',
+    simCtrl: (w, z) => 'Random-entry control ' + w + '% (z=' + z + ')',
+    simMaxDDTip: 'Max drawdown of the equity curve formed by chaining trades in time order — not the worst single trade',
+    simThin: n => 'Only ' + n + ' triggers (fewer than 8) — win rate withheld. Below are the trigger points. At this sample size a win rate is noise, not a finding.',
+    simNoTrig: 'This rule never triggered over the available history — loosen the condition or pick another ticker',
+    simCost: bps => 'Includes ' + bps + 'bp round-trip cost (an assumption, not measured slippage)',
+    simHead: ['Entry', 'Entry px', 'Exit', 'Exit px', 'Return %', 'Worst %'],
+    simDisclaim: 'This replays "what this rule would have done over the past year." One year × 10 tickers is statistically thin, and that year was a one-way bull market — treat any "always buy, always win" result as the market, not the rule. That is why a random-entry control sits next to every number.',
+    /* ---- the five below are not in the SPEC 3.5 table; each is required to render the panel ---- */
+    simPresetName: { supportBuy: 'Buy near support', breakoutBuy: 'Buy the breakout', dipBuy: 'Buy the dip', trendBuy: 'Buy the golden cross', roomBuy: 'Buy only when there is room' },
+    simPredName: { nearSupport: 'near support below', nearResistance: 'near resistance above', breakResistance: 'breaks the nearest resistance',
+      pullbackPct: 'drawdown within window', maCross: 'golden cross', reachBelow: 'resistance above out of reach' },
+    simExit: { hold: 'Exit at the end of the holding period; no stop-loss, no take-profit' },
+    simMinTrigNote: 'With fewer than 8 triggers this panel withholds the win rate and only lists the trigger points — a small-sample win rate is noise.',
+    simStale: '⚠ Options changed; the numbers below are still the previous run — press "Run simulation" again.',
+    simIdle: 'Pick a holding period and a buy rule, then press "Run simulation" for a bar-by-bar replay. Typing does not start a run: one replay recomputes every pressure level on every daily bar of this ticker, which takes a few hundred milliseconds and would freeze the input box.',
+    mxCoreTip: 'This cell is an endpoint of the core range above (low EPS × P25 = floor, high EPS × P75 = ceiling)',
+    mxLegBase: 'Mid = base EPS × median PE',
+    mxLegCore: 'Core range ends = low×P25 / high×P75',
+    mxFlag: {
+      swapped: '⚠ Low/high EPS arrived inverted from the source and were swapped before computing (check Estimate History column order).',
+      meanOutside: '⚠ Base EPS falls outside the low/high band; shown as-is with no correction (source definitions may differ).',
+      lossLow: '⚠ Low-case EPS ≤ 0 (expected loss). P/E multiples break down on losses, so that row falls back to base EPS.',
+      lossHigh: '⚠ High-case EPS ≤ 0 — fell back to base EPS.',
+    },
     blMid: 'Mid ', blPrice: 'Price ', peCur: 'Now ',
     peStats: (n, a, b) => n + ' monthly obs (' + a + ' ~ ' + b + ')', peMedianShort: 'Median',
     peShortWin: ' · ⚠ under 3y of data — percentiles are tentative', pctOf: n => ' (' + n + '%ile)',
+    klWinNames: { w60: 'Last 60', w120: 'Last 120', all: 'All' },
+    klRange: (n, a, b, tot) => n + ' bars drawn, ' + a + ' → ' + b
+      + (tot > n ? ' (series has ' + tot + '; the window shows only its tail)' : '') + '.',
+    klModeCandle: 'One candle = one trading day: the wick spans the day\'s high and low, the body spans open to close. '
+      + 'The red/green body **only describes** whether that day closed above or below its own open — a statement about what already happened. '
+      + 'It is not a buy/sell signal and carries no claim about what comes next.',
+    klModeLine: 'This is a **close-only line, not a candlestick chart**: candles need Open / High / Low columns and the current export has close only, '
+      + 'so there are no bodies and no wicks to draw (SPEC appendix K.2 calls this pending_no_ohlc). '
+      + 'No "yesterday\'s close as today\'s open" approximation is used to fake candles — every bar would then be invented, and invented bars look exactly like real ones. '
+      + 'Once the export carries those three columns this panel switches to candles on its own.',
+    klNoInd: '**No indicator line is drawn here, and no verdict is given.** The four indicators pre-registered in SPEC appendix K '
+      + '(MA state / 55-day breakout / RSI14 / volume-confirmed breakout) × three horizons (5 / 21 / 63 days) make 12 cells, '
+      + 'and on the 2026-08-06 run **all 12 failed the acceptance gate** — they fail C3 (fold-to-fold consistency) and C4 (effect size), not sample size. '
+      + 'Per K.8 anything that fails the gate is drawn as a plain line with no colour, no badge and no verdict; this panel simply draws none of them. '
+      + 'Painting a failed indicator green would void the rule that the backtest numbers decide.',
+    klLegUp: 'close ≥ open', klLegDown: 'close < open', klLegClose: 'Close',
+    klLegDesc: 'colour only describes that day\'s open-to-close direction — not a signal',
+    klTipO: 'O ', klTipH: 'H ', klTipL: 'L ', klTipC: 'C ',
     stTotal: (n, m) => ' Now: ' + n + ' companies, ' + m + ' with PE history.',
     demoLoaded: 'Demo data loaded (illustrative, not real quotes).',
     priceManual: 'manual', priceSnap: 'snapshot close', priceDerived: 'derived from model PE', priceWait: 'price needed',
@@ -503,11 +1023,33 @@ const I18N = {
     dirChipRev: (u, d) => 'Revisions ' + u + '↑/' + d + '↓', dirChipVal: p => 'Valuation ' + p + '%ile',
     dirChipTech: (a, b) => 'Tech ' + (a ? '>MA50' : '<MA50') + '·' + (b ? '>MA200' : '<MA200'),
     dirChipNA: '(no data)',
+    dirAutoOpt: v => 'Auto · from market data (' + v + ')',
+    dirWhyMacro: (b, up, vp, rsym, r3) => 'Macro ' + b + (up ? '>MA200' : '<MA200') + ' · vol ' + vp + '%ile' + (rsym && isFinite(r3) ? ' · ' + rsym + ' 3m ' + (r3 >= 0 ? '+' : '') + r3.toFixed(1) + '%' : ''),
+    dirWhyInd: (s, b, rs, ma) => 'Industry ' + s + '−' + b + ' 3m ' + (isFinite(rs) ? (rs >= 0 ? '+' : '') + rs.toFixed(1) + '%' : '—') + ' · ' + (ma ? '>MA200' : '<MA200'),
+    dirWhyLiq: (s, t3, ma) => 'Liquidity ' + s + ' 3m ' + (isFinite(t3) ? (t3 >= 0 ? '+' : '') + t3.toFixed(1) + '%' : '—') + ' · ' + (ma ? '>MA200' : '<MA200'),
+    mktMsg: (sym, role, n) => 'Market series ' + sym + ' (' + role + ', ' + n + ' rows) loaded',
+    mktRole: { BENCH: 'benchmark', SECTOR: 'sector', CREDIT: 'credit', RATES: 'rates' },
+    dirChipPeers: items => 'Peer revisions ' + items.slice(0, 4).map(x => x.tk.split('-')[0] + (x.sc >= 0 ? '+' : '') + x.sc.toFixed(1)).join(' ') + (items.length > 4 ? ' +' + (items.length - 4) : ''),
+    dirPeersPh: 'e.g. AMD-US, AVGO-US (blank = all others)',
+    dirWhyTgt: (chg, buy) => 'Target 3m ' + (isFinite(chg) ? (chg >= 0 ? '+' : '') + chg.toFixed(1) + '%' : '—') + ' · buy-class ' + (isFinite(buy) ? buy.toFixed(0) + '%' : '—'),
+    dirWhySi: (pct, days, hasTrend) => 'Short int ' + pct + '% float · ' + (isFinite(days) ? days : '—') + 'd to cover' + (hasTrend ? '' : ' (single point)'),
+    dirWhyNews: (p, n, tot, prev) => 'News 30d ' + p + '+ / ' + n + '− (' + tot + ' items' + (prev ? ', prior 60d ' + prev : '') + ')',
+    dirWhyNewsQuiet: prev => 'No news in 30d (prior 60d: ' + prev + ')',
+    tgtMsg: (tk, n, tgt) => tk + ' targets/ratings history: ' + n + ' monthly points (latest mean target ' + fmtN(tgt) + ')',
+    tgtNoTicker: 'Targets history could not be attributed (import the company\'s estimate/snapshot file first)',
+    mSiRows: n => ': ' + n + ' short-interest rows',
+    mNewsRows: (tk, n) => ': ' + tk + ' — ' + n + ' headlines',
+    mNewsNoTicker: ': news file could not be matched to a company (name it like "NVDA-US News.csv")',
+    mOptRows: (tk, n, e) => ': ' + tk + ' — ' + n + ' strikes across ' + e + ' expiries',
+    mOptNoTicker: ': options file could not be matched to a company (name it like "NVDA-US Options.csv")',
     dirPUp: 'P(up in 6 months)', dirPUp10: 'P(gain > +10%)', dirPDn10: 'P(loss > -10%)', dirMedian: 'Median endpoint',
     dirWeights: (b, m, u) => 'Scenario weights: bear ' + b + '% / base ' + m + '% / bull ' + u + '%',
     dirNote: (lo, md, hi) => 'Anchors: bear ' + lo + ' (P10 × low EPS) · base ' + md + ' (current price, no repricing) · bull ' + hi + ' (median PE × FY2 mean). Auto signals come from imported data; the three manual factors default to neutral — hover their labels for FactSet sourcing hints. Re-assess around earnings. Not investment advice.',
     dirNeedData: 'Needs current price and a price history (daily or monthly) to compute direction probability.',
     mEmptyFile: ': empty or unparsable', mHistRows: n => ': read ' + n + ' PE history rows', mCoRows: n => ': read ' + n + ' companies',
+    mRosterRows: n => ': fetch roster — ' + n + ' companies (anything off-roster is hidden by default)',
+    ovHidden: n => n + ' more not on the fetch roster, hidden — click to show',
+    ovHiddenOn: n => 'Showing all; ' + n + ' of them are off the fetch roster (data may have stopped updating) — click to hide',
     mBadCols: ': unrecognized columns (need the companies or history template)',
     mXlsxNone: ': unrecognized (needs "Earnings Per Share" / "Estimate History" / snapshot "Previous Close")',
     mNeedNet: 'could not load xlsx parser (network needed on first xlsx)', mParseFail: ': parse failed ',
@@ -518,6 +1060,7 @@ const I18N = {
     peSeries: (n, a, b) => '; P/E monthly series: ' + n + ' points (' + a + ' ~ ' + b + ')',
     truncNote: n => ' [of ' + n + ' raw points only the last 24 months are used: Estimate History tracks a fixed fiscal year, so early P/E points price earnings many years out and are not comparable; for a true multi-year band export an NTM PE monthly series (history.csv)]',
     shortWin: ', short window — percentiles are tentative', keepLonger: n => '; kept the existing longer PE series (' + n + ' points)',
+    estFarSkip: fy => '; fiscal year ' + fy + ' — only its price series is used; EPS and P/E percentiles still come from FY1 (mixing them can flip the sign of the mid)',
     jumpNote: p => '; note: latest consensus moved ' + p + ' vs prior month — possibly one-off items, check the basis',
     snapHead: tk => tk + ' snapshot: price ', snapClose: ' (close)', snapW52: ' · 52wk ', snapTgt: ' · analyst target ',
     snapPeRef: s => '; annual PE refs: ' + s,
@@ -583,9 +1126,19 @@ function ingestHistory(recs) {
   }
   for (const [tk, arr] of pbuf) {
     arr.sort((a, b) => a.date < b.date ? -1 : 1);
-    if (arr.length > (state.priceHist.get(tk) || []).length) state.priceHist.set(tk, arr);
+    setPriceHist(tk, arr);
   }
   return n;
+}
+
+/* 价格序列择优:长的赢,但带成交量的序列值 1.5 倍长度——
+ * 因为筹码分布靠成交量加权,一条稍短但有量的日线比一条更长的纯收盘价序列有用得多。 */
+const hasVol = a => !!(a && a.length && a.some(d => isFinite(d.vol) && d.vol > 0));
+function setPriceHist(ticker, arr) {
+  if (!arr || !arr.length) return;
+  const old = state.priceHist.get(ticker) || [];
+  const score = a => a.length * (hasVol(a) ? 1.5 : 1);
+  if (score(arr) > score(old)) state.priceHist.set(ticker, arr);
 }
 
 /* ================= PE stats & core calc ================= */
@@ -612,18 +1165,48 @@ function epsFor(ticker, hz) {
   const co = state.companies.get(ticker);
   return co ? co.eps[hz] : null;
 }
+/* EPS 情景清洗 —— 乘数法只有在 EPS>0 时才有意义。
+ * Low/High 缺失、非正、或高低颠倒(列错位时真的会发生)统统在这里收敛;
+ * calcRange 与情景矩阵共用同一份结果,保证"表头核心区间"和"矩阵格子"永远算的是同一件事。 */
+function epsScen(eps) {
+  if (!eps || !isFinite(eps.mean) || eps.mean <= 0) return null;
+  const flags = [];
+  let low = isFinite(eps.low) ? eps.low : eps.mean;
+  let high = isFinite(eps.high) ? eps.high : eps.mean;
+  if (low > high) { const x = low; low = high; high = x; flags.push('swapped'); }
+  if (low > eps.mean || high < eps.mean) flags.push('meanOutside');   /* 均值落在区间外:只提示,不改数 */
+  if (low <= 0) { low = eps.mean; flags.push('lossLow'); }            /* 悲观情景亏损 → 乘数法失效,退回均值 */
+  if (high <= 0) { high = eps.mean; flags.push('lossHigh'); }
+  return { low, mean: eps.mean, high, flags };
+}
+/* 估值分位必须为正:历史里有亏损年份时 P/E 会是负数,乘出来的"价格"没有意义 */
+const pePos = (pe, k) => isFinite(pe[k]) && pe[k] > 0;
+/* 口径自查:分位库最新一点 × 基准 EPS ≈ 现价。
+ * 这两个数本该出自同一份 Estimate History 的同一行(P/E 和 Mean 并排摆着),
+ * 乘回去就是那一行当天的股价。和现价差得离谱,说明分位库和 EPS 压根不是同一个口径。
+ *
+ * 阈值 25%:四家真实数据在配对正确时偏差落在 -12% ~ +1%(价格快照和估值快照差几天,
+ * 加上 P/E 只有一位小数);FY3 的分位配 FY1 的 EPS 那次是 -40%。
+ * 这条只报警不改数 —— 说不清是哪一边错的时候,不该替人做主。 */
+const BASE_GAP_TOL = 25;
+function baseGap(price, pe, eps) {
+  if (!pe || !isFinite(pe.current) || pe.current <= 0) return null;
+  if (!isFinite(price) || price <= 0 || !eps || !isFinite(eps.mean) || eps.mean <= 0) return null;
+  const implied = pe.current * eps.mean, dev = (implied / price - 1) * 100;
+  return Math.abs(dev) > BASE_GAP_TOL ? { implied, dev } : null;
+}
 function calcRange(co, hz) {
-  const eps = epsFor(co.ticker, hz), pe = peStats(co.ticker);
-  if (!eps || !pe || !isFinite(eps.mean) || eps.mean <= 0) return null;
-  const lo = isFinite(eps.low) ? eps.low : eps.mean;
-  const hi = isFinite(eps.high) ? eps.high : eps.mean;
+  const pe = peStats(co.ticker), eps = epsScen(epsFor(co.ticker, hz));
+  if (!eps || !pe) return null;
+  if (!pePos(pe, 'p25') || !pePos(pe, 'p50') || !pePos(pe, 'p75')) return null;
   const r = {
-    eps, pe,
+    eps, pe, flags: eps.flags,
     mid: eps.mean * pe.p50,
-    coreLow: lo * pe.p25, coreHigh: hi * pe.p75,
-    extLow: isFinite(pe.p10) ? lo * pe.p10 : NaN,
-    extHigh: isFinite(pe.p90) ? hi * pe.p90 : NaN,
+    coreLow: eps.low * pe.p25, coreHigh: eps.high * pe.p75,
+    extLow: pePos(pe, 'p10') ? eps.low * pe.p10 : NaN,
+    extHigh: pePos(pe, 'p90') ? eps.high * pe.p90 : NaN,
   };
+  r.baseGap = baseGap(co.price, pe, eps);
   r.midPct = (r.mid / co.price - 1) * 100;
   r.downPct = (r.coreLow / co.price - 1) * 100;
   r.upPct = (r.coreHigh / co.price - 1) * 100;
@@ -782,8 +1365,30 @@ function parseEstDate(v) {
   const y = m[3].length === 2 ? '20' + m[3] : m[3];
   return y + '-' + mo + '-' + m[1].padStart(2, '0');
 }
+/* 这份 Estimate History 跟的是第几个财年 —— 用**表里写的财年末**判定,不信文件名。
+ * FactSet 会在 "Estimate History" 那一行右边写上「… Jan '27E …」,拿它和这批数据
+ * 最新一行的日期比,差满几个整年就是第几个财年。文件名只在读不到标签时兜底。
+ *
+ * 为什么非得较真到这一步:2026-07-27/28 那两轮抓错了财年,存下一批 *FY3* 文件。
+ * 老代码只问一句「文件名里有没有 FY2」,答否就当 FY1 —— 于是 Jan '29E 的 P/E 分位
+ * 配上了 Jan '27E 的 EPS,NVDA 中枢从 +11.9% 翻成 -16.5%,GOOGL 从 +15.7% 翻成 -10.0%,
+ * 连正负号都反了。它不抛异常、不写日志,只是安静地给出一个反的结论 —— 判定口径
+ * 一旦依赖文件名,下一次抓错财年就又会中毒一次,所以改成认数据自己带的那行标签。 */
+const FY_LABEL = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*'?\s*(\d{2})\s*E\b/i;
+function fyGapMonths(label, asOfISO) {
+  const m = FY_LABEL.exec(String(label || ''));
+  const d = String(asOfISO || '').match(/^(\d{4})-(\d{2})/);
+  if (!m || !d || !MONTHS[m[1].toLowerCase()]) return NaN;
+  return (2000 + Number(m[2])) * 12 + Number(MONTHS[m[1].toLowerCase()]) - (Number(d[1]) * 12 + Number(d[2]));
+}
+function estimateFy(label, asOfISO, fileName) {
+  const gap = fyGapMonths(label, asOfISO);
+  /* 已经过完但还没出报的财年 gap≤0,仍算 FY1 —— 下限钳在 1,别让它变成 0 或负数 */
+  if (isFinite(gap)) return Math.max(1, Math.floor(gap / 12) + 1);
+  const m = String(fileName || '').match(/\bFY\s*(\d+)/i);
+  return m ? Math.max(1, Number(m[1])) : 1;
+}
 function ingestEstimateSheet(sheetName, aoa, fileName) {
-  const isFY2 = /FY\s*2/i.test(String(fileName || ''));   /* 文件名含 FY2 → 写入第二财年;PE 序列不入分位库(口径为两年期 forward) */
   let sec = -1;
   for (let i = 0; i < aoa.length; i++) {
     if (String((aoa[i] || [])[0] || '').trim() === 'Estimate History') { sec = i; break; }
@@ -810,6 +1415,11 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
   if (!recs.length) return null;
   recs.sort((a, b) => a.date < b.date ? -1 : 1);
   const latest = recs[recs.length - 1];
+  const fy = estimateFy((aoa[sec] || [])[1], latest.date, fileName);
+  const isFY2 = fy === 2;
+  /* 第三个财年及以后:只借它的价格序列,EPS 与 P/E 分位一概不收。
+   * 三年后的盈利乘不上明年的估值分位,收进来就是把两套口径混在一张卡片上。 */
+  const isFar = fy >= 3;
   let ticker = String((aoa[0] || [])[0] || sheetName).trim().toUpperCase();
   if (!ticker) ticker = sheetName.toUpperCase();
   const prev = state.companies.get(ticker);
@@ -817,8 +1427,8 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
     ticker, name: ticker, currency: '', price: NaN, priceDate: '',
     eps: { fy1: { low: NaN, mean: NaN, high: NaN }, fy2: { low: NaN, mean: NaN, high: NaN } },
   };
-  co.eps[isFY2 ? 'fy2' : 'fy1'] = { low: latest.low, mean: latest.mean, high: latest.high };
-  if (!isFY2) {   /* 修正动量:最新一期上调/下调家数(方向信号) */
+  if (!isFar) co.eps[isFY2 ? 'fy2' : 'fy1'] = { low: latest.low, mean: latest.mean, high: latest.high };
+  if (fy === 1) {   /* 修正动量:最新一期上调/下调家数(方向信号) */
     const lrow = aoa.map(r => r || []).find(r => parseEstDate(r[cDate]) === latest.date) || [];
     co.rev = {
       n: cN >= 0 ? parseFloat(lrow[cN]) : NaN,
@@ -831,7 +1441,7 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
   /* 价格序列 = P/E × Mean(逐月恒等还原),用于波动率;不受 24 个月截断影响 */
   const pxSeries = recs.filter(r => isFinite(r.pe) && r.pe > 0 && isFinite(r.mean) && r.mean > 0)
     .map(r => ({ date: r.date, price: +(r.pe * r.mean).toFixed(4) }));
-  if (pxSeries.length > (state.priceHist.get(ticker) || []).length) state.priceHist.set(ticker, pxSeries);
+  setPriceHist(ticker, pxSeries);
   let peSeries = recs.filter(r => isFinite(r.pe) && r.pe > 0).map(r => ({ date: r.date, pe: r.pe }));
   let truncNote = '';
   if (peSeries.length > 24) {
@@ -840,8 +1450,8 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
   }
   const existing = state.history.get(ticker) || [];
   let peNote = '';
-  if (isFY2) {
-    peNote = '';   /* FY2 文件:只取 EPS 区间与价格序列,PE 分位仍以 FY1/NTM 口径为准 */
+  if (fy !== 1) {
+    peNote = isFar ? t('estFarSkip')(fy) : '';   /* 非第一财年:PE 分位一律不收,口径以 FY1/NTM 为准 */
   } else if (peSeries.length > existing.length) {
     state.history.set(ticker, peSeries);
     peNote = t('peSeries')(peSeries.length, peSeries[0].date.slice(0, 7), peSeries[peSeries.length - 1].date.slice(0, 7)) + truncNote
@@ -858,7 +1468,7 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
   }
   return {
     ticker,
-    text: (isFY2 ? '[FY2] ' : '') + t('estHead')(ticker, latest.date) + (isFinite(latest.low) ? latest.low.toFixed(2) : '—')
+    text: (fy > 1 ? '[FY' + fy + '] ' : '') + t('estHead')(ticker, latest.date) + (isFinite(latest.low) ? latest.low.toFixed(2) : '—')
       + t('estMid') + latest.mean.toFixed(2) + t('estHigh') + (isFinite(latest.high) ? latest.high.toFixed(2) : '—') + peNote + jumpNote,
   };
 }
@@ -951,6 +1561,26 @@ function resolveTicker(fileName, nameStr, lastPrice) {
   if (!nameTried && state.companies.size === 1) return [...state.companies.keys()][0];
   return null;   /* 有名字但对不上任何公司:宁可不猜 */
 }
+/* 最少 K 根(浏览器摄取侧的下限):一份导出少于这么多根,整份不收。
+ * 以前这里写的是字面量 `px.length < 13`,回测那边写的是字面量 `px.length < 40`,
+ * 于是"13 < 40"只是两个文件各写各的、看上去像巧合。这两个 const 就是把它声明出来。
+ *
+ * 13 的出处:src/js/valuation/volstats.js 的 `ph.length < 13`(它内部还要 `rets.length < 12`)。
+ * 13 个点 = 12 个收益率 = 能算出一个样本方差的最少点数。比它更严没有收益,
+ * 比它更松则会收下一条 volStats 注定返回 null 的序列。
+ *
+ * 为什么**不能**跟 Node 侧统一到 40:这一侧还要吃周线 / 月线导出(volStats 按日期中位间隔
+ * 判频率,252 / 52 / 12 / 1 四档都支持),以及**新上市**的短日线序列 ——
+ * 今天盘上 SPCX-US 就只有 36 根,按 40 收它会从面板上静默消失。
+ *
+ * 不变式:INGEST_MIN_BARS(13) < BACKTEST_MIN_BARS(40,见 tools/backtest.mjs)。
+ * 中间 13–39 根这一段两侧**故意**不一致:浏览器收(照画),回测不收(样本不够不出结论)。
+ * 想"顺手统一"的话,tests/test-app.mjs [16] 末尾那三条断言会先红。
+ *
+ * 这个 const **不进** tools/backtest.mjs 那行 bridge:Node 侧不读它(它有自己的 40),
+ * 桥出去反而会让人以为两边共用同一个下限。 */
+const INGEST_MIN_BARS = 13;
+
 /* Charting 导出:Date + "<公司名> - Close" 周/日价格序列(真实价格 → 波动率);P/E-LTM 列仅作参考 */
 function ingestChartingSheet(sheetName, aoa, fileName) {
   const hdr = (aoa[0] || []).map(c => String(c || '').trim());
@@ -958,16 +1588,45 @@ function ingestChartingSheet(sheetName, aoa, fileName) {
   const ci = hdr.findIndex(h => / - Close$/i.test(h));
   if (di < 0 || ci < 0) return null;
   const pi = hdr.findIndex(h => /P\/E/i.test(h));
+  /* 成交量列(FactSet 导出为 "NVDA-US - Volume";也兼容裸 "Volume")→ 真实筹码分布;缺列时压力位退回停留时间口径 */
+  const vi = hdr.findIndex(h => / - Volume$/i.test(h) || /^volume$/i.test(h));
+  /* 开/高/低三列:FactSet 把图切成 K 线布局后才会多出来("NVDA-US - Open"),手搭的表可能只写 "Open"。
+   * 正则与 fetcher/steps/charting.mjs 的 hasCol() **同一条** —— 那边用它判"这份导出算不算含 OHLC",
+   * 两处不一致就会出现"抓取器说有、读取层不读"的静默错位。只认这两种写法是有意为之:
+   * "52 Week High" 里也有 High,认进来等于凭空多出三列并不存在的日内数据。
+   * 三列必须齐:少了 Low 的"蜡烛"画不出下影线,那不是"部分可用",是另一种东西(SPEC K.2)。
+   * 没有这三列时下面整段不执行,记录形状与今天逐字段相同 —— 降级路径是主路径,不许被这段改动碰到。 */
+  const ohlcIdx = w => hdr.findIndex(h => new RegExp('(^| - )' + w + '$', 'i').test(h));
+  const oi = ohlcIdx('Open'), hi2 = ohlcIdx('High'), li2 = ohlcIdx('Low');
+  const hasOHLCCols = oi >= 0 && hi2 >= 0 && li2 >= 0;
   const px = []; let lastPE = NaN;
   for (let i = 1; i < aoa.length; i++) {
     const r = aoa[i] || [];
     const d = toISODate(r[di]); const p = parseFloat(r[ci]);
     if (!d || !isFinite(p) || p <= 0) continue;
-    px.push({ date: d, price: p });
+    const rec = { date: d, price: p };
+    if (vi >= 0) { const v = parseFloat(String(r[vi]).replace(/,/g, '')); if (isFinite(v) && v > 0) rec.vol = v; }
+    /* 自相矛盾的一根(最高 < 最低、收盘跑到影线外)整根退回"只有收盘价",不写 o/h/l:
+     * 画一根自相矛盾的蜡烛比不画危险 —— 它看上去仍然像数据。 */
+    if (hasOHLCCols) {
+      const nm = x => parseFloat(String(x).replace(/,/g, ''));
+      const o = nm(r[oi]), hh = nm(r[hi2]), ll = nm(r[li2]);
+      if (isFinite(o) && o > 0 && isFinite(hh) && hh > 0 && isFinite(ll) && ll > 0
+        && hh >= ll && hh >= Math.max(o, p) && ll <= Math.min(o, p)) { rec.o = o; rec.h = hh; rec.l = ll; }
+    }
+    px.push(rec);
     if (pi >= 0) { const v = parseFloat(r[pi]); if (isFinite(v) && v > 0) lastPE = v; }
   }
-  if (px.length < 13) return null;
+  if (px.length < INGEST_MIN_BARS) return null;
   px.sort((a, b) => a.date < b.date ? -1 : 1);
+  /* 市场级序列(fetcher 输出 "_MARKET-角色 SYMBOL Daily Charting.xlsx")→ 存入 market,不建公司 */
+  const mm = /_MARKET-(BENCH|SECTOR|CREDIT|RATES)\s+([A-Z.]{1,6}-[A-Z]{2})/i.exec(fileName || '');
+  if (mm) {
+    const role = mm[1].toUpperCase(), sym = mm[2].toUpperCase();
+    const old = state.market.get(role);
+    if (!old || px.length >= old.px.length || old.sym !== sym) state.market.set(role, { sym, px });
+    return { ticker: null, text: t('mktMsg')(sym, t('mktRole')[role] || role, px.length) };
+  }
   const nameStr = hdr[ci].replace(/ - Close$/i, '');
   const ticker = resolveTicker(fileName, nameStr, px[px.length - 1].price);
   if (!ticker) return { ticker: null, text: t('chartNoTicker') };
@@ -977,12 +1636,132 @@ function ingestChartingSheet(sheetName, aoa, fileName) {
       eps: { fy1: { low: NaN, mean: NaN, high: NaN }, fy2: { low: NaN, mean: NaN, high: NaN } },
     });
   }
-  if (px.length > (state.priceHist.get(ticker) || []).length) state.priceHist.set(ticker, px);
+  setPriceHist(ticker, px);
   return {
     ticker,
     text: t('chartMsg')(ticker, px.length, px[0].date.slice(0, 7), px[px.length - 1].date.slice(0, 7))
       + (isFinite(lastPE) ? t('chartLtm')(lastPE.toFixed(1)) : ''),
   };
+}
+/* Targets & Ratings 月度历史(fetcher 输出 "{ticker} Targets Ratings.xlsx")→ 情绪面信号 */
+const MON3 = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
+function parseDMYY(s) {   /* "28 Jul '26" -> ISO */
+  const m = /^(\d{1,2})\s+([A-Z][a-z]{2})\s+'(\d{2})$/.exec(String(s || '').trim());
+  if (!m || !MON3[m[2]]) return null;
+  return `20${m[3]}-${String(MON3[m[2]]).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+}
+function ingestTargetsSheet(sheetName, aoa, fileName) {
+  let hi = -1;
+  for (let i = 0; i < Math.min(aoa.length, 6); i++) {
+    const row = (aoa[i] || []).map(c => String(c || ''));
+    if (row.some(c => /Mean Tgt Price/i.test(c)) && row.some(c => /^Date$/i.test(c))) { hi = i; break; }
+  }
+  if (hi < 0) return null;
+  const hdr = aoa[hi].map(c => String(c || '').trim());
+  const col = re => hdr.findIndex(h => re.test(h));
+  const cD = col(/^Date$/i), cR = col(/Mean Rating/i), cN = col(/# of Ratings/i),
+    cB = col(/^Buy/i), cO = col(/Overweight/i), cT = col(/Mean Tgt Price/i);
+  const rows = [];
+  for (let i = hi + 1; i < aoa.length; i++) {
+    const r = aoa[i] || [];
+    const d = parseDMYY(r[cD]); const tgt = parseFloat(String(r[cT]).replace(/[$,]/g, ''));
+    if (!d || !isFinite(tgt)) continue;
+    const rt = /\(([\d.]+)\)/.exec(String(r[cR] || ''));
+    rows.push({
+      date: d, tgt,
+      rating: rt ? +rt[1] : NaN,
+      n: parseFloat(r[cN]),
+      buyPct: (parseFloat(r[cB]) || 0) + (parseFloat(r[cO]) || 0),
+    });
+  }
+  if (rows.length < 2) return null;
+  rows.sort((a, b) => a.date < b.date ? -1 : 1);
+  const tk = ((/^([A-Z.]{1,6}-[A-Z]{2})/.exec(fileName || '') || [])[1] || String((aoa[0] || [])[0] || '')).toUpperCase();
+  const ticker = state.companies.has(tk) ? tk : resolveTicker(fileName, tk, NaN);
+  if (!ticker) return { ticker: null, text: t('tgtNoTicker') };
+  if (!state.companies.has(ticker)) return { ticker: null, text: t('tgtNoTicker') };
+  state.companies.get(ticker).targets = rows;
+  return { ticker, text: t('tgtMsg')(ticker, rows.length, rows[rows.length - 1].tgt) };
+}
+/* short-interest.csv(fetcher 逐日累积)*/
+function ingestShortInt(recs) {
+  let n = 0;
+  for (const r of recs) {
+    const tk = String(r.ticker || '').toUpperCase();
+    const days = parseFloat(r.days_to_cover), pct = parseFloat(r.pct_of_float);
+    if (!tk || !r.date || !isFinite(pct)) continue;
+    const arr = state.shortInt.get(tk) || [];
+    if (!arr.some(x => x.date === r.date)) { arr.push({ date: r.date, days, pct }); n++; }
+    arr.sort((a, b) => a.date < b.date ? -1 : 1);
+    state.shortInt.set(tk, arr);
+  }
+  return n;
+}
+/* "{ticker} News.csv"(fetcher 从 StreetAccount 累积)—— 归属靠文件名前缀 */
+function ingestNews(recs, fileName) {
+  const tk = ((/^([A-Z.]{1,6}-[A-Z]{2})/.exec(fileName || '') || [])[1] || '').toUpperCase();
+  const ticker = tk && state.companies.has(tk) ? tk : (tk ? resolveTicker(fileName, tk, NaN) : null);
+  if (!ticker || !state.companies.has(ticker)) return { ticker: null, text: t('mNewsNoTicker') };
+  const seen = new Map();
+  for (const r of (state.news.get(ticker) || [])) seen.set(r.date + '|' + r.headline, r);
+  for (const r of recs) {
+    const date = String(r.date || '').trim(), headline = String(r.headline || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || headline.length < 4) continue;
+    seen.set(date + '|' + headline, { date, headline });
+  }
+  const arr = [...seen.values()].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  state.news.set(ticker, arr);
+  return { ticker, text: t('mNewsRows')(ticker, arr.length) };
+}
+/* "{ticker} Options.csv"(fetcher 从期权链累积)—— 列 asof,expiry,strike,call_oi,put_oi
+ * 同一个 (到期日, 行权价) 只保留 asof 最新的一条:OI 是存量数字,昨天的快照没有意义。 */
+function ingestOptions(recs, fileName) {
+  const tk = ((/^([A-Z.]{1,6}-[A-Z]{2})/.exec(fileName || '') || [])[1] || '').toUpperCase();
+  const ticker = tk && state.companies.has(tk) ? tk : (tk ? resolveTicker(fileName, tk, NaN) : null);
+  if (!ticker || !state.companies.has(ticker)) return { ticker: null, text: t('mOptNoTicker') };
+  const seen = new Map();
+  for (const r of (state.options.get(ticker) || [])) seen.set(r.expiry + '|' + r.strike, r);
+  for (const r of recs) {
+    const expiry = String(r.expiry || '').trim();
+    const strike = parseFloat(r.strike);
+    const callOI = parseFloat(r.call_oi), putOI = parseFloat(r.put_oi);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry) || !isFinite(strike) || strike <= 0) continue;
+    if (!isFinite(callOI) && !isFinite(putOI)) continue;
+    const rec = { asof: String(r.asof || '').trim(), expiry, strike,
+      callOI: isFinite(callOI) ? callOI : 0, putOI: isFinite(putOI) ? putOI : 0 };
+    const key = expiry + '|' + strike, old = seen.get(key);
+    if (!old || (rec.asof || '') >= (old.asof || '')) seen.set(key, rec);
+  }
+  const arr = [...seen.values()].sort((a, b) => a.expiry < b.expiry ? -1 : a.expiry > b.expiry ? 1 : a.strike - b.strike);
+  state.options.set(ticker, arr);
+  const exp = [...new Set(arr.map(r => r.expiry))].length;
+  return { ticker, text: t('mOptRows')(ticker, arr.length, exp) };
+}
+
+/* 关键词情绪:只用于"方向倾斜",不做精细 NLP —— 每条标题最多计一次多/空 */
+const NEWS_POS = /\b(upgrad\w*|rais\w*|beat\w*|tops?|topped|record|surge\w*|jump\w*|soar\w*|rall\w*|outperform\w*|overweight|initiat\w+ (?:at |with )?buy|buy rating|strong|stronger|expand\w*|partnership|approval|approved|wins?|won|awarded|secur(?:es|ed)|boost\w*|upside|higher|guidance raised|accelerat\w*|profit\w* rose)\b/gi;
+const NEWS_NEG = /\b(downgrad\w*|cut\w*|lower\w*|miss\w*|lawsuit\w*|probe\w*|investigat\w*|recall\w*|delay\w*|halt\w*|weak\w*|warn\w*|plunge\w*|slump\w*|sink\w*|tumbl\w*|fell|falls?|drop\w*|layoff\w*|resign\w*|ban(?:s|ned)?|restrict\w*|curb\w*|underperform\w*|underweight|sell rating|loss(?:es)?|declin\w*|concern\w*|shortfall|subpoena|antitrust|fine[ds]?)\b/gi;
+const NEWS_WIN = 30, NEWS_PREV = 90;   /* 打分窗口 30 日;31–90 日只作条数对照,不参与打分 */
+function newsScore(ticker, todayISO) {
+  const arr = state.news.get(ticker);
+  if (!arr || !arr.length) return null;
+  const now = todayISO ? new Date(todayISO + 'T00:00:00Z') : new Date();
+  const ageD = d => (now - new Date(d + 'T00:00:00Z')) / 86400000;
+  let nPos = 0, nNeg = 0, tot = 0, prev = 0;
+  for (const r of arr) {
+    const a = ageD(r.date);
+    if (a < 0 || a > NEWS_PREV) continue;
+    if (a > NEWS_WIN) { prev++; continue; }
+    tot++;
+    const p = (r.headline.match(NEWS_POS) || []).length;
+    const n = (r.headline.match(NEWS_NEG) || []).length;
+    if (p > n) nPos++; else if (n > p) nNeg++;
+  }
+  if (!tot && !prev) return null;
+  if (!tot) return { s: 0, why: t('dirWhyNewsQuiet')(prev), tot: 0, prev };
+  /* 分母下限 4:只有一两条新闻时不至于把分数拉满 */
+  const s = clamp1((nPos - nNeg) / Math.max(4, nPos + nNeg));
+  return { s, why: t('dirWhyNews')(nPos, nNeg, tot, prev), tot, prev, nPos, nNeg };
 }
 /* Price Summary 导出:实时/最新价格页 */
 function ingestPriceSummarySheet(sheetName, aoa, fileName) {
@@ -1005,11 +1784,70 @@ function ingestPriceSummarySheet(sheetName, aoa, fileName) {
   if ((SRC_RANK[co.priceSrc] || 0) <= 2) { co.price = price; co.priceSrc = 'file'; co.priceDate = '@snap'; }
   return { ticker, text: t('psMsg')(ticker, fmtN(price)) };
 }
+/* ================= ingest: roster.csv(拉取清单)=================
+ *
+ * 这个文件解决一件很具体的事:仪表盘扫的是文件夹,不是清单。
+ * 你从 fetcher/tickers.txt 里删掉一个代码,数据还在 Assets/ 里躺着,于是它照样出现在表格里——
+ * 只是从此再也不更新。那一行看不出任何异常,你却会照着一份停在几个月前的价格做判断。
+ *
+ * 所以 fetcher 每次启动会往 Assets/summary/roster.csv 写一份当前清单,这里读它。
+ * 读到了就**只画清单里的公司**;读不到(旧的 Assets 文件夹、演示数据、别人发来的一堆表)
+ * 就 state.roster = null,一个都不过滤——没有清单不等于清单是空的,这两件事绝不能弄混。
+ *
+ * 过滤只影响"画不画",不影响"读不读":落榜公司的数据照常载入,点一下就能展开看。
+ * 真正的清理在 fetcher 那侧,而且要等满一年(见 fetcher/lib/roster.mjs)。
+ */
+function ingestRoster(recs) {
+  const set = new Set();
+  let markets = 0;
+  for (const r of recs) {
+    const tk = String(r.ticker || '').trim().toUpperCase();
+    /* CSV 没有注释语法,文件末尾那句"别改这里"会被解析成一行数据。
+     * 靠开头的 # 滤掉——这是和 fetcher/lib/roster.mjs 的 ROSTER_NOTE 对好的约定。 */
+    if (!tk || tk.charAt(0) === '#') continue;
+    if (String(r.active || '').trim() === '0') continue;
+    /* 市场级序列(BENCH/SECTOR/CREDIT/RATES)不是公司,不进过滤集合:
+     * 它们的数据走 state.market,本来就不出现在公司表格里。 */
+    if (String(r.role || '').trim().toLowerCase() === 'company') set.add(tk);
+    else markets++;
+  }
+  state.roster = set.size ? set : null;
+  return { n: set.size, markets };
+}
+
+/** 该画哪些公司。没有清单、或用户点开了开关,就是全部。 */
+function visibleCompanies() {
+  const all = [...state.companies.values()];
+  if (!state.roster || state.showOffRoster) return all;
+  const on = all.filter(c => state.roster.has(c.ticker));
+  /* 一个都不剩就不过滤。这种情况是清单和数据完全对不上(比如清单写的是另一批代码),
+   * 此时交出一张空表格,看起来和"app 坏了"一模一样——宁可多显示,也不要静默地什么都不显示。 */
+  return on.length ? on : all;
+}
+
+/** 参与计算的公司代码(目前只有"默认同行"这一处用)。
+ *  刻意**不看** showOffRoster:那是个显示开关,点一下"展开看看"如果连同行中位数一起变了,
+ *  同一家公司的估值区间会因为你点了个眼睛图标而漂移——没有比这更难查的数字来源。 */
+function onRosterTickers() {
+  const all = [...state.companies.keys()];
+  if (!state.roster) return all;
+  const on = all.filter(k => state.roster.has(k));
+  return on.length ? on : all;
+}
+
+/** 被藏起来的有几家。上面那条"全落榜就不过滤"的退路在这里必须同步,否则会写出
+ *  "已隐藏 6 家"却又把 6 家都画出来的自相矛盾提示。 */
+function offRosterCount() {
+  if (!state.roster) return 0;
+  const all = [...state.companies.keys()];
+  const n = all.filter(k => !state.roster.has(k)).length;
+  return n < all.length ? n : 0;
+}
 /* ================= file handling(顺序导入,保证"新文件覆盖旧文件"确定性) ================= */
 async function handleFiles(files) {
   const msgs = [];
   /* 归属类文件(Charting / Price Summary)排到主数据文件之后,保证公司先建立再归属 */
-  const isSecondary = f => /price\s*summary|charting/i.test(f.name);
+  const isSecondary = f => /price\s*summary|charting|targets|news/i.test(f.name);
   files = [...files].sort((a, b) => (isSecondary(a) ? 1 : 0) - (isSecondary(b) ? 1 : 0));
   for (const f of files) {
     try {
@@ -1020,7 +1858,7 @@ async function handleFiles(files) {
         for (const sn of wb.SheetNames) {
           const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true });
           const r = ingestModelSheet(sn, aoa) || ingestEstimateSheet(sn, aoa, f.name) || ingestSnapshotSheet(sn, aoa, f.name)
-            || ingestChartingSheet(sn, aoa, f.name) || ingestPriceSummarySheet(sn, aoa, f.name);
+            || ingestTargetsSheet(sn, aoa, f.name) || ingestChartingSheet(sn, aoa, f.name) || ingestPriceSummarySheet(sn, aoa, f.name);
           if (r) got.push(r);
         }
         msgs.push(f.name + (got.length ? ':' + got.map(x => x.text).join(';') : t('mXlsxNone')));
@@ -1029,7 +1867,18 @@ async function handleFiles(files) {
         if (!recs.length) msgs.push(f.name + t('mEmptyFile'));
         else {
           const h = Object.keys(recs[0]);
-          if (h.includes('pe_ntm') || (h.includes('eps_ntm') && h.includes('date'))) {
+          /* 拉取清单排在最前面认:它的列名(ticker/role/active)和下面几支都不重叠,
+           * 先认掉省得每次都把不相干的分支跑一遍。见 ingest/roster.js */
+          if (h.includes('ticker') && h.includes('role') && h.includes('active')) {
+            const rr = ingestRoster(recs);
+            msgs.push(f.name + t('mRosterRows')(rr.n));
+          } else if (h.includes('days_to_cover') || h.includes('pct_of_float')) {
+            msgs.push(f.name + t('mSiRows')(ingestShortInt(recs)));
+          } else if (h.includes('headline')) {
+            msgs.push(f.name + ingestNews(recs, f.name).text);
+          } else if (h.includes('strike') && (h.includes('call_oi') || h.includes('put_oi'))) {
+            msgs.push(f.name + ingestOptions(recs, f.name).text);
+          } else if (h.includes('pe_ntm') || (h.includes('eps_ntm') && h.includes('date'))) {
             msgs.push(f.name + t('mHistRows')(ingestHistory(recs)));
           } else if (h.includes('price') && h.some(k => k.startsWith('eps_fy1'))) {
             msgs.push(f.name + t('mCoRows')(ingestCompanies(recs)));
@@ -1040,7 +1889,9 @@ async function handleFiles(files) {
       }
     } catch (e) { msgs.push(f.name + t('mParseFail') + ((e && e.message) || e)); }
   }
-  if (!state.selected && state.companies.size) state.selected = [...state.companies.keys()][0];
+  /* 默认选中的那家必须是**画得出来的**那批里的一家,否则详情卡片会指着一家表格里根本没有的公司 */
+  const vis = visibleCompanies();
+  if (vis.length && (!state.selected || !vis.some(c => c.ticker === state.selected))) state.selected = vis[0].ticker;
   renderAll(msgs.join(' · '));
 }
 
@@ -1114,7 +1965,8 @@ idbGet('dir').then(h => { if (h && window.showDirectoryPicker) $('reconnectBtn')
 /* ================= render: overview ================= */
 function overviewRows() {
   const rows = [];
-  for (const co of state.companies.values()) {
+  /* 不是 state.companies.values() —— 不在拉取清单里的公司数据照常载入,只是默认不画。见 ingest/roster.js */
+  for (const co of visibleCompanies()) {
     const r = calcRange(co, state.horizon);
     rows.push({ co, r });
   }
@@ -1184,6 +2036,17 @@ function renderOvTable(rows) {
     tbody.appendChild(tr);
   }
   tb.appendChild(tbody); wrap.appendChild(tb);
+  renderOffRoster(wrap);
+}
+/* 表格下方那一行:"另有 N 家不在拉取清单里,已隐藏"。点一下展开,再点收起。
+ * 之所以不是设置项而是就摆在表格底下:被藏起来的东西必须在藏它的地方留下痕迹,
+ * 否则下次你数了数只有 4 家、明明记得有 6 家,只能怀疑是数据丢了。 */
+function renderOffRoster(wrap) {
+  const n = offRosterCount();
+  if (!n) return;
+  const line = el('div', 'offroster', state.showOffRoster ? t('ovHiddenOn')(n) : t('ovHidden')(n));
+  line.addEventListener('click', () => { state.showOffRoster = !state.showOffRoster; renderAll(); });
+  wrap.appendChild(line);
 }
 function renderOvChart(rows) {
   const box = $('ovChart'); box.replaceChildren();
@@ -1235,7 +2098,8 @@ function renderDetail() {
   if (!co) { $('detCard').hidden = true; return; }
   $('detCard').hidden = false;
   const sel = $('coSel'); sel.replaceChildren();
-  for (const c of state.companies.values()) {
+  /* 下拉里也只列画得出来的那批 —— 表格里没有的公司出现在下拉里,是另一种"藏了但没藏干净" */
+  for (const c of visibleCompanies()) {
     const o = el('option', '', c.name + ' (' + c.ticker + ')'); o.value = c.ticker;
     if (c.ticker === state.selected) o.selected = true;
     sel.appendChild(o);
@@ -1261,7 +2125,10 @@ function renderDetail() {
   renderMatrix(co, r);
   renderBullet(co, r);
   renderCompare(co, r);
+  renderPressure(co, r);
+  renderSim(co);
   renderDirection(co, r);
+  renderCandles(co);
   renderPEBand(co, pe);
 }
 const PRICE_DATE_KEYS = { '@snap': 'priceSnap', '@derived': 'priceDerived', '@manual': 'priceManual' };
@@ -1298,26 +2165,31 @@ function partialRefresh() {
   const rows = overviewRows(); renderOvTable(rows); renderOvChart(rows);
   const co = state.companies.get(state.selected); if (!co) return;
   const r = calcRange(co, state.horizon);
-  renderHead(co); renderKpis(co, r); renderMatrix(co, r); renderBullet(co, r); renderCompare(co, r); renderDirection(co, r);
+  renderHead(co); renderKpis(co, r); renderMatrix(co, r); renderBullet(co, r); renderCompare(co, r); renderPressure(co, r); renderSim(co); renderDirection(co, r);
 }
 function renderMatrix(co, r) {
   const wrap = $('mxWrap'); wrap.replaceChildren();
   if (!r) { wrap.appendChild(el('div', 'empty', '—')); return; }
   const pe = r.pe, eps = r.eps;
+  /* 只显示为正的分位:负 P/E 乘出来的"价格"没有意义(与 calcRange 同一把尺子) */
   const cols = [['p10', 'PE P10'], ['p25', 'PE P25'], ['p50', t('mxMedian')], ['p75', 'PE P75'], ['p90', 'PE P90']]
-    .filter(([k]) => isFinite(pe[k]));
-  const rows = [[t('mxOpt'), eps.high, false], [t('mxBase'), eps.mean, true], [t('mxPes'), eps.low, false]];
+    .filter(([k]) => pePos(pe, k));
+  /* 行序沿用"乐观在上",但 EPS 取的是 calcRange 清洗后的同一份情景 */
+  const rows = [['opt', t('mxOpt'), eps.high], ['base', t('mxBase'), eps.mean], ['pes', t('mxPes'), eps.low]];
+  /* 核心区间就是矩阵里的两个角:悲观×P25 = 核心下沿,乐观×P75 = 核心上沿。标出来,读者一眼看到两处同源 */
+  const isCore = (rk, k) => (rk === 'pes' && k === 'p25') || (rk === 'opt' && k === 'p75');
   const tb = el('table', 'mx'), trh = el('tr');
   trh.appendChild(el('th', '', t('mxCorner')));
   for (const [k, lb] of cols) trh.appendChild(el('th', '', lb + ' ' + fmtX(pe[k])));
   tb.appendChild(trh);
-  for (const [lb, e, isBase] of rows) {
+  for (const [rk, lb, e] of rows) {
     const tr = el('tr');
     tr.appendChild(el('td', '', lb + fmtN(e)));
     for (const [k] of cols) {
       const v = e * pe[k], d = (v / co.price - 1) * 100;
       const td = el('td', k === 'p50' ? 'med' : '');
-      if (isBase && k === 'p50') td.classList.add('base');
+      if (rk === 'base' && k === 'p50') td.classList.add('base');
+      if (isCore(rk, k)) { td.classList.add('core'); td.title = t('mxCoreTip'); }
       td.appendChild(document.createTextNode(fmtN(v)));
       td.appendChild(el('span', 'sub ' + (isFinite(d) ? (d >= 0 ? 'pos' : 'neg') : ''), fmtPct(d)));
       tr.appendChild(td);
@@ -1325,6 +2197,15 @@ function renderMatrix(co, r) {
     tb.appendChild(tr);
   }
   wrap.appendChild(tb);
+  const legend = el('p', 'hint');
+  legend.appendChild(el('span', 'mxKey base', ''));
+  legend.appendChild(document.createTextNode(' ' + t('mxLegBase') + '   '));
+  legend.appendChild(el('span', 'mxKey core', ''));
+  legend.appendChild(document.createTextNode(' ' + t('mxLegCore')));
+  wrap.appendChild(legend);
+  /* 数据可疑时明说,不悄悄替换 */
+  if (r.baseGap) wrap.appendChild(el('p', 'hint warn', t('mxBaseGap')(r.baseGap.implied, r.baseGap.dev)));
+  for (const fl of (r.flags || [])) wrap.appendChild(el('p', 'hint warn', t('mxFlag')[fl] || fl));
   wrap.appendChild(el('p', 'hint', t('mxUnit')(co.currency || '—')));
 }
 function renderBullet(co, r) {
@@ -1371,6 +2252,960 @@ function volStats(ticker) {
   const mu = rets.reduce((a, b) => a + b, 0) / rets.length;
   const va = rets.reduce((a, b) => a + (b - mu) * (b - mu), 0) / (rets.length - 1);
   return { sigma: Math.sqrt(va) * Math.sqrt(perYear), n: rets.length + 1 };
+}
+/* ================= 压力位引擎 · 全部可调常量 =================
+ * 【σ 的量纲 —— 读这一句再往下看】本文件与 scale.js/grid.js/engine.js 里出现的每一个 σ
+ * 都是**日**对数收益标准差(`sigmaD().sd`,约 0.01–0.04);而仓库里早就存在的
+ * `volStats(ticker).sigma` 是**年化**的(`Math.sqrt(va) * Math.sqrt(perYear)`,日线 perYear=252)。
+ * 两者相差 √252 ≈ 15.9 倍,换算关系是 `σ年 = σ日 × √252`,反过来 `σ日 = σ年 / √252`。
+ * 把年化 σ 喂进本引擎不会抛任何错 —— 两者都是有限正数、都叫 "sigma" ——
+ * 只会让长度单位 u 放大 16 倍,于是每条带的 edge 都趋近 0、触及概率全部显示 99%,
+ * 可靠性图贴着右边界,而 Brier skill 只是变成一个"不大不小的负数",很容易被读成
+ * "这个持有期上模型就是不行"。这是本轮最像"财年翻车"的一处静默事故,
+ * 三道防线:①本注释;②[7] 节 `sigmaD × √252 ≈ volStats.sigma` 的比值断言;
+ * ③`reachProb()` 里 `if (sd > 0.25) return NaN` 的运行期哨兵(日波动率 25% 的股票不存在)。
+ *
+ * 本文件是**纯常量**,一个函数都不许有,而且每个值必须是**字面量** ——
+ * 不许由别的 const 派生。理由是求值顺序:顶层 const 按 manifest 顺序求值,
+ * params.js 排在 21,只要它没有前置依赖,22–25 怎么写都不会踩 TDZ。 */
+
+/* ---- σ 估计 ---- */
+const PX_SIGMA_WIN = 60;          // 日收益估计窗口(根)。窗口太短会把一次财报跳空当成常态波动。
+                                  // 【2026-08-06 搜索结果:no_move,值不动】旧注释写的"60 根在三个 Brier 上
+                                  // 都胜 20 根"这次复核不成立 —— 不是输了,是**根本比不了**:下面那条
+                                  // PX_SIGMA_MIN_N = 40 要求至少 40 根收益,20 根窗口喂不满,sigmaD() 返回
+                                  // null,20 这一档在全部 5 档半衰期、全部 3 个持有期上都是零观测。
+                                  // 剩下 40/60/120 三档进了嵌套留一评分,没有一格过预注册门槛。
+                                  // 逐配置的数见 `npm run paramsearch`;裁决行在 param-adjudication.csv。
+const PX_SIGMA_MIN_N = 40;        // 少于 40 根收益不出结论 —— 不出结论比出一个错结论便宜。
+
+/* ---- 持有期:这是口径,不是参数 ---- */
+const PX_HORIZONS = { short: 5, mid: 21, long: 63 };   // 一周 / 一月 / 一季
+/* 反射原理 p = 2Φ(−u) 的按 h 再校准系数。裸公式在短周期系统性高估触及率
+ * (日收益尖峰厚尾),所以 h 越短系数越小。判据是 OOS Brier,不是命中率。 */
+const PX_REACH_C = { 5: 0.60, 21: 0.86, 63: 1.02 };
+/* 【2026-08-06 搜索结果:no_move,三个值都不动】各 ±0.15、步长 0.05,共 7 档。
+ * c 只出现在 reachProb 的分母里(p = 2Φ(−edgeU/c)),它**不改变观测集合** ——
+ * 视野闸门 edgeU ≤ PX_REACH_U 与 c 无关。所以"只搜 c"那一轮里处理臂与对照臂
+ * 逐条比的是同一批位置、同一批结局,是这轮唯一没有"换了道题"嫌疑的对比。
+ * 结果:嵌套留出净贡献 -0.0057 / -0.0217 / +0.0093,CV 下界 0.030 / -0.057 / 0.010,
+ * 留出折最大偏差 0.13 / 0.21 / 0.17,三格全过不了 ≤0.10。搜了,没搜出来。
+ * 另记一条给下一轮预注册用的诊断(**不是**本轮改门槛的理由):全网格那一轮 h=21 上
+ * 十折一致挑中 c=0.71,而 0.71 正是许可范围的下边界 —— 最优点可能在范围之外。
+ * 要动这个范围,得在下一轮**看数据之前**提,不能看完再回头改。 */
+
+/* ---- σ 尺度几何:所有长度都以 1u = σd·√h·P 为单位 ---- */
+const PX_HALF_U = 0.35;           // 价位带半宽下限。**全表最危险的参数**:带宽单独就能把命中率
+                                  // 从 48% 推到 86%,所以它只许按"带宽 × 触及率"的联合曲线定,
+                                  // 严禁按命中率单调调优。
+const PX_REACH_U = 1.00;          // 视野闸门:距离超过 1u 的位置本期不入表 —— 再远就不是"本期的位置"。
+const PX_MERGE_U = 0.50;          // 相距 <0.5u 视为同一个位置。取代旧的固定 1.5%
+                                  // (固定百分比对高波动票太严、对低波动票太松)。
+const PX_BIN_U = 0.25;            // 分箱宽度。取代旧的固定 48 箱 —— 固定箱数会把价区大的票切碎。
+                                  // 约束:PX_BIN_U ≤ PX_HALF_U / 1.4。
+
+/* ---- 密度分箱 ---- */
+const PX_LOOKBACK_D = 730;        // 回看窗口(自然日);更长的历史对当下没有约束力。
+const PX_HALFLIFE_D = 365;        // 权重半衰期。源码旧注释("180 天会把老平台抹掉")与卷宗扫描
+                                  // ("45d > 90d > 180d > 365d")方向相反,谁都没留下可复核的测量,
+                                  // 所以本轮把它挂进唯一一次调参搜索,判据是 LOO-CV 的 OOS Brier;
+                                  // 极差 < 0.005 就判 no_effect 并回到 365。
+                                  // 【2026-08-06 裁决已执行:no_effect,回到 365】
+                                  // {45,90,180,365,∞} 扫完,单参数 OOS 极差 h5=0.2055 / h21=0.1830 /
+                                  // h63=0.1762,**远超** 0.005 —— 预注册那条极差规则并没有触发。
+                                  // 判 no_effect 靠的是另外两条,都比极差规则硬:
+                                  //  ① 那个极差不归半衰期。换一档半衰期就换一批观测(h5 样本 334→253),
+                                  //    平均带宽同步从 1.553u 移到 2.023u —— SPEC 4.1 点名的混杂就是这个。
+                                  //    带宽单独就能推动命中率(见 PX_HALF_U 那条),曲线量的是它,不是半衰期。
+                                  //  ② 唯一有资格宣布结论的嵌套留出评分上(配置只在训练票里挑),
+                                  //    含半衰期的全网格搜索净贡献 -0.0750 / +0.1549 / -0.0969,
+                                  //    留出折可靠性图最大偏差 0.22 / 0.21 / 0.20,三格全过不了 ≤0.10。
+                                  // 卷宗那条"45d > 90d > 180d > 365d"的单调扫描在这里没有复现:
+                                  // 本轮三个持有期上 365 与 ∞ 反而都排在 45 前面,方向是反的。
+                                  // 至于 D6 要求"把源码那句注释删掉":technical.js 在重写后已不存在,
+                                  // 那句话如今只以引文形式活在上面两行里,删无可删 —— 留着当裁决的对照。
+const PX_SWING_K = 8;             // 摆动极值:左右各 k 根都不超过它。
+const PX_PEAK_X = 1.15;           // 峰值判据:平滑密度 > 均值 ×1.15,否则只是噪声。
+const PX_BAND_CUT = 0.55;         // 从峰值向外扩张到密度降至峰值的 55%。
+const PX_KEEP = 3;                // 上下各留 3 档 —— UI 容量决定的,不是统计决定的。
+
+/* ---- 期权轨:七个参数本轮一个都不许调 ----
+ * 可回测的期权快照只有 4–5 天(其中一天是残链)。在 5 个数据点上调 7 个参数
+ * 得到的不是校准,是拟合噪声。 */
+const PX_OPT_EXPIRIES = 3;        // 取窗口内 OI 最重的 3 个到期日(周度期权普及后 2 个盖不住月度那条)
+const PX_OPT_MAX_DTE = 60;        // 视野:超过两个月的 OI 对当下价格几乎没有钉住力
+const PX_OPT_DTE_HALF = 30;       // 时间权重 w = 1/(1+dte/30)
+const PX_OPT_WINDOW = 0.25;       // 只看现价 ±25% 内的行权价
+const PX_OPT_WALL_X = 1.5;        // 墙 = OI ≥ 窗口内**有参与的**行权价均值的 1.5 倍
+const PX_OPT_KEEP = 4;            // 每个到期日最多留 4 面墙
+const PX_OPT_MIN_OI = 500;        // 单个行权价 OI 下限:再稀疏就是噪声
+
+/* ---- 买入模拟 ---- */
+const SIM_COST_BPS = 10;          // 单边 10bp 往返成本。取整数是为了让用户一眼看出这是个假设,不是实测滑点。
+const SIM_MIN_TRIG = 8;           // 触发次数 < 8 时面板拒绝显示胜率 —— 3 次触发 3 次赢不是 100%,是噪声。
+const SIM_WARM = 120;             // 热身根数,与 testBands 现有的 warm=120 对齐,免得浏览器内外两套长度。
+
+/* ---- 证据分级:这张表是渲染层的开关,不是标签 ----
+ * pending / inconclusive / falsified 的腿在渲染层根本不存在"输出百分比"的代码路径。
+ * 各值由回测结果更新(SPEC 3.3 这一行的"搜索范围"栏写的就是「由回测结果更新」),
+ * 不由实现者手动改好看 —— 上面 24 个数值常量则一个字都不许动。
+ *
+ * 【2026-08-06 本轮两处改判,都是把面板改得更悲观,不是调参】
+ *  · reach: 'verified' → 'pending'。G 组三条预注册判据里,可靠性图最大偏差
+ *    0.2213 / 0.2035 / 0.2648(h=5/21/63)全部超过预注册门槛 ≤0.10,三格全灭。
+ *    SPEC 3.9 兜底条款:任何一格判为「未过」,该腿的 evidence 落为 pending。
+ *    已知存在一个结构性争议(PX_REACH_U=1.0 给 pReach 压了 0.0956/0.2449/0.3269 的硬下限,
+ *    最低那 2–3 个桶永远填不满,门槛可能根本够不到),但那是**下一轮预注册前**该提的动议,
+ *    不是这一轮看完数据再回头改门槛的理由 —— 后者本身就是预注册缺陷。先降级,再论证。
+ *  · bounce: 'falsified' → 'inconclusive'。B 组实测 z = −0.35 / −0.76,
+ *    effN 17 / 16,而预注册要求 effN ≥ 30。**样本不足不给人宣告证伪的权利** ——
+ *    「测了没过」和「根本没测够」是两件事,前者是结论,后者是空白。
+ *    面板正文 plBounceNote 说的一直是「测不出」,这里只是把徽章改成与它同一个意思。 */
+const PX_EVIDENCE = { reach: 'pending', contain: 'pending', bounce: 'inconclusive', opt: 'pending', val: 'descriptive' };
+/* ================= σ 尺度:日波动率 / 长度单位 / 触及概率 / 打分 =================
+ * 本文件里的 sd 一律是**日**对数收益标准差,不年化。想要年化请自己乘 √252,
+ * 但别把年化的值再喂回来 —— 详见 params.js 文件头那一段。 */
+
+/** 日对数收益标准差。返回 { sd, n, from, to } | null。
+ *  n 是参与计算的**收益个数**(不是价格根数),from/to 是实际窗口的首尾日期。
+ *  不负责年化、不负责 √t 外推、不负责跨票比较 —— 那些都是调用方的事。 */
+function sigmaD(ticker, refISO, win) {
+  const all = state.priceHist.get(ticker);
+  if (!all || !all.length) return null;
+  /* 时间截断只走 asOfSlice 这一个口子(grid.js),别在这里自己写 filter */
+  const seg = asOfSlice(all, refISO || null);
+  const w = isFinite(win) && win > 0 ? Math.floor(win) : PX_SIGMA_WIN;
+  /* 取最后 w 个收益,也就是最后 w+1 根价格 */
+  const tail = seg.slice(Math.max(0, seg.length - (w + 1)));
+  const rets = [], dates = [];
+  for (let i = 1; i < tail.length; i++) {
+    const a = tail[i - 1].price, b = tail[i].price;
+    if (!(a > 0) || !(b > 0)) continue;
+    rets.push(Math.log(b / a));
+    dates.push(tail[i].date);
+  }
+  if (rets.length < PX_SIGMA_MIN_N) return null;
+  const mu = rets.reduce((x, y) => x + y, 0) / rets.length;
+  const va = rets.reduce((x, y) => x + (y - mu) * (y - mu), 0) / (rets.length - 1);
+  const sd = Math.sqrt(va);
+  if (!isFinite(sd)) return null;
+  return { sd, n: rets.length, from: dates[0], to: dates[dates.length - 1] };
+}
+
+/** 本引擎唯一的长度单位「1u」= σd·√h·P(一个持有期的一个标准差,折成价格)。
+ *  坏输入返回 NaN 而**不是 0**:0 会让下游的 dist/u 变成 Infinity(仍可比较,面板照画错的),
+ *  NaN 会让所有比较为 false,于是那条带安静地不出现 —— 消失是看得见的,错数不是。 */
+function scaleU(sd, h, price) {
+  if (!isFinite(sd) || sd <= 0) return NaN;
+  if (!isFinite(h) || h <= 0) return NaN;
+  if (!isFinite(price) || price <= 0) return NaN;
+  return sd * Math.sqrt(h) * price;
+}
+
+/** 标准正态 CDF,Abramowitz-Stegun 7.1.26(对 Φ 的绝对误差 < 7.5e-8)。 */
+function normCdf(z) {
+  if (!isFinite(z)) return z > 0 ? 1 : z < 0 ? 0 : NaN;
+  const s = z < 0 ? -1 : 1, x = Math.abs(z) / Math.SQRT2;
+  const tt = 1 / (1 + 0.3275911 * x);
+  const y = 1 - ((((1.061405429 * tt - 1.453152027) * tt + 1.421413741) * tt - 0.284496736) * tt + 0.254829592) * tt * Math.exp(-x * x);
+  return 0.5 * (1 + s * y);
+}
+
+/** 未来 h 个交易日内**至少触及一次**的概率(反射原理 p = 2Φ(−u),经 c 再校准)。
+ *  它对上下对称、不含方向;它**不是**"守得住的概率",也**不是**"收盘落在那里的概率"。
+ *  edgeAbs 是现价到目标位**边缘**的绝对价差(非负)。 */
+function reachProb(edgeAbs, sd, h, c) {
+  /* 量纲哨兵:日波动率超过 25% 的股票不存在,这个值只可能是年化 σ 走错了门。
+   * 返回 NaN 让整条带静默消失 —— 比返回 0.99 好,因为消失看得见,0.99 看不见。 */
+  if (sd > 0.25) return NaN;
+  if (!isFinite(edgeAbs) || edgeAbs < 0) return NaN;
+  if (!isFinite(sd) || sd <= 0) return NaN;
+  if (!isFinite(h) || h <= 0) return NaN;
+  if (!isFinite(c) || c <= 0) return NaN;
+  return Math.min(1, 2 * normCdf(-edgeAbs / (c * sd * Math.sqrt(h))));
+}
+
+/** 二项比例的 Wilson 区间。用 Wilson 不用正态近似:k=0 或 k=n 时正态区间会塌成一个点,
+ *  而小样本恰恰是本面板最常见的处境。z 缺省 1.96。 */
+function wilson(k, n, z) {
+  const zz = isFinite(z) && z > 0 ? z : 1.96;
+  if (!isFinite(k) || !isFinite(n) || n <= 0 || k < 0 || k > n) return { lo: NaN, hi: NaN };
+  const p = k / n, d = 1 + zz * zz / n;
+  const c = p + zz * zz / (2 * n);
+  const s = zz * Math.sqrt(p * (1 - p) / n + zz * zz / (4 * n * n));
+  return { lo: Math.max(0, (c - s) / d), hi: Math.min(1, (c + s) / d) };
+}
+
+/** Brier 分数 Σ(p−y)²/n。y 只能是 0/1。 */
+function brier(ps, ys) {
+  if (!Array.isArray(ps) || !Array.isArray(ys) || !ps.length || ps.length !== ys.length) return NaN;
+  let s = 0, n = 0;
+  for (let i = 0; i < ps.length; i++) {
+    const p = ps[i], y = ys[i];
+    if (!isFinite(p) || !isFinite(y)) continue;
+    s += (p - y) * (p - y); n++;
+  }
+  return n ? s / n : NaN;
+}
+
+/** Brier skill:1 − brier(模型) / brier(常数 base 预测)。
+ *  base 是气候基准(全样本触及率),不是别的模型 —— 换基准就换了题,不许混着报。 */
+function brierSkill(ps, ys, base) {
+  const b = brier(ps, ys);
+  if (!isFinite(b) || !isFinite(base)) return NaN;
+  const b0 = brier(ys.map(() => base), ys);
+  if (!isFinite(b0) || b0 <= 0) return NaN;
+  return 1 - b / b0;
+}
+/* ================= 价格密度几何(σ 尺度) =================
+ * 职责只有三件:as-of 截断、摆动极值、按 1u = σd·√h·P 分箱成带。
+ * 不做合并、不做排序、不算概率、不判上下 —— 那些在 engine.js。
+ * 这里的 sd 一律是**日**波动率(sigmaD().sd),不是 volStats 的年化 σ,详见 params.js 文件头。 */
+
+/** 时间截断的唯一入口。别处再写 `filter(d => d.date <= ref)` 一律算规格违例 ——
+ *  上一版整段未来函数防护就是密度函数里 `a >= 0` 一个子句,某次重构顺手就能删掉,
+ *  删掉之后没有任何东西会响:回放照跑,只是每一根都偷看了后面的价格。
+ *  这里刻意用**前缀截断 + 事后断言**而不是 filter:filter 会把乱序序列里夹着的未来行
+ *  悄悄挑掉,留下一段"看起来干净"的结果;前缀截断会把同样的乱序直接炸出来。 */
+function asOfSlice(series, refISO) {
+  if (!Array.isArray(series) || !series.length) return [];
+  if (!refISO) return series;
+  let i = 0;
+  while (i < series.length && series[i] && series[i].date <= refISO) i++;
+  const out = series.slice(0, i);
+  if (out.length && out[out.length - 1].date > refISO)
+    throw new Error('as-of 越界:切片末日期 ' + out[out.length - 1].date + ' 晚于 ' + refISO);
+  /* 截断点之后若还有 <= refISO 的行,说明序列没按日期升序 —— 那就不只是排序问题,
+   * 是"我刚刚静默丢掉了本该参与计算的历史"。宁可炸,不许少算。 */
+  for (let j = i; j < series.length; j++) {
+    if (series[j] && series[j].date <= refISO)
+      throw new Error('as-of 越界:序列未按日期升序,' + series[j].date + ' 出现在截断点之后');
+  }
+  if (!out.length) throw new Error('as-of 越界:' + refISO + ' 早于该序列的第一根 ' + series[0].date);
+  return out;
+}
+
+/** 摆动高低点:局部极值,最经典的前高/前低来源。k 缺省 PX_SWING_K。 */
+function swingPoints(series, k) {
+  const kk = isFinite(k) && k > 0 ? Math.floor(k) : PX_SWING_K;
+  const out = [];
+  for (let i = kk; i < series.length - kk; i++) {
+    const p = series[i].price;
+    let hi = true, lo = true;
+    for (let j = i - kk; j <= i + kk; j++) {
+      if (j === i) continue;
+      if (series[j].price > p) hi = false;
+      if (series[j].price < p) lo = false;
+      if (!hi && !lo) break;
+    }
+    if (hi || lo) out.push({ price: p, date: series[i].date, kind: hi ? 'high' : 'low' });
+  }
+  return out;
+}
+
+/** 价格密度 → 价位带。名字不许改:tools/backtest.mjs 的函数存在性断言点名了它。
+ *  返回 { bins, bands, basis, n, from, to, swings, min, max, sd, u, asOf } | null。 */
+function priceDensity(ticker, refISO, h) {
+  const all = state.priceHist.get(ticker);
+  if (!all || all.length < PX_SIGMA_MIN_N) return null;
+  /* h 缺省必须落到 PX_HORIZONS.mid(=21),绝不允许 undefined 走进几何:
+   * √undefined = NaN → u = NaN → 所有 distU/edgeU 全 NaN → 过滤条件恒为 false
+   * → 面板整个消失,而控制台干干净净。这种失败看起来像"这只票没数据",不像 bug。 */
+  const hh = isFinite(h) && h > 0 ? h : PX_HORIZONS.mid;
+  const sliced = asOfSlice(all, refISO || null);
+  if (sliced.length < PX_SIGMA_MIN_N) return null;
+  const asOf = sliced[sliced.length - 1].date;
+
+  /* 回看窗口:这一刀砍的是**太老**的数据,与 as-of 无关(as-of 已经在上面做完了)。
+   * 同样用前缀索引而不是 filter,免得日后有人把两种截断看成一类而互相抄。
+   * 年龄一律从 refISO 起算,不从最后一根起算:序列停更两年的票,
+   * 若按最后一根算年龄,它的老平台永远是"新鲜"的,回看窗口和半衰期都等于没有。 */
+  const now = new Date((refISO || asOf) + 'T00:00:00Z');
+  const ageD = d => (now - new Date(d + 'T00:00:00Z')) / 86400000;
+  let s0 = 0;
+  while (s0 < sliced.length && ageD(sliced[s0].date) > PX_LOOKBACK_D) s0++;
+  const series = sliced.slice(s0);
+  if (series.length < PX_SIGMA_MIN_N) return null;
+
+  const sig = sigmaD(ticker, refISO || null, PX_SIGMA_WIN);
+  if (!sig) return null;
+  const refPx = series[series.length - 1].price;
+  const u = scaleU(sig.sd, hh, refPx);
+  if (!isFinite(u) || u <= 0) return null;
+
+  const basis = hasVol(series) ? 'volume' : 'time';
+  const prices = series.map(d => d.price);
+  const mn = Math.min(...prices), mx = Math.max(...prices);
+  if (!(mx > mn)) return null;
+
+  /* 箱宽 = PX_BIN_U · u,不再是固定 48 箱 —— 固定箱数会把价区大的票切碎、把窄幅票糊成一片。
+   * 上下两道钳位不是可调参数,是分辨率上限:箱数超过样本量的一半以后,
+   * 平均每箱不到 2 个观测,密度就是散粒噪声 —— 峰值检测测到的是"哪天恰好落在这一格",
+   * 不是筹码分布。σ 塌到接近 0 时(比如一段几乎线性的走势)箱数会炸到十万级,
+   * 那不是"更精细",那是把噪声当成结构,顺带把浏览器卡死。 */
+  let nb = Math.ceil((mx - mn) / (PX_BIN_U * u));
+  if (!isFinite(nb) || nb < 4) nb = 4;
+  const nbMax = Math.max(8, Math.floor(series.length / 2));
+  if (nb > nbMax) nb = nbMax;
+  const w = (mx - mn) / nb;
+  const bins = Array.from({ length: nb }, (_, i) => ({ lo: mn + i * w, hi: mn + (i + 1) * w, mid: mn + (i + 0.5) * w, wt: 0, last: '' }));
+  const at = p => Math.min(nb - 1, Math.max(0, Math.floor((p - mn) / w)));
+  for (const d of series) {
+    const decay = Math.pow(0.5, ageD(d.date) / PX_HALFLIFE_D);
+    const unit = basis === 'volume' ? (isFinite(d.vol) && d.vol > 0 ? d.vol : 0) : 1;
+    if (!unit) continue;
+    const idx = at(d.price);
+    bins[idx].wt += unit * decay;
+    if (d.date > bins[idx].last) bins[idx].last = d.date;
+  }
+  const total = bins.reduce((a, b) => a + b.wt, 0);
+  if (!(total > 0)) return null;
+  for (const b of bins) b.share = b.wt / total;
+  /* 3 点平滑后再找峰:未平滑的分布在"匀速走过"的区段会出现一串等高的微峰,
+   * 峰值法会把一个连续区域切成好几条挨着的窄带,读起来是噪声。平滑只用于识别,展示仍用原始值。 */
+  for (let i = 0; i < nb; i++) {
+    const a = bins[i - 1] ? bins[i - 1].share : bins[i].share;
+    const c = bins[i + 1] ? bins[i + 1].share : bins[i].share;
+    bins[i].sm = (a + bins[i].share + c) / 3;
+  }
+
+  /* 摆动点:落进哪个箱就给那个箱记一次"触及" */
+  const swings = swingPoints(series, PX_SWING_K);
+  for (const sp of swings) { const i = at(sp.price); bins[i].touch = (bins[i].touch || 0) + 1; }
+
+  /* 峰值 → 向两侧扩张成带(峰值必须高于平均密度,否则只是噪声) */
+  const avg = 1 / nb;
+  const used = new Array(nb).fill(false);
+  const peaks = bins.map((b, i) => ({ i, s: b.sm }))
+    .filter(x => x.s > avg * PX_PEAK_X
+      && x.s >= (bins[x.i - 1] ? bins[x.i - 1].sm : -1)
+      && x.s >= (bins[x.i + 1] ? bins[x.i + 1].sm : -1))
+    .sort((a, b) => b.s - a.s);
+  const spans = [];
+  for (const pk of peaks) {
+    if (used[pk.i]) continue;
+    let a = pk.i, z = pk.i;
+    while (a > 0 && !used[a - 1] && bins[a - 1].sm >= pk.s * PX_BAND_CUT) a--;
+    while (z < nb - 1 && !used[z + 1] && bins[z + 1].sm >= pk.s * PX_BAND_CUT) z++;
+    for (let i = a; i <= z; i++) used[i] = true;
+    spans.push({ a, z, pi: pk.i });
+    if (spans.length >= 10) break;
+  }
+  /* 相邻(中间没有真正空档)的两段合成一条——一个连续密集区应该是一条带,不是三条 */
+  spans.sort((x, y) => x.a - y.a);
+  const merged = [];
+  for (const s of spans) {
+    const prev = merged[merged.length - 1];
+    if (prev && s.a - prev.z <= 1) {
+      prev.z = s.z;
+      if (bins[s.pi].sm > bins[prev.pi].sm) prev.pi = s.pi;
+    } else merged.push({ ...s });
+  }
+  const half = PX_HALF_U * u;
+  const bands = merged.map(({ a, z, pi }) => {
+    let wt = 0, touch = 0, last = '';
+    for (let i = a; i <= z; i++) { wt += bins[i].share; touch += bins[i].touch || 0; if (bins[i].last > last) last = bins[i].last; }
+    const peak = bins[pi].mid;
+    let lo = bins[a].lo, hi = bins[z].hi;
+    /* 半宽下限 PX_HALF_U·u:比这更窄的带在本持有期的尺度上就是一个点,
+     * 而"点"承载不了触及概率(到边缘和到中心的距离没有区别)。按峰值对称补足。 */
+    if ((hi - lo) / 2 < half) { lo = Math.min(lo, peak - half); hi = Math.max(hi, peak + half); }
+    return { lo, hi, peak, share: wt, touch, last };
+  }).sort((x, y) => y.share - x.share).slice(0, 6);
+
+  return {
+    bins, bands, basis, n: series.length,
+    from: series[0].date, to: series[series.length - 1].date,
+    swings, min: mn, max: mx, sd: sig.sd, u, asOf,
+  };
+}
+/* ================= 期权轨:未平仓量(OI)墙 —— 一层前瞻标注,不是一条压力轨 =================
+ * 为什么它在这里但又"不算数":可回测的期权快照只有 4–5 个交易日(其中一天还是 18–37 行的残链)。
+ * 这不是"样本小",是**没有时间序列** —— 没有时间序列就无法回答"这堵墙顶住了没有",
+ * 于是这一轨永远进不了任何 z 检验。它渲染、它写前瞻台账,但它不产生百分比、不参与排序、
+ * 不影响 up/down 的先后。`evidence` 因此是**写死的字面量 'pending'**,不由任何输入决定 ——
+ * 防的事故是:有人往台账里塞几行就把它"升级"成 verified,而升级的依据其实一条都没有。
+ *
+ * 旧版那个 `strength = 55·(oi/maxOI) + 20·w + 25·align` 的 0–100 加权分**整个删除**,
+ * 不得以任何名义恢复。它与后续走势的相关系数实测 r≈+0.01,而它在界面上是一根进度条 ——
+ * 进度条这个视觉隐喻本身就在宣称"越长越可信"。表里只留带单位的原始量(OI、dte、align)。
+ *
+ * 七个 PX_OPT_* 参数本轮一个都不许调:在 5 个数据点上调 7 个参数,得到的不是校准,是拟合噪声。
+ *
+ * ---- 2026-07-30 那笔老账(下面三条行为是当时修出来的,这里逐条保留并在测试里钉死)----
+ *   ① **周度期权把月度挤出去了。** 一份 NVDA 导出里有 12 个到期日,"最近两个"选中的是
+ *      08/03、08/05 这种薄得没人参与的周度链,而 OI 真正堆着的月度 08/21 被整个忽略。
+ *      所以选到期日的标准是"**窗口内 OI 最重的那几个**",不是日历上的远近;
+ *      远近改由权重 w 连续衰减表达,而不是靠排名一刀切。
+ *   ② **零 OI 行把均值压下去了。** 导出给的是整条链,一大半行权价 OI 是 0;把它们算进分母,
+ *      `avg × 1.5` 这道门槛就形同虚设,于是满屏都是"墙"。均值只在真有人参与的行权价上算。
+ *   ③ **当天到期的链占着最高权重。** 判据是 `expiry <= today`(不是 `<`)——
+ *      今天到期的链今晚就归零,对明天之后一点约束力都没有,让它拿走一个名额是净损失。 */
+
+/** 单个到期日的 max pain:让所有持有人内在价值总和最小的行权价。
+ *  它是**磁吸位**参考,不是障碍位 —— 不进 walls,只挂在 expiries 上给面板打印。 */
+function maxPain(rows) {
+  let best = null, bestPay = Infinity;
+  for (const s of rows) {
+    let pay = 0;
+    for (const r of rows) {
+      pay += r.callOI * Math.max(0, s.strike - r.strike) + r.putOI * Math.max(0, r.strike - s.strike);
+    }
+    if (pay < bestPay) { bestPay = pay; best = s.strike; }
+  }
+  return best;
+}
+
+/** 行权价是不是落在整五十 / 整二十五的网格上。
+ *  用整数分(×100 再取模)而不是直接对浮点取模:真导出里有 152.5 这种半档行权价,
+ *  `152.5 % 25` 在浮点上不一定得到干净的 0,分层就会随机漏掉几行 ——
+ *  H2 组按这个标记分层,标记漂一次,那一组的结论就整个作废。 */
+function optGridMark(strike) {
+  if (!isFinite(strike)) return { isGrid50: false, isGrid25: false };
+  const c = Math.round(strike * 100);
+  if (Math.abs(c - strike * 100) > 1e-6) return { isGrid50: false, isGrid25: false };
+  const g50 = c % 5000 === 0;
+  return { isGrid50: g50, isGrid25: !g50 && c % 2500 === 0 };
+}
+
+/** 期权链 → OI 墙。返回 { walls, expiries, window, evidence:'pending' } | null。
+ *  walls[] = { strike, oi, callOI, putOI, expiry, dte, w, align, isGrid50, isGrid25 }。
+ *
+ *  第三参 `h` 是持有期(5/21/63)。它**故意不参与任何筛选**:七个 PX_OPT_* 冻结,
+ *  一旦让 h 去改 MAX_DTE 或权重,等于在 5 个快照上按持有期分三套参数调 —— 那是纯拟合。
+ *  留着这个参数只是为了让 engine.js 对三条轨用同一种调用形状,将来真有了 OI 时间序列
+ *  再决定它该不该起作用。 */
+function optionWalls(co, refISO, h) {
+  const arr = co && state.options.get(co.ticker);
+  if (!arr || !arr.length || !isFinite(co.price) || co.price <= 0) return null;
+  const today = (refISO || new Date().toISOString().slice(0, 10));
+  /* 行权价窗口必须围着 **as-of 那天的价** 取,不是 `co.price`(那永远是今天的价)。
+   * 写成 `co.price` 的后果是 refISO 对这个函数**完全无效**:回放到 2025-03 的某一天,
+   * 窗口仍然以 2026-08 的价为中心 —— 一年的涨幅足以让整条链落到 ±PX_OPT_WINDOW 之外,
+   * 于是那天"一面墙都没有";反过来在下跌票上会挑出一批当时根本不在价内外的行权价。
+   * 这一轨现在 evidence='pending'、不进任何统计,所以这个偷看不影响任何已发布的数字;
+   * 但把一个已知的未来函数留在代码里,下一个把它接进统计的人一定会踩上去。
+   * 同理,下面判断"上方看涨占优 / 下方看跌占优"的 align 也必须用同一个 px。 */
+  const px = asOfPrice(co.ticker, refISO || null, co.price);
+  if (!isFinite(px) || px <= 0) return null;
+  const dteOf = e => Math.round((new Date(e + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
+  const oiOf = r => r.callOI + r.putOI;
+  const byExp = new Map();
+  for (const r of arr) {
+    /* ---- as-of 闸门:**快照日晚于参照日的行,一条都不许进** ----
+     * 这是这个文件里最后一个、也是最严重的一个未来函数。上面那段修的是"窗口中心用错了价",
+     * 这一条修的是"整批 OI 本身就来自未来":Assets/options/ 下的链只有一个很窄的近期窗口
+     * (NVDA-US 是 2026-07-29 ~ 2026-08-06),而回放会把 refISO 拨到几周甚至一年前。
+     * 少了这道闸门,站在 2026-07-01 那天读到的是 08-06 收盘之后才登记下来的未平仓量 ——
+     * **一份在参照日之后拍下的快照不是证据,是答案本身。** 拿它当"当时看得见的信息",
+     * 等于先看了后面的走势再回头画墙,画出来的墙当然处处应验。
+     * 事故的形态是可见的:线上 breakoutBuy 在 NVDA 上触发 4 次、五个候选位置 tracks 全是
+     * ["opt"];而回测那边从不往 state.options 里塞链,同一条规则一次都不触发 ——
+     * 同一份代码在两条路径上给出两种世界,差的就是这一行。
+     * 判据用 `>` 不用 `>=`:参照日**当天**收盘后登记的 OI 是那天收盘时就存在的存量,
+     * 与 expiry 那条 `<=` 不同,这里没有"今晚归零"的问题。
+     * refISO 为空(线上看今天)时不设限:那时候没有"未来"可偷。 */
+    if (refISO && r.asof && r.asof > refISO) continue;
+    if (r.expiry <= today) continue;                          // 见文件头 ③:今晚归零的链不占名额
+    if (dteOf(r.expiry) > PX_OPT_MAX_DTE) continue;           // 超出视野的远月对当下价格没有钉住力
+    if (Math.abs(r.strike / px - 1) > PX_OPT_WINDOW) continue;
+    if (!byExp.has(r.expiry)) byExp.set(r.expiry, []);
+    byExp.get(r.expiry).push(r);
+  }
+  /* 见文件头 ①:按窗口内 OI 总量选到期日,选完再按日期排(面板要按时间读)。 */
+  const exps = [...byExp.keys()]
+    .sort((a, b) => byExp.get(b).reduce((s, r) => s + oiOf(r), 0) - byExp.get(a).reduce((s, r) => s + oiOf(r), 0))
+    .slice(0, PX_OPT_EXPIRIES)
+    .sort();
+  if (!exps.length) return null;
+  const walls = [], expiries = [];
+  exps.forEach(expiry => {
+    const rows = byExp.get(expiry).slice().sort((a, b) => a.strike - b.strike);
+    const live = rows.filter(r => oiOf(r) > 0);               // 见文件头 ②:零 OI 行不进分母
+    const tot = live.reduce((s, r) => s + oiOf(r), 0);
+    if (!tot) return;
+    const avg = tot / live.length;
+    const dte = dteOf(expiry);
+    const w = 1 / (1 + dte / PX_OPT_DTE_HALF);
+    expiries.push({ expiry, dte, w, maxPain: maxPain(rows), nStrike: live.length,
+      callOI: rows.reduce((s, r) => s + r.callOI, 0), putOI: rows.reduce((s, r) => s + r.putOI, 0) });
+    const picked = live.filter(r => oiOf(r) >= Math.max(PX_OPT_MIN_OI, avg * PX_OPT_WALL_X))
+      .sort((a, b) => oiOf(b) - oiOf(a)).slice(0, PX_OPT_KEEP);
+    for (const r of picked) {
+      const oi = oiOf(r);
+      /* 方位一致性:上方要看涨占优才像阻力,下方要看跌占优才像支撑。
+       * 方向不一致的大 OI 更可能是别人的对冲腿。align 现在是**一个原始比例的三档标签**,
+       * 不再乘进任何合成分 —— 它只被渲染出来给人看,不参与任何排序。 */
+      const share = r.strike > px ? r.callOI / oi : r.putOI / oi;
+      const align = share >= 0.6 ? 1 : share >= 0.4 ? 0.5 : 0.25;
+      const g = optGridMark(r.strike);
+      walls.push({ strike: r.strike, oi, callOI: r.callOI, putOI: r.putOI, expiry, dte, w, align,
+        isGrid50: g.isGrid50, isGrid25: g.isGrid25 });
+    }
+  });
+  if (!walls.length && !expiries.length) return null;
+  /* 字面量,不是变量:evidence 不许因为任何输入变成 verified。 */
+  return { walls, expiries, window: PX_OPT_WINDOW, evidence: 'pending' };
+}
+/* ================= 压力位引擎:组装 =================
+ * 取 as-of 价 → 拿密度带与 OI 墙 → 合并 → 算触及概率 → 按现价分上下。
+ *
+ * 这个文件**不做**四件事,每一件都是上一版做过并且被自己的回测否掉的:
+ *   ① 不给 0–100 强度分。旧 `strength` 与后续走势的相关是 r≈+0.01,而它在界面上是进度条,
+ *      进度条这个隐喻本身就在宣称"越长越可信"。表里只留带单位的原始量。
+ *   ② 不预测方向。
+ *   ③ 不预测"守不守得住"。三套不同对照都得到同一个"没有"(max|z| 1.06–1.20,门槛 2),
+ *      所以 `why` 里必须有一句明说这件事测不出来 —— 少了一个功能而不说,用户会以为它还在。
+ *   ④ 不把估值线放进 up/down。本仓库 D 组回测已判 `valAnchorBias = biased`:
+ *      中枢相对现价的偏离中位数为负、方向命中率跌破 50%(P/E 分位取自该票自身历史,
+ *      而这一年是再评级行情)。一条被自家回测判为系统性挂偏的线,不能继续占"压力位"这个名分。
+ *      它降级为图上的虚线参考刻度,走 `valRefs`,永不进 up/down、永不参与合并。 */
+
+/** 按当前语种挑一句话。用 typeof 兜住是因为回测在 vm 里可能没装 i18n.js ——
+ *  引擎不该因为少了一个词表就整个不能跑。 */
+function pxWhy(zh, en) { return (typeof LANG === 'string' && LANG === 'en') ? en : zh; }
+
+/** as-of 那天的收盘价。refISO 为 null → 用 fallback(即 co.price)。
+ *
+ *  **这个函数存在的唯一理由是修一个已知的未来函数。** 上一版 `pressureLevels` 拿 `co.price`
+ *  切分 up/down,而 `co.price` 永远是**今天**的价 —— 历史回放时,2025 年那一天的"上方压力"
+ *  是按 2026 年的价算出来的。后果不是数字略偏,是 `price > up[0].hi` 这类突破规则
+ *  在回放里**永远不可能触发**:上方压力被今天的高价推得要么全在下方、要么远得出视野。
+ *  回测于是安静地少掉一整类事件,报告上看起来只是"这条规则触发次数少"。 */
+function asOfPrice(ticker, refISO, fallback) {
+  if (!refISO) return fallback;
+  const all = state.priceHist.get(ticker);
+  if (!all || !all.length) return fallback;
+  /* 时间截断只走 asOfSlice 这一个口子;它越界会抛错,这里不接 —— 抛错是要的,
+   * 静默用错日期的价才是要防的那件事。 */
+  const seg = asOfSlice(all, refISO);
+  const p = seg.length ? seg[seg.length - 1].price : NaN;
+  return (isFinite(p) && p > 0) ? p : fallback;
+}
+
+/** 估值参考线:基准 EPS × 五个 P/E 分位。取代旧的 `valuationLevels`。
+ *  **调用方只有渲染层。** 改名是故意的:旧名字叫 "levels",与压力位表里的 Level 同名,
+ *  于是"顺手把它也 push 进 up/down"变成一个很自然的动作。改叫 refs 之后,
+ *  再想合并就得先改名字,而改名字这件事会被人看见。
+ *  这里刻意只用基准 EPS(不用悲观/乐观),这样每条线只含估值一个变量,
+ *  跟核心区间(EPS 情景 × 分位,两个变量一起动)是不同的问题,不要混为一谈。 */
+function valuationRefs(co, r) {
+  if (!r || !r.eps || !r.pe) return [];
+  const e = r.eps.mean, pe = r.pe;
+  const defs = [['p10', 'plV10'], ['p25', 'plV25'], ['p50', 'plV50'], ['p75', 'plV75'], ['p90', 'plV90']];
+  const out = [];
+  for (const [k, key] of defs) {
+    if (!pePos(pe, k)) continue;
+    const v = e * pe[k];
+    if (!isFinite(v) || v <= 0) continue;
+    out.push({ price: v, pct: k, label: (typeof t === 'function' ? t(key) : key), x: pe[k] });
+  }
+  return out;
+}
+
+/** 压力位 / 支撑位。名字不许改:tests/test-app.mjs 与 tools/backtest.mjs 都直接按名调。
+ *  horizon ∈ 'short'|'mid'|'long';**缺省与任何非法值一律退回 'mid'**。
+ *
+ *  为什么这道退回必须存在、而且必须**出声**:`state.horizon` 已经被**财年**占用了
+ *  ('fy1'/'fy2'),它和持有期是两个东西却共用一个字段名。若有人顺手写
+ *  `pressureLevels(co, r, null, state.horizon)`,`PX_HORIZONS['fy1']` = undefined
+ *  → `√undefined` = NaN → u = NaN → `edgeU <= PX_REACH_U` 恒为 false
+ *  → up/down 两个数组都空 → 渲染层走进 `sec.hidden = true` → **面板整个消失,控制台干干净净**。
+ *  用户看到的是"这只票没数据",不是 bug。所以退回之后还要往 why 里推一句可见的提示。 */
+function pressureLevels(co, r, refISO, horizon) {
+  if (!co || !isFinite(co.price) || co.price <= 0) return null;
+  const ref = refISO || null;
+  const why = [];
+
+  let hz = horizon;
+  if (hz !== 'short' && hz !== 'mid' && hz !== 'long') {
+    if (horizon !== undefined && horizon !== null && horizon !== '') {
+      why.push(pxWhy('不认识的持有期「' + String(horizon) + '」—— 已退回中线(21 个交易日)。'
+        + '注意 state.horizon 是**财年**(fy1/fy2),不是持有期,两者不能互相传。',
+        'Unrecognised horizon "' + String(horizon) + '" — fell back to mid (21 sessions). '
+        + 'Note state.horizon holds a fiscal year (fy1/fy2), not a holding period.'));
+    }
+    hz = 'mid';
+  }
+  const h = PX_HORIZONS[hz];
+
+  /* 现价:回放时必须是 as-of 那天的价,不是 co.price(见 asOfPrice 的注释)。 */
+  const price = asOfPrice(co.ticker, ref, co.price);
+  const sig = sigmaD(co.ticker, ref, PX_SIGMA_WIN);
+  const sd = sig ? sig.sd : NaN;
+  const u = scaleU(sd, h, price);
+
+  const dens = priceDensity(co.ticker, ref, h);
+  const opt = optionWalls(co, ref, h);
+  const walls = opt ? opt.walls : [];
+  const valRefs = valuationRefs(co, r);
+  /* 估值线不算"内容":上一版把它算进来,于是一只完全没有日线、没有期权链的票
+   * 也能画出五条"支撑位"。现在没有技术带也没有 OI 墙就是没有位置可报。 */
+  if (!dens && !walls.length) return null;
+
+  let asOf = dens ? dens.asOf : null;
+  if (!asOf) {
+    const all = state.priceHist.get(co.ticker);
+    const seg = (all && all.length) ? asOfSlice(all, ref) : [];
+    asOf = seg.length ? seg[seg.length - 1].date : (ref || null);
+  }
+
+  /* ---- 候选:技术带(有宽度)+ OI 墙(是点) ---- */
+  const raw = [];
+  if (dens && dens.bands.length) {
+    for (const b of dens.bands) raw.push({ lo: b.lo, hi: b.hi, mid: b.peak, tech: b, opts: [] });
+  }
+  /* 合并容差改用 PX_MERGE_U·u,取代旧的固定 1.5%:固定百分比对高波动票太严、对低波动票太松,
+   * 同一个 1.5% 在两只票上表达的根本不是同一件事。u 是无量纲化以后的"本期一个标准差"。 */
+  const mergeAbs = (isFinite(u) && u > 0) ? PX_MERGE_U * u : NaN;
+  for (const w of walls) {
+    let host = raw.find(L => L.tech && w.strike >= L.lo && w.strike <= L.hi);
+    if (!host && isFinite(mergeAbs)) host = raw.find(L => !L.tech && Math.abs(w.strike - L.mid) <= mergeAbs);
+    if (host) {
+      host.opts.push(w);
+      if (!host.tech) { host.lo = Math.min(host.lo, w.strike); host.hi = Math.max(host.hi, w.strike); }
+    } else raw.push({ lo: w.strike, hi: w.strike, mid: w.strike, tech: null, opts: [w] });
+  }
+
+  /* ---- 每个位置算距离与触及概率 ---- */
+  const levels = raw.map(L => {
+    /* 概率用**到最近边缘**的距离,不用到中心的距离:带是有宽度的,
+     * 价格碰到边缘就算"触及"了,用中心会系统性低估触及概率。 */
+    const edgeAbs = price < L.lo ? L.lo - price : price > L.hi ? price - L.hi : 0;
+    return {
+      lo: L.lo, hi: L.hi, mid: L.mid,
+      distU: (L.mid - price) / u,
+      distPct: (L.mid / price - 1) * 100,
+      edgeU: edgeAbs / u,
+      /* 量纲:reachProb 的分母是 `c·sd·√h`,那是一个**收益率**尺度(无量纲),
+       * 所以分子也必须是收益率 —— 传 edgeAbs / price,不能传 edgeAbs 本身。
+       * SPEC 3.2 的注释写的是 `reachProb(edgeU*u, ...)`,edgeU*u 恰好等于 edgeAbs(元),
+       * 照那样传下去 z = edgeAbs/(c·sd·√h) 会被价格放大约 P 倍:116 元的票、半个 u 的距离
+       * 得到 z≈68 → Φ(−68) 下溢成 0 → **整列触及概率恒为 0.00%**。
+       * 这正是 SPEC 4.3 危险清单里"概率静默塌到 0"那一条描述的事故形态,
+       * 只不过这次放大倍数来自 P 而不是 √252。数全在 [0,1] 里,不抛错,没人看得出来。
+       * 这里改的是**调用方的量纲**,scale.js 的公式与七个参数一个字没动。 */
+      pReach: reachProb(edgeAbs / price, sd, h, PX_REACH_C[h]),
+      tracks: [L.tech && 'tech', L.opts.length && 'opt'].filter(Boolean),
+      src: { tech: L.tech, opts: L.opts },
+      /* 含期权腿就整条取期权轨那一档 —— 一条未验证的腿不会因为旁边站着一条已验证的腿
+       * 就变得可验证;混着报等于把 pending 洗成 verified。这条论证与等级本身无关,
+       * 所以它在两个等级都变成 pending 之后照样成立:取的永远是**更弱的那一档**。
+       *
+       * 两个等级现在都从 PX_EVIDENCE 读,不再是写死的字面量。理由不是洁癖,是可执行性:
+       * SPEC 3.9 的兜底条款说「任何一格判为未过,该腿的 evidence 落为 pending」,
+       * 而字面量让这句话**无法被执行** —— 改 PX_EVIDENCE.reach 对用户看到的东西零影响,
+       * 实测把它翻成 'pending' 得到的是 {before:'已验证', after:'已验证', changed:false}。
+       * 一个改了没反应的开关不是开关,是装饰;降级条款靠它兜底,就等于没有兜底。
+       * 现在这一行是参数的函数,回测判语一变,徽章和百分比跟着变,不需要谁记得来改代码。 */
+      evidence: L.opts.length ? PX_EVIDENCE.opt : PX_EVIDENCE.reach,
+    };
+  });
+
+  /* 视野闸门:距离超过 PX_REACH_U 个 u 的位置本期不入表 —— 再远就不是"本期的位置"。
+   * u 为 NaN 时这个比较恒为 false,于是两张表都空、面板消失。这是**有意**的:
+   * 消失看得见,一屏 NaN 或一屏 99% 看不见。 */
+  const inView = levels.filter(L => L.edgeU <= PX_REACH_U);
+  const inBand = inView.find(L => L.src.tech && price >= L.lo && price <= L.hi) || null;
+  const up = inView.filter(L => L.mid > price && L !== inBand).sort((a, b) => a.mid - b.mid).slice(0, PX_KEEP);
+  const down = inView.filter(L => L.mid < price && L !== inBand).sort((a, b) => b.mid - a.mid).slice(0, PX_KEEP);
+
+  why.push(pxWhy(
+    '这张表只回答"本期够不够得着",不回答"挡不挡得住"。**我们不预测支撑位会不会守住** —— '
+    + '用距离匹配的对照测过,在这份数据上测不出任何优于对照的守位能力(最大 z ≈ 1.2,门槛 2)。',
+    'This table answers "can price reach it," not "will it stop there." **We do not predict whether a level holds** — '
+    + 'tested against distance-matched controls, no track beat control on any horizon (max z ≈ 1.2 against a threshold of 2).'));
+  why.push(pxWhy(
+    '长中短期不是三套算法,是同一把尺子的三个刻度:持有期越长,同一个位置的不确定性越大,带子就越宽'
+    + '(√5 : √21 : √63 ≈ 1 : 2 : 3.6)。',
+    'Long/mid/short are not three algorithms but three notches on one ruler: the longer the horizon, '
+    + 'the wider the band around the same level (√5 : √21 : √63 ≈ 1 : 2 : 3.6).'));
+  if (!isFinite(u) || u <= 0) {
+    why.push(pxWhy('日波动率估不出来(样本不足 ' + PX_SIGMA_MIN_N + ' 根收益,或价格序列有非正值),'
+      + '本期长度单位 u 无效 —— 宁可一条都不报,也不报一批没有尺度的位置。',
+      'Daily volatility could not be estimated (fewer than ' + PX_SIGMA_MIN_N + ' returns, or non-positive prices), '
+      + 'so the length unit u is invalid — reporting nothing beats reporting levels with no scale.'));
+  }
+  if (valRefs.length) {
+    why.push(pxWhy('估值参考线只画在图上,一条都不进上下两张表:本仓库 D 组回测已判它系统性挂偏'
+      + '(中位偏离为负、方向命中率低于 50%)。',
+      'Valuation reference lines are drawn on the chart only and never enter the tables: this repo\'s group-D '
+      + 'backtest flagged them as systematically biased (negative median deviation, sub-50% directional hit rate).'));
+  }
+  if (walls.length) {
+    why.push(pxWhy('OI 墙 ' + walls.length + ' 面 · 未验证:可回测的期权快照只有 4–5 天(其中一天是残链),'
+      + '没有时间序列就没法检验"这堵墙顶住没有"。这一轨只标注,不进任何统计、不影响排序。',
+      walls.length + ' OI wall(s) · unverified: only 4–5 usable option snapshots exist (one a partial chain). '
+      + 'Without a time series there is no way to test whether a wall held. This track annotates only.'));
+  }
+
+  return {
+    horizon: hz, h, sd, u, price, asOf,
+    up, down, inBand,
+    dens, opt,
+    valRefs,
+    /* 浅拷贝而不是直接交出 PX_EVIDENCE:调用方(渲染层)拿到的是一次快照,
+     * 谁写坏了都传染不回参数表。 */
+    evidence: { reach: PX_EVIDENCE.reach, contain: PX_EVIDENCE.contain, bounce: PX_EVIDENCE.bounce,
+      opt: PX_EVIDENCE.opt, val: PX_EVIDENCE.val },
+    why,
+  };
+}
+/* ================= 压力位 / 支撑位面板 =================
+ * 这一版对上一版删掉的东西比加上的多,每一处删除都有一条回测结论顶着:
+ *   · **没有强度列、没有进度条。** 旧的 0–100 分与后续走势的相关系数是 +0.01,
+ *     而进度条这个视觉隐喻本身就在宣称"越长越可信"。表里只留带单位的原始量:σ 距离、触及概率。
+ *   · **估值参考线永远不进表**,只在图上画一条虚线(D 组 valAnchorBias 已判 biased)。
+ *   · **未验证的腿不走百分比。** 不是"渲染时跳过",是这条腿根本走不到格式化百分比的那个分支 ——
+ *     两个分支写在下面 `mkRow` 里,verified 走 `plReachPct`,pending 走 `t('plOptPending')`。
+ *     "先算出来再决定显不显示"迟早会有人把它显示出来;不存在的代码路径没法被打开。
+ *   · **"守不守得住"这件事测不出来** —— 这句话是表格下方的常驻正文(`.plsay`),不是 tooltip。
+ *     少掉一个功能而把理由藏进悬浮提示,用户只会读成"你们做少了"。
+ *
+ * 持有期(short/mid/long → h = 5/21/63)存在 `state.plHold`。
+ * **绝不能用 `state.horizon`**:那是财年 fy1/fy2,`PX_HORIZONS['fy1']` = undefined
+ * → √undefined = NaN → u = NaN → 两张表全空 → 面板静默消失,控制台干干净净。
+ * engine.js 里对非法值有兜底并会往 why 里写一句,但那是最后一道网,不是这里偷懒的理由。 */
+
+/** 触及概率 → 百分比。**只有 evidence === 'verified' 的腿允许调到这里。**
+ *  它是本文件里唯一一处产出 `%` 的代码;未验证腿的那个分支里没有它。 */
+function plReachPct(p) { return isFinite(p) ? (p * 100).toFixed(0) + '%' : '—'; }
+
+/** i18n 里照 SPEC 逐字抄的文案带着 `**强调**` 标记(比如 plBounceNote 的第一句)。
+ *  这里把它渲染成 <strong>,而不是回头去改词条 —— 词条要与规格逐字一致,格式化是渲染层的事。 */
+function plRich(node, s) {
+  const parts = String(s == null ? '' : s).split('**');
+  for (let i = 0; i < parts.length; i++) {
+    if (!parts[i]) continue;
+    node.appendChild(i % 2 ? el('strong', '', parts[i]) : document.createTextNode(parts[i]));
+  }
+  return node;
+}
+/** 同一条文案进 title 属性时的纯文本版(title 里渲染不了 <strong>)。 */
+function plPlain(s) { return String(s == null ? '' : s).replace(/\*\*/g, ''); }
+
+/** 当前持有期。非法值一律落回 'mid' —— 与 engine.js 同一套兜底,但这里先兜一次,
+ *  好让高亮的那个按钮和真正算出来的 h 永远是同一个。 */
+function plHoldNow() {
+  const v = state.plHold;
+  return (v === 'short' || v === 'mid' || v === 'long') ? v : 'mid';
+}
+
+function renderPressure(co, r) {
+  const sec = $('plSec'), box = $('plChart'), tbl = $('plTable'), note = $('plNote'), tabs = $('plHoldTabs');
+  box.replaceChildren(); tbl.replaceChildren(); note.replaceChildren();
+  /* 连现价都没有 = 这一屏没有任何可说的东西,整块收起(详情页别处已经在提示缺现价了)。
+   * 与"有价但历史不够"是两种情况:后者要出一句话,见下面 P === null 的分支。 */
+  if (!co || !isFinite(co.price) || co.price <= 0) { sec.hidden = true; return; }
+  sec.hidden = false;
+
+  const hold = plHoldNow();
+  state.plHold = hold;
+  /* 切换器:onclick 属性赋值而不是 addEventListener —— renderPressure 每次重绘都会走到这里,
+   * 用 addEventListener 会一次次叠加,点一下触发 N 次重绘。 */
+  if (tabs) {
+    for (const b of tabs.querySelectorAll('button')) b.classList.toggle('on', b.dataset.plh === hold);
+    tabs.onclick = ev => {
+      const b = ev.target.closest('button');
+      if (!b || !b.dataset.plh || b.dataset.plh === plHoldNow()) return;
+      state.plHold = b.dataset.plh;
+      /* 整块重算重绘:带宽 u = σd·√h·P 里的 h 变了,分箱宽度、带宽下限、合并容差、
+       * 视野闸门、触及概率全都跟着变 —— 只改个显示会得到一张与标签不符的表。 */
+      renderPressure(co, r);
+    };
+  }
+
+  const P = pressureLevels(co, r, null, hold);
+  if (!P) {
+    /* 引擎在既没有密度带、又没有 OI 墙时返回 null(估值轨单独撑不起这张表)。
+     * 这里出一句话而不是留白:空面板读起来像"坏了",一句话读起来像"这只票没这个信息"。 */
+    tbl.appendChild(el('p', 'hint', t('plNone')));
+    note.appendChild(el('span', 'plnl', t('plHorizonNote')));
+    return;
+  }
+  const shown = [...(P.inBand ? [P.inBand] : []), ...P.up, ...P.down];
+
+  /* ---- 侧向密度图:纵轴是价格,横条是密集度 ---- */
+  const dens = P.dens;
+  if (dens) {
+    const W = 560, H = 360, ML = 62, MR = 16, MT = 10, MB = 24;
+    const lo = Math.min(dens.min, P.price, ...shown.map(L => L.lo));
+    const hi = Math.max(dens.max, P.price, ...shown.map(L => L.hi));
+    const pad = (hi - lo) * 0.04 || 1;
+    const y = v => MT + (hi + pad - v) / ((hi + pad) - (lo - pad)) * (H - MT - MB);
+    const maxShare = Math.max(...dens.bins.map(b => b.share)) || 1;
+    const barW = W - ML - MR;
+    const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'price congestion profile' });
+    /* 价位带底纹。**带宽随持有期变**:h 从 5 → 21 → 63,半宽下限 PX_HALF_U·u 按 √h 放大
+     * 约 1 : 2.05 : 3.55 —— 切换持有期时肉眼看到的就是这几条底纹变粗。 */
+    for (const L of shown) {
+      if (!L.src.tech) continue;
+      const yt = y(L.hi), yb = y(L.lo);
+      svg.appendChild(svgEl('rect', {
+        x: ML, y: Math.min(yt, yb), width: barW, height: Math.max(2, Math.abs(yb - yt)),
+        fill: L.tracks.length >= 2 ? 'var(--wash-strong)' : 'var(--ghost)',
+      }));
+    }
+    /* 密度横条 */
+    for (const b of dens.bins) {
+      if (!(b.share > 0)) continue;
+      const yt = y(b.hi), yb = y(b.lo), bh = Math.max(1, Math.abs(yb - yt) - 1);
+      svg.appendChild(svgEl('rect', {
+        x: ML, y: Math.min(yt, yb), width: Math.max(1, b.share / maxShare * barW), height: bh,
+        fill: 'var(--series-1)', opacity: 0.5, rx: 1,
+      }));
+    }
+    /* 估值参考线:虚线 + 分位标签,并挂 plValRefTip。它从 P.valRefs 来,不挂在任何 Level 上 ——
+     * 挂在 Level 上就意味着它"进过表",而它永远不该进表。 */
+    for (const v of P.valRefs) {
+      const yy = y(v.price);
+      const ln = svgEl('line', { x1: ML - 6, x2: ML + barW, y1: yy, y2: yy, stroke: 'var(--axis)', 'stroke-width': 1, 'stroke-dasharray': '3 3' });
+      ln.appendChild(svgEl('title', {}, t('plValRef') + ' — ' + t('plValRefTip')));
+      svg.appendChild(ln);
+      const tx = svgEl('text', { x: ML - 9, y: yy + 3.5, 'text-anchor': 'end', 'font-size': 10, fill: 'var(--text-muted)' });
+      tx.textContent = v.label;
+      svg.appendChild(tx);
+    }
+    /* 期权 OI 墙:右侧竖条,长度按 OI 相对最大值;近月实心、远月半透明。长度只表示 OI 大小,
+     * 不是强度 —— 这一轨 evidence 恒为 pending,不产出任何百分比。 */
+    const allW = P.opt ? P.opt.walls : [];
+    if (allW.length) {
+      const mxOI = Math.max(...allW.map(w => w.oi));
+      for (const w of allW) {
+        const yy = y(w.strike), len = Math.max(4, (w.oi / mxOI) * barW * 0.28);
+        const rc = svgEl('rect', {
+          x: ML + barW - len, y: yy - 2.5, width: len, height: 5, rx: 2,
+          fill: 'var(--delta-down)', opacity: w.w >= 1 ? 0.75 : 0.4,
+        });
+        rc.appendChild(svgEl('title', {}, plPlain(t('plOptPendingTip'))));
+        svg.appendChild(rc);
+      }
+    }
+    /* 现价 */
+    const yp = y(P.price);
+    svg.appendChild(svgEl('line', { x1: ML - 10, x2: ML + barW, y1: yp, y2: yp, stroke: 'var(--series-2)', 'stroke-width': 2 }));
+    const pl = svgEl('text', { x: ML - 13, y: yp + 4, 'text-anchor': 'end', 'font-size': 11, fill: 'var(--series-2)', 'font-weight': 650 });
+    pl.textContent = fmtN(P.price);
+    svg.appendChild(pl);
+    /* 上下边界价格标注 */
+    for (const v of [hi, lo]) {
+      const tx = svgEl('text', { x: ML - 13, y: y(v) + 4, 'text-anchor': 'end', 'font-size': 10, fill: 'var(--text-muted)' });
+      tx.textContent = fmtN(v);
+      svg.appendChild(tx);
+    }
+    const ax = svgEl('text', { x: ML, y: H - 8, 'font-size': 10, fill: 'var(--text-muted)' });
+    ax.textContent = '← ' + t('plAxisWt');
+    svg.appendChild(ax);
+    svg.appendChild(svgEl('line', { x1: ML, x2: ML, y1: MT, y2: H - MB, stroke: 'var(--axis)', 'stroke-width': 1 }));
+    box.appendChild(svg);
+    if (P.valRefs.length) {
+      const lg = el('p', 'plleg');
+      lg.appendChild(el('i'));
+      lg.appendChild(el('span', '', t('plValRef')));
+      lg.title = t('plValRefTip');
+      box.appendChild(lg);
+    }
+  }
+
+  /* ---- 表格:位置 / 距离(σ) / 本期触及概率 / 来源轨 / 证据等级 ---- */
+  const mkTable = (title, list, dir, emptyKey) => {
+    const h3 = el('h3', 'plh ' + dir, title);
+    tbl.appendChild(h3);
+    if (!list.length) { tbl.appendChild(el('p', 'hint', t(emptyKey))); return; }
+    const tb = el('table', 'mx pl');
+    const hr = el('tr');
+    for (const [label, tip] of [
+      [t('plZone'), ''], [t('plDistU'), ''], [t('plReach'), plPlain(t('plReachTip'))],
+      [t('plTracks'), ''], [t('plEvidenceCol'), ''],
+    ]) {
+      const th = el('th', '', label);
+      if (tip) { th.title = tip; th.style.cursor = 'help'; }
+      hr.appendChild(th);
+    }
+    tb.appendChild(hr);
+    for (const L of list) {
+      const tr = el('tr');
+      tr.appendChild(el('td', '', L.lo === L.hi ? fmtN(L.mid) : fmtN(L.lo) + ' ~ ' + fmtN(L.hi)));
+      /* 距离用 σ(= 本期一个标准差 u),不用百分比:同一个 3% 在 NVDA 和 KO 上不是同一件事,
+       * 而 σ 已经把波动率除掉了,三个持有期之间也能直接比。 */
+      tr.appendChild(el('td', 'pldist ' + (L.distU >= 0 ? 'pos' : 'neg'),
+        isFinite(L.distU) ? (L.distU >= 0 ? '+' : '') + L.distU.toFixed(2) + 'σ' : '—'));
+      /* ---- 触及概率:两个互斥分支,pending 那条上没有百分比格式化函数 ---- */
+      const rc = el('td', '');
+      if (L.evidence === 'verified') {
+        const sp = el('span', 'plreach', plReachPct(L.pReach));
+        sp.title = plPlain(t('plReachTip'));
+        rc.appendChild(sp);
+      } else {
+        /* 未验证分支里再分两种口径:有期权腿的说 OI 墙,没有的说校准没过。
+         * 合成一句会印出「OI 墙 0 面 · 未验证」—— 那句话在纯技术轨的行上既不对也读不懂。
+         * 两条文案都不含百分号,分支本身仍然是"到不了 plReachPct"的那一条。 */
+        const nOpt = L.src.opts.length;
+        const sp = el('span', 'plpend', nOpt ? t('plOptPending')(nOpt) : t('plReachPending'));
+        sp.title = plPlain(t(nOpt ? 'plOptPendingTip' : 'plReachPendingTip'));
+        rc.appendChild(sp);
+      }
+      tr.appendChild(rc);
+      /* 来源轨:参与的轨各一个徽章(tech / opt),下面挂原始量 —— 摆动触及次数、OI 墙明细。 */
+      const bs = el('td', '');
+      for (const k of L.tracks) {
+        const tag = el('span', 'pltag ' + k, t('plKind')[k]);
+        tag.title = t('plKindTip')[k];
+        bs.appendChild(tag);
+      }
+      const bits = [];
+      if (L.src.tech && L.src.tech.touch) bits.push(t('plSwing')(L.src.tech.touch));
+      for (const w of L.src.opts) bits.push(t('plWall')(fmtInt(w.oi), w.dte, w.callOI >= w.putOI ? 'C' : 'P'));
+      if (bits.length) {
+        /* 一个价位上叠八面墙是常事(NVDA 实测),全铺出来这一列会把另外四列挤扁。
+         * 截到 4 条 + "+N",完整清单挂 title —— 截断的是排版,不是数据。 */
+        const sub = el('span', 'sub', bits.slice(0, 4).join(' · ') + (bits.length > 4 ? ' · +' + (bits.length - 4) : ''));
+        if (bits.length > 4) sub.title = bits.join(' · ');
+        bs.appendChild(sub);
+      }
+      tr.appendChild(bs);
+      /* 证据等级:徽章文案与 tooltip 都来自 PX_EVIDENCE 的分级表,不是渲染层自己起的名字。 */
+      const ev = el('td', '');
+      const badge = el('span', 'plev ' + L.evidence, t('plEvidence')[L.evidence] || L.evidence);
+      badge.title = t('plEvidenceTip')[L.evidence] || '';
+      ev.appendChild(badge);
+      tr.appendChild(ev);
+      tb.appendChild(tr);
+    }
+    tbl.appendChild(tb);
+  };
+  mkTable(t('plUp'), P.up, 'up', 'plNoneUp');
+  mkTable(t('plDown'), P.down, 'down', 'plNoneDown');
+  if (P.inBand) tbl.appendChild(el('p', 'hint warn', t('plInBand')(fmtN(P.inBand.lo) + ' ~ ' + fmtN(P.inBand.hi))));
+
+  /* ---- 表格下方的常驻正文。三段都必须可见,一段都不许降级成 tooltip ----
+   * plBounceNote:这张表不回答"挡不挡得住"(B 组测过,max z ≈ 1.2,门槛 2);
+   * plNoStrength:强度列为什么整列没了;
+   * plHorizonNote:为什么切持有期带子会变宽。 */
+  const say = el('div', 'plsay');
+  const saidKeys = ['plBounceNote', 'plNoStrength', 'plHorizonNote'];
+  for (const k of saidKeys) plRich(say.appendChild(el('p')), t(k));
+  tbl.appendChild(say);
+  /* 引擎的 why 与这三段是**同一批句子的两个出处**(SPEC 3.2 让 engine 发,3.5 让 i18n 拥有)。
+   * 两边都要渲染,但同一句话在一屏里印两遍会被读成 bug。只按**规范化后完全相等**去重:
+   * 归一化只去空白与 ** 标记,不做模糊匹配 —— 引擎将来换了措辞,应该照原样冒出来,而不是被悄悄吞掉。 */
+  const plKey = s => plPlain(s).replace(/\s+/g, '');
+  const said = new Set(saidKeys.map(k => plKey(t(k))));
+
+  /* ---- 图表下方的技术说明:口径 / 样本区间 / 引擎给的 why / 期权轨元信息 ---- */
+  const lines = [];
+  if (dens) lines.push(t('plNote')(t(dens.basis === 'volume' ? 'plBasisVol' : 'plBasisTime'), dens.n, dens.from, dens.to, PX_HALFLIFE_D));
+  else lines.push(t('plNone'));
+  /* why 是引擎给的人话(含持有期兜底提示、u 无效提示、估值线降级说明),直接吐出来。 */
+  for (const s of P.why) if (!said.has(plKey(s))) lines.push(s);
+  /* 期权轨元信息:到期日、剩余天数、max pain、Put/Call 比 —— max pain 只作磁吸位参考,不当压力位。 */
+  if (P.opt && P.opt.expiries.length) {
+    lines.push(t('plOptNote')(P.opt.expiries.map(e =>
+      e.expiry + '(' + e.dte + t('plDte') + (isFinite(e.maxPain) ? ' · max pain ' + fmtN(e.maxPain) : '')
+      + ' · P/C ' + (e.callOI ? (e.putOI / e.callOI).toFixed(2) : '—') + ')').join(' · '),
+      Math.round(PX_OPT_WINDOW * 100)));
+  }
+  for (const s of lines) plRich(note.appendChild(el('span', 'plnl')), s);
 }
 function renderCompare(co, r) {
   const sec = $('cmpSec'), box = $('cmpChart'); box.replaceChildren();
@@ -1420,6 +3255,691 @@ function renderCompare(co, r) {
   box.appendChild(svg);
   $('cmpNote').textContent = t('cmpNote');
 }
+/* ================= 买入规则:谓词表 · 预设 · 受限解析器 =================
+ * 本文件只定义"什么算一次买入信号",不执行任何回放(回放在 sim/engine.js)。
+ *
+ * ---- 两条不许破的规矩 ----
+ * ① **没有 eval,没有 new Function,没有正则驱动的动态派发。** 自定义输入框里的字符串
+ *    只经过下面这个手写词法器,词法器只认:谓词名(必须在 SIM_PREDICATES 里)、数字、
+ *    `and`、圆括号、逗号。别的一律在词法阶段就死掉。这个面板的输入框是页面上唯一一处
+ *    "用户文本 → 被执行的东西"的通道,它一旦能执行任意代码,整份"数据只在本地处理"的
+ *    承诺就没了(用户会把它连同 CSV 一起发给同事)。
+ * ② **谓词 fn 是纯函数,只读 ctx,且只许读 ctx.px 里 index ≤ ctx.i 的元素。**
+ *    读到 i 之后就是未来函数 —— 回放会变成一条漂亮的净值曲线,而且不抛任何错。
+ *    as-of 截断由 sim/engine.js 统一做(它把当天的 pressureLevels 结果放进 ctx.P),
+ *    谓词自己不许再切片、不许自己调 state.priceHist。
+ *
+ * 解析失败返回 `{ok:false, error:'simRuleErr', at:<看不懂的那一段>}`,**不抛异常**:
+ * 这个函数在 `input` 事件里被调用,而 input 处理器里抛出去的错会连带打断后面所有绑定。 */
+
+/** 谓词的参数取值:约束在 [min,max] 里,坏值一律退回 def。
+ *  解析器已经拦掉了非数字,这里防的是"合法数字但离谱"(比如 nearSupport(999) —— 恒真规则,
+ *  会得到一条"每天都买"的回放,而那条曲线读起来跟一条真规则一模一样)。 */
+function simArg(args, k, spec) {
+  const v = Array.isArray(args) ? args[k] : undefined;
+  if (!isFinite(v)) return spec.def;
+  return Math.min(spec.max, Math.max(spec.min, v));
+}
+
+/** 简单均线,只回看:mean(px[i-n+1 .. i])。i-n+1 < 0 返回 NaN(热身不够就不出信号)。 */
+function simMA(px, i, n) {
+  if (!(n > 0) || i - n + 1 < 0) return NaN;
+  let s = 0;
+  for (let j = i - n + 1; j <= i; j++) s += px[j].price;
+  return s / n;
+}
+
+/* 六个谓词,不多不少。每个 fn 只读 ctx;参数走 ctx.args(引擎逐个谓词填进去),
+ * 这样 fn 的签名保持 SPEC 3.2 写死的 fn(ctx) → boolean。 */
+const SIM_PREDICATES = {
+  /* 下方最近的支撑,离现价不到 arg 个 σ(edgeU 是到带**边缘**的距离,单位 1u)。 */
+  nearSupport: {
+    labelKey: 'nearSupport', argSpec: [{ def: 0.5, min: 0.01, max: 3 }],
+    fn(ctx) {
+      const L = ctx.P && ctx.P.down && ctx.P.down[0];
+      return !!L && isFinite(L.edgeU) && L.edgeU <= simArg(ctx.args, 0, this.argSpec[0]);
+    },
+  },
+  /* 上方最近的压力,离现价不到 arg 个 σ。 */
+  nearResistance: {
+    labelKey: 'nearResistance', argSpec: [{ def: 0.5, min: 0.01, max: 3 }],
+    fn(ctx) {
+      const L = ctx.P && ctx.P.up && ctx.P.up[0];
+      return !!L && isFinite(L.edgeU) && L.edgeU <= simArg(ctx.args, 0, this.argSpec[0]);
+    },
+  },
+  /* 向上突破**昨天**那条最近压力。
+   *
+   * ---- 这里与 SPEC 3.2 的字面写法不同,理由必须留下 ----
+   * SPEC 写的是 `price > P.up[0].hi && prev <= P.up[0].hi`,其中 P 是**当天**的结果。
+   * 那个条件**永远为 false**,一次都触发不了:engine.js 里 up 的定义是 `L.mid > price`,
+   * 而 mid ∈ [lo, hi],所以 up[0].hi ≥ up[0].mid > price 恒成立 —— `price > up[0].hi`
+   * 和它自相矛盾。突破一旦发生,那条带当天就已经掉进 down 里了,不在 up 里。
+   * 这不是"少触发几次",是这条预设整条死掉,而面板只会显示"触发 0 次",看起来像
+   * "这只票这一年没突破过"。
+   * 所以这里用**上一根**的 as-of 结果 ctx.prevP(引擎按 px[i-1].date 算的,不含任何未来信息):
+   * 昨天它还在上方,今天收盘站上了它的上沿 = 突破。 */
+  breakResistance: {
+    labelKey: 'breakResistance', argSpec: [],
+    fn(ctx) {
+      const R = ctx.prevP && ctx.prevP.up && ctx.prevP.up[0];
+      if (!R || !isFinite(R.hi)) return false;
+      /* 第二个子句在几何上由 prevP 的构造保证(prev < R.mid ≤ R.hi),留着是一道明写的护栏:
+       * 哪天 ctx.prevP 被接错成别的根,这里会先熄火,而不是静默多报一批突破。 */
+      return ctx.price > R.hi && ctx.prev <= R.hi;
+    },
+  },
+  /* 近 arg0 根内的最高收盘回撤了 arg1(0.08 = 8%)。只看 i 及之前。 */
+  pullbackPct: {
+    labelKey: 'pullbackPct', argSpec: [{ def: 20, min: 2, max: 250 }, { def: 0.08, min: 0.005, max: 0.9 }],
+    fn(ctx) {
+      const w = Math.round(simArg(ctx.args, 0, this.argSpec[0]));
+      const d = simArg(ctx.args, 1, this.argSpec[1]);
+      const from = Math.max(0, ctx.i - w + 1);
+      if (ctx.i - from + 1 < 2) return false;
+      let mx = -Infinity;
+      for (let j = from; j <= ctx.i; j++) if (ctx.px[j].price > mx) mx = ctx.px[j].price;
+      if (!(mx > 0)) return false;
+      return ctx.price / mx - 1 <= -d;
+    },
+  },
+  /* 短均线上穿长均线(金叉):今天在上、昨天不在上。 */
+  maCross: {
+    labelKey: 'maCross', argSpec: [{ def: 20, min: 2, max: 250 }, { def: 60, min: 3, max: 400 }],
+    fn(ctx) {
+      const a = Math.round(simArg(ctx.args, 0, this.argSpec[0]));
+      const b = Math.round(simArg(ctx.args, 1, this.argSpec[1]));
+      if (!(b > a) || ctx.i < 1) return false;
+      const s0 = simMA(ctx.px, ctx.i, a), l0 = simMA(ctx.px, ctx.i, b);
+      const s1 = simMA(ctx.px, ctx.i - 1, a), l1 = simMA(ctx.px, ctx.i - 1, b);
+      if (!isFinite(s0) || !isFinite(l0) || !isFinite(s1) || !isFinite(l1)) return false;
+      return s0 > l0 && s1 <= l1;
+    },
+  },
+  /* 上方最近的压力"本期够不着"(触及概率 ≤ arg)—— 也就是头顶暂时没有挡路的东西。
+   * 上方压根没有位置入表时视为够不着,这是这条规则本来的意思。 */
+  reachBelow: {
+    labelKey: 'reachBelow', argSpec: [{ def: 0.4, min: 0.01, max: 1 }],
+    fn(ctx) {
+      if (!ctx.P) return false;                        /* 连位置表都算不出来 = 不知道,不是"没有压力" */
+      const L = ctx.P.up && ctx.P.up[0];
+      if (!L) return true;
+      return isFinite(L.pReach) && L.pReach <= simArg(ctx.args, 0, this.argSpec[0]);
+    },
+  },
+};
+
+/* 五个预设。`hold` 直接引用 PX_HORIZONS(交易日数)—— 这就是 manifest 里
+ * sim/rules.js(27)必须排在 pressure/params.js(21)之后的唯一原因:
+ * 顶层 const 按 manifest 顺序求值,放反了这里是 TDZ ReferenceError。
+ * 注意 hold 只是每个预设的**建议**持有期,面板上那个下拉才是实际用的那个。 */
+const SIM_PRESETS = [
+  { id: 'supportBuy', labelKey: 'supportBuy', hold: PX_HORIZONS.mid, all: [{ p: 'nearSupport', args: [0.5] }], exitKey: 'hold' },
+  { id: 'breakoutBuy', labelKey: 'breakoutBuy', hold: PX_HORIZONS.short, all: [{ p: 'breakResistance', args: [] }], exitKey: 'hold' },
+  { id: 'dipBuy', labelKey: 'dipBuy', hold: PX_HORIZONS.mid, all: [{ p: 'pullbackPct', args: [20, 0.08] }], exitKey: 'hold' },
+  { id: 'trendBuy', labelKey: 'trendBuy', hold: PX_HORIZONS.long, all: [{ p: 'maCross', args: [20, 60] }], exitKey: 'hold' },
+  { id: 'roomBuy', labelKey: 'roomBuy', hold: PX_HORIZONS.mid, all: [{ p: 'reachBelow', args: [0.4] }], exitKey: 'hold' },
+];
+
+/** 词法器。手写、逐字符,只吐五种 token:name / num / and / punct / bad。
+ *  **刻意不用正则做派发**:抓一个"名字 + 括号 + 参数"的模式再按名字去查表,写起来短得多,
+ *  但那种写法对 `foo(1)` 和 `nearSupport(1)` 一视同仁,于是"认不认识这个名字"这件事
+ *  就被推迟到执行期,而执行期已经太晚了。这里名字的合法性在词法阶段就查表。 */
+function simLex(text) {
+  /* 连"这个字符算不算标识符"都用逐字符比较,不用 /\w/ ——
+   * 本文件里一个正则都不出现,是为了让"这里没有任何东西能被当成代码执行"这件事
+   * 用肉眼一次就能读完,而不是要先想清楚某个正则会不会回溯出别的分支。 */
+  const isD = c => c >= '0' && c <= '9';
+  const isA = c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c === '_';
+  const s = String(text == null ? '' : text);
+  const out = [];
+  let i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (c === ' ' || c === '\t' || c === '\n' || c === '\r') { i++; continue; }
+    if (c === '(' || c === ')' || c === ',') { out.push({ k: c, v: c, at: i }); i++; continue; }
+    if (isD(c) || c === '.' || c === '-' || c === '+') {
+      let j = i, seen = false, dot = false;
+      if (s[j] === '-' || s[j] === '+') j++;
+      while (j < s.length) {
+        const d = s[j];
+        if (isD(d)) { seen = true; j++; continue; }
+        if (d === '.' && !dot) { dot = true; j++; continue; }
+        break;
+      }
+      const raw = s.slice(i, j);
+      if (!seen) return { ok: false, at: raw || c };
+      out.push({ k: 'num', v: parseFloat(raw), at: i });
+      i = j; continue;
+    }
+    if (isA(c)) {
+      let j = i;
+      while (j < s.length && (isA(s[j]) || isD(s[j]))) j++;
+      const w = s.slice(i, j);
+      if (w === 'and' || w === 'AND' || w === 'And') out.push({ k: 'and', v: 'and', at: i });
+      /* 名字不在谓词表里 = 词法阶段就失败。`or`、`not`、`eval`、`window` 都走这一条。 */
+      else if (Object.prototype.hasOwnProperty.call(SIM_PREDICATES, w)) out.push({ k: 'name', v: w, at: i });
+      else return { ok: false, at: w };
+      i = j; continue;
+    }
+    /* 别的字符一个都不认:`+ - * / = ; { } [ ] $ ' " 反引号 中文` 全在这里死掉。 */
+    return { ok: false, at: c };
+  }
+  return { ok: true, toks: out };
+}
+
+/** 受限文法:
+ *    rule := call ( 'and' call )*
+ *    call := NAME '(' [ NUM (',' NUM)* ] ')'
+ *  **没有分组括号、没有 or、没有 not、没有表达式**。只有 `and` 意味着不需要优先级,
+ *  也就不需要一棵树 —— 结果是一个扁平的 {all:[...]},与 SIM_PRESETS 的结构一模一样,
+ *  于是"预设"和"自定义"在下游走的是同一条代码路径(两条路径迟早会长歪一条)。
+ *
+ *  返回 {ok:true, rule} 或 {ok:false, error:'simRuleErr', at}。**任何情况下都不抛。** */
+function parseRule(text) {
+  const bad = at => ({ ok: false, error: 'simRuleErr', at: String(at == null ? '' : at).slice(0, 40) });
+  const lx = simLex(text);
+  if (!lx.ok) return bad(lx.at);
+  const toks = lx.toks;
+  if (!toks.length) return bad('');                    /* 空串也是"看不懂",渲染层显示 ∅ */
+  const all = [];
+  let i = 0;
+  for (;;) {
+    const nm = toks[i];
+    if (!nm || nm.k !== 'name') return bad(nm ? String(nm.v) : '');
+    const spec = SIM_PREDICATES[nm.v].argSpec;
+    if (!toks[i + 1] || toks[i + 1].k !== '(') return bad(nm.v);
+    i += 2;
+    const args = [];
+    if (toks[i] && toks[i].k === ')') i++;
+    else {
+      for (;;) {
+        if (!toks[i] || toks[i].k !== 'num') return bad(toks[i] ? String(toks[i].v) : nm.v);
+        args.push(toks[i].v); i++;
+        if (toks[i] && toks[i].k === ',') { i++; continue; }
+        if (toks[i] && toks[i].k === ')') { i++; break; }
+        return bad(toks[i] ? String(toks[i].v) : nm.v);
+      }
+    }
+    /* 参数个数不对也算看不懂:多给的会被无声丢掉,少给的会退回默认值,
+     * 两种都让用户以为自己写的那条规则被执行了,而实际跑的是另一条。 */
+    if (args.length > spec.length) return bad(nm.v);
+    all.push({ p: nm.v, args });
+    if (i >= toks.length) break;
+    if (toks[i].k !== 'and') return bad(String(toks[i].v));
+    i++;
+  }
+  return { ok: true, rule: { all }, error: null, at: null };
+}
+
+/** rule → 规范文本。用于:显示预设的实际条件、把规则文本喂进对照的种子哈希。
+ *  必须是**规范形式**(固定空格、固定分隔符),否则同一条规则写法不同就会得到不同的种子,
+ *  "同样输入每次跑出同一个数"这条承诺当场破功。 */
+function ruleToText(rule) {
+  if (!rule || !Array.isArray(rule.all)) return '';
+  return rule.all.map(c => c.p + '(' + (c.args || []).map(a => String(a)).join(',') + ')').join(' and ');
+}
+/* ================= 浏览器内规则回放 + 同频随机对照 =================
+ * 职责:把一条 {all:[{p,args}]} 规则在一只票的日线上逐根放一遍,吐出每一笔交易和一组统计,
+ * 外加一组**同频随机入场**的对照。不做仓位管理、不做复利、不做多标的组合、不做做空。
+ *
+ * ---- 为什么对照不是可选项 ----
+ * 这份数据是一年 × 十只票,而这一年是单边上行。在这种样本里,"随便哪天买、持有 21 天"
+ * 的胜率本来就有六七成。没有对照的胜率会把**行情**读成**规则**,而且读起来非常有说服力。
+ * 所以 simRun 每次都顺手跑一组同频随机入场,并把 z 一起交出去 —— 渲染层必须把它
+ * **并排**摆在胜率旁边(SPEC 3.5 第 5 条),不许折进 tooltip。
+ *
+ * ---- 未来函数在这里最容易溜进来,三道防线 ----
+ * ① 每一根的位置表都由 `pressureLevels(co, r, px[i].date, hz)` 现算 —— as-of 截断在
+ *    engine 里(asOfSlice),**sim 一次都不自己切片**;
+ * ② 谓词只拿得到 ctx,ctx.px 虽然是整条序列,但 ctx.i 划了线,越线读就是违规(见 rules.js);
+ * ③ 入场只能在**信号那一根之后**(i+1 的收盘),出场在 i+1+hold —— 信号根自己的收盘
+ *    是当天收盘之后才知道的,用它入场等于用当天收盘价买当天。
+ * [13] 节有一条断言专门喂一段"结尾被篡改"的序列,要求 trades 逐条不变。 */
+
+/** 32 位字符串哈希(FNV-1a 变体)。对照的种子由 `ticker + 规则文本` 得到,
+ *  于是"同样输入每次跑出同一个数"是**结构性**保证的,而不是靠调用方记得传 seed。
+ *  这条很重要:对照本身如果每次都换一批随机日,面板上的 z 就会在用户按第二次
+ *  「立即模拟」时跳一下 —— 那会让人以为规则的表现在变。 */
+function simHash(s) {
+  let h = 2166136261;
+  const str = String(s == null ? '' : s);
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/** 确定性 LCG(与 tests / backtest 里那套同一个式子)。返回 [0,1)。 */
+function simRng(seed) {
+  let s = (isFinite(seed) ? Math.floor(seed) : 1) & 0x7fffffff;
+  if (s <= 0) s = 1;
+  return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+}
+
+/** 交易日数 → 'short'|'mid'|'long'。认不出来的一律 'mid'(与 pressureLevels 同一套兜底)。
+ *  **不许把 state.horizon 塞进来**:那是财年 fy1/fy2,不是持有期。 */
+function simHzKey(hold) {
+  for (const k in PX_HORIZONS) if (PX_HORIZONS[k] === hold) return k;
+  return 'mid';
+}
+
+const SIM_HEAD_KEYS = ['entryDate', 'entryPx', 'exitDate', 'exitPx', 'retPct', 'maePct'];
+
+/** 一笔交易的算术。cost 是**往返**总成本(bp),一次性从收益里扣掉。
+ *  MAE/MFE 取入场根到出场根之间(含两端)的最不利 / 最有利偏移,以入场价为基准 —— 含入场根
+ *  意味着 mae ≤ 0 ≤ mfe,读表的人不用先想"这个正的 MAE 是什么意思"。 */
+function simTrade(px, e, x, costBps) {
+  const entryPx = px[e].price, exitPx = px[x].price;
+  if (!(entryPx > 0) || !(exitPx > 0)) return null;
+  let mae = 0, mfe = 0;
+  for (let j = e; j <= x; j++) {
+    const d = px[j].price / entryPx - 1;
+    if (d < mae) mae = d;
+    if (d > mfe) mfe = d;
+  }
+  const gross = (exitPx / entryPx - 1) * 100;
+  return {
+    entryDate: px[e].date, exitDate: px[x].date, entryPx, exitPx,
+    /* 成本口径:SIM_COST_BPS = 10 bp = 0.10 个百分点,**整笔往返一次性扣**。
+     * [13] 有一条断言盯着这件事:零成本与 10bp 的平均收益必须相差 0.1 个百分点。 */
+    retPct: gross - costBps / 100,
+    maePct: mae * 100, mfePct: mfe * 100,
+    bars: x - e, entryI: e, exitI: x,
+  };
+}
+
+/** 贪心不重叠去重后的独立事件数。
+ *  持有 63 天的规则很容易连着 40 天天天触发,那 40 笔共享的是同一段行情,
+ *  当成 40 个独立样本去算 z,分母虚高四十倍,任何噪声都会显著。effN 是给 z 用的真分母。 */
+function simEffN(trades) {
+  let n = 0, until = -1;
+  for (const tr of trades) {
+    if (tr.entryI > until) { n++; until = tr.exitI; }
+  }
+  return n;
+}
+
+/** 一组交易 → 一组统计。maxDD 的定义在这里写死,别处不许再算一遍。 */
+function simStats(trades) {
+  const n = trades.length;
+  const out = { n, win: 0, winPct: NaN, avgRet: NaN, medRet: NaN, maxDD: NaN, avgMAE: NaN, avgMFE: NaN, effN: simEffN(trades) };
+  if (!n) return out;
+  const rets = trades.map(t => t.retPct);
+  out.win = rets.filter(v => v > 0).length;
+  out.winPct = out.win / n * 100;
+  out.avgRet = rets.reduce((a, b) => a + b, 0) / n;
+  const srt = rets.slice().sort((a, b) => a - b);
+  out.medRet = percentile(srt, 0.5);
+  out.avgMAE = trades.reduce((a, t) => a + t.maePct, 0) / n;
+  out.avgMFE = trades.reduce((a, t) => a + t.mfePct, 0) / n;
+  /* ---- maxDD:把每一笔按时间顺序接成一条权益曲线,取曲线上的最大回撤 ----
+   * **不是**单笔最大亏损。两笔 -10% 接起来是 -19%(0.9×0.9),不是 -10%;
+   * 而如果前面先赚了 5%,峰值是 1.05,同样两笔 -10% 就是 -19.0% 相对峰值。
+   * 这条定义必须与 i18n 的 simMaxDDTip 一字对应 —— 面板上写着什么,这里就得算什么。 */
+  let eq = 1, peak = 1, dd = 0;
+  for (const v of rets) {
+    eq *= (1 + v / 100);
+    if (eq > peak) peak = eq;
+    const d = eq / peak - 1;
+    if (d < dd) dd = d;
+  }
+  out.maxDD = dd * 100;
+  return out;
+}
+
+/** 同频随机入场对照:在同一段可入场区间里随机挑 nEvents 个入场日,持有期相同。
+ *  种子固定 → 同样输入每次得到同一批日子(SPEC 3.2)。
+ *  对照**不看任何规则**,这是它的全部意义:它回答"这段行情里随便买会怎样"。 */
+function simControl(ticker, hold, nEvents, seed) {
+  const px = state.priceHist.get(ticker) || [];
+  const warm = SIM_WARM;
+  const lo = warm + 1, hi = px.length - 1 - hold;      /* 入场根的合法区间 [lo, hi] */
+  const trades = [];
+  if (!(nEvents > 0) || hi < lo) return Object.assign(simStats(trades), { trades, seed });
+  const span = hi - lo + 1;
+  const want = Math.min(nEvents, span);
+  const rnd = simRng(seed);
+  const picked = new Set();
+  /* 不放回抽样;撞满 20×want 次还没抽够就停 —— 宁可对照少几笔,也不要一个死循环
+   * 把浏览器挂住(want 接近 span 时碰撞率会很高)。 */
+  let guard = 0;
+  while (picked.size < want && guard++ < want * 20 + 200) {
+    picked.add(lo + Math.floor(rnd() * span));
+  }
+  const idx = [...picked].sort((a, b) => a - b);
+  for (const e of idx) {
+    const tr = simTrade(px, e, e + hold, SIM_COST_BPS);
+    if (tr) trades.push(tr);
+  }
+  return Object.assign(simStats(trades), { trades, seed });
+}
+
+/** 两比例 z(合并 p)。分母用 min(n, effN) —— 重叠持仓不算独立样本。 */
+function simZ(a, b) {
+  const na = Math.min(a.n, a.effN), nb = Math.min(b.n, b.effN);
+  if (!(na > 0) || !(nb > 0)) return NaN;
+  const ka = Math.round(a.winPct / 100 * na), kb = Math.round(b.winPct / 100 * nb);
+  const p = (ka + kb) / (na + nb);
+  const se = Math.sqrt(p * (1 - p) * (1 / na + 1 / nb));
+  if (!(se > 0)) return NaN;
+  return (ka / na - kb / nb) / se;
+}
+
+/** 规则回放。`hold` 是**交易日数**(5/21/63),`opts = { costBps, warm, seed }`。
+ *  返回见 SPEC 3.2;`warn` ∈ 'thin' | 'overlap' | 'noTrigger' | 'shortHistory'。 */
+function simRun(ticker, rule, hold, opts) {
+  const o = opts || {};
+  const costBps = isFinite(o.costBps) ? o.costBps : SIM_COST_BPS;
+  const warm = isFinite(o.warm) && o.warm > 0 ? Math.floor(o.warm) : SIM_WARM;
+  const h = isFinite(hold) && hold > 0 ? Math.floor(hold) : PX_HORIZONS.mid;
+  const hz = simHzKey(h);
+  const px = state.priceHist.get(ticker) || [];
+  const co = state.companies.get(ticker) || null;
+  const ruleText = ruleToText(rule);
+  const seed = isFinite(o.seed) ? o.seed : simHash(ticker + '|' + ruleText);
+  const warn = [];
+  const trades = [];
+
+  const empty = () => {
+    const st = simStats(trades);
+    const ctrl = simControl(ticker, h, 0, seed);
+    return Object.assign(st, { trades, ctrl, z: NaN, warn, hold: h, horizon: hz, ruleText, seed, costBps,
+      scanned: 0, from: px.length ? px[0].date : null, to: px.length ? px[px.length - 1].date : null });
+  };
+  if (!co || !rule || !Array.isArray(rule.all) || !rule.all.length) { warn.push('noTrigger'); return empty(); }
+  /* 能扫的信号根:[warm, len-2-hold] —— 入场在 i+1,出场在 i+1+hold,两根都必须存在。 */
+  const first = warm, last = px.length - 2 - h;
+  if (last < first) { warn.push('shortHistory'); warn.push('noTrigger'); return empty(); }
+  if (last - first + 1 < 60) warn.push('shortHistory');
+
+  /* 估值参考线对 up/down 没有任何影响(engine.js 里它们走 valRefs,永不入表),
+   * 所以这里给 r = null:省掉 250 次 calcRange,结果一模一样。 */
+  let prevP = null;
+  let heldUntil = -1;
+  let scanned = 0;
+  for (let i = first; i <= last; i++) {
+    /* **每一根都现算**。pressureLevels 内部按 px[i].date 做 as-of 截断,
+     * 历史不够(不足 40 根收益、既无密度带又无 OI 墙)时它返回 null —— 那是正常输出,
+     * 不是异常:谓词拿到 ctx.P === null 应当自己判"不知道",而不是崩。 */
+    let P = null;
+    try { P = pressureLevels(co, null, px[i].date, hz); }
+    catch (e) { P = null; }                            /* asOfSlice 越界之类:这一根跳过,不打断整场回放 */
+    scanned++;
+    const base = {
+      ticker, i, px, price: px[i].price, prev: i > 0 ? px[i - 1].price : NaN,
+      sd: P ? P.sd : NaN, u: P ? P.u : NaN, P, prevP, ref: px[i].date,
+    };
+    prevP = P;
+    if (i + 1 <= heldUntil) continue;                  /* 已有持仓 → 同一时刻不重复开仓 */
+    let hit = true;
+    for (const c of rule.all) {
+      const pred = SIM_PREDICATES[c.p];
+      if (!pred) { hit = false; break; }
+      base.args = c.args || [];
+      let v = false;
+      try { v = !!pred.fn(base); } catch (e) { v = false; }
+      if (!v) { hit = false; break; }
+    }
+    if (!hit) continue;
+    const tr = simTrade(px, i + 1, i + 1 + h, costBps);
+    if (!tr) continue;
+    tr.sigDate = px[i].date;
+    trades.push(tr);
+    heldUntil = tr.exitI;
+  }
+
+  const st = simStats(trades);
+  const ctrl = simControl(ticker, h, st.n, seed);
+  if (!st.n) warn.push('noTrigger');
+  else {
+    if (st.n < SIM_MIN_TRIG) warn.push('thin');
+    if (st.effN < st.n) warn.push('overlap');
+  }
+  return Object.assign(st, {
+    trades, ctrl, z: st.n ? simZ(st, ctrl) : NaN, warn,
+    hold: h, horizon: hz, ruleText, seed, costBps, scanned,
+    from: px[first] ? px[first].date : null, to: px[px.length - 1] ? px[px.length - 1].date : null,
+  });
+}
+/* ================= 买入逻辑模拟面板(渲染) =================
+ * 只渲染,不绑事件(事件在 app/events.js,SPEC 3.5 第 4 条)。这一层要守住三件事:
+ *
+ *   ① **随机对照与胜率并排。** 对照的胜率和 z 就写在胜率那一格里,同一个视野、同一眼。
+ *      这是整块面板存在的前提:这份数据是一年 × 十只票 × 单边上行行情,任何规则的胜率
+ *      都会好看。把对照折进 tooltip,等于把"这可能只是行情"折进 tooltip。
+ *   ② **触发时点表不分页、不折叠、不截断。** 用户原话要的就是「每一次触发的时间点」。
+ *      滚不滚是 CSS 的事(sim.css 给了 max-height),行数一条不许减。
+ *   ③ **触发次数 < SIM_MIN_TRIG 时不显示胜率。** 不是显示成灰色,是那一格根本不渲染:
+ *      灰色的数字照样会被抄进结论里。
+ *
+ * 输入不自动开跑:一次回放 ≈ 250 根 × 每根一次 pressureLevels,同步几百毫秒。
+ * 所以 simGo() 是唯一的计算入口,别处一律只读 simLast。 */
+
+/** 上一次跑出来的结果。**不进 state** —— 它是纯派生物,重算比缓存一致性便宜,
+ *  而且一旦进了 state,"切公司要不要清"这个问题就得回答,答错就是把 A 的回测当成 B 的。
+ *  模块级 let 的作用域就是整份产物(build 把所有文件拼成一个脚本块),够用。 */
+let simLast = null;
+
+/** 当前持有期 key,非法值落回 'mid'(与 engine 同一套兜底,先兜一次好让下拉与结果一致)。 */
+function simHoldNow() {
+  const v = state.simPref && state.simPref.hold;
+  return (v === 'short' || v === 'mid' || v === 'long') ? v : 'mid';
+}
+function simPresetNow() {
+  const id = state.simPref && state.simPref.presetId;
+  if (id === 'custom') return 'custom';
+  return SIM_PRESETS.some(p => p.id === id) ? id : SIM_PRESETS[0].id;
+}
+
+/** 当前选择 → {rule, text, err}。自定义走 parseRule(永不抛),预设直接取 all。 */
+function simRuleNow() {
+  const id = simPresetNow();
+  if (id !== 'custom') {
+    const p = SIM_PRESETS.find(x => x.id === id) || SIM_PRESETS[0];
+    const rule = { all: p.all };
+    return { rule, text: ruleToText(rule), err: null, presetId: p.id };
+  }
+  const res = parseRule((state.simPref && state.simPref.custom) || '');
+  if (!res.ok) return { rule: null, text: '', err: res, presetId: 'custom' };
+  return { rule: res.rule, text: ruleToText(res.rule), err: null, presetId: 'custom' };
+}
+
+/** 把词条里的反引号片段渲染成 <code>。词条要与 SPEC 3.5 的表格逐字一致,
+ *  所以格式化只能发生在这里,不能回头去改词条。 */
+function simCodeText(node, s) {
+  const parts = String(s == null ? '' : s).split('`');
+  for (let i = 0; i < parts.length; i++) {
+    if (!parts[i]) continue;
+    node.appendChild(i % 2 ? el('code', '', parts[i]) : document.createTextNode(parts[i]));
+  }
+  return node;
+}
+
+/** 下拉/输入框的文案与状态同步 + 即时语法校验。
+ *  events.js 的三个 change/input 处理器都只调它,**不跑回放**。 */
+function simSyncUI() {
+  const selH = $('simHold'), selP = $('simPreset'), inp = $('simRule'), hint = $('simHint');
+  if (!selH || !selP || !inp || !hint) return;
+  const hold = simHoldNow();
+  const pid = simPresetNow();
+  if (state.simPref) { state.simPref.hold = hold; state.simPref.presetId = pid; }
+
+  /* option 的文案每次重填:切语种时这一批文字没有别的出口(option 里塞不下 .lz/.le 成对 span)。 */
+  const ho = t('simHoldOpt');
+  for (const o of selH.options) o.textContent = ho[o.value] || o.value;
+  const pn = t('simPresetName');
+  for (const o of selP.options) o.textContent = o.value === 'custom' ? t('simCustom') : (pn[o.value] || o.value);
+  selH.value = hold;
+  selP.value = pid;
+
+  inp.disabled = pid !== 'custom';
+  if (inp.value !== ((state.simPref && state.simPref.custom) || '')) inp.value = (state.simPref && state.simPref.custom) || '';
+
+  /* 提示行:恒定给出文法示例;自定义模式下再追加一行「读懂了 / 看不懂」。 */
+  hint.replaceChildren();
+  simCodeText(hint, t('simRuleHint'));
+  if (pid === 'custom') {
+    const raw = (state.simPref && state.simPref.custom) || '';
+    const res = parseRule(raw);
+    const line = el('span', 'simnl');
+    line.style.display = 'block';
+    if (res.ok) {
+      /* 读懂了就把**规范化后的**规则回显出来:用户写 `nearSupport( .5 )`,实际跑的是
+       * `nearSupport(0.5)`,回显让这件事看得见(种子也是按这串文本算的)。 */
+      line.appendChild(el('span', 'simok', '✓ ' + ruleToText(res.rule)));
+    } else {
+      /* **一行红字,不是 alert、不是抛异常。** 这个处理器挂在 input 上,抛出去的错会连带
+       * 打断后面所有绑定;而 alert 会在每一次按键上弹一次。 */
+      line.appendChild(el('span', 'simerr', t('simRuleErr')(res.at === '' ? '∅' : res.at)));
+    }
+    hint.appendChild(line);
+  }
+  /* 选项改过而结果还是旧的 —— 这一句必须出现在结果区,否则用户会把旧数当成新规则的结果。 */
+  simPaint(state.companies.get(state.selected) || null);
+}
+
+/** 唯一的计算入口。按钮点一次跑一次。 */
+function simGo() {
+  const co = state.companies.get(state.selected);
+  if (!co) return;
+  const r = simRuleNow();
+  if (!r.rule) { simSyncUI(); return; }          /* 自定义没写对:红字已经在 hint 里,不跑 */
+  const hold = simHoldNow();
+  const h = PX_HORIZONS[hold];
+  const btn = $('simRun');
+  if (btn) btn.disabled = true;
+  try {
+    const result = simRun(co.ticker, r.rule, h, {});
+    simLast = { ticker: co.ticker, ruleText: r.text, rule: r.rule, presetId: r.presetId, hold, result, at: Date.now() };
+  } catch (e) {
+    /* 回放本身不该抛(engine 内部每根都 try 过),但真抛了也只能是一行提示:
+     * 这个 handler 抛出去等于整块面板从此不响应。 */
+    simLast = { ticker: co.ticker, ruleText: r.text, rule: r.rule, presetId: r.presetId, hold, result: null,
+      at: Date.now(), fail: String((e && e.message) || e) };
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+  simPaint(co);
+}
+
+/** 结果区。不计算,只画 simLast。 */
+function simPaint(co) {
+  const out = $('simOut'), trg = $('simTrig'), note = $('simNote');
+  if (!out || !trg || !note) return;
+  out.replaceChildren(); trg.replaceChildren(); note.replaceChildren();
+
+  /* ---- 常驻三句话(SPEC 3.5 第 7 条):成本口径 / maxDD 定义 / <8 次不显示胜率 ----
+   * 三句都是正文,一句都不许降级成 tooltip;有没有结果都在。 */
+  const nl = s => note.appendChild(el('span', 'simnl', s));
+  nl(t('simCost')(SIM_COST_BPS));
+  nl(t('simMaxDDTip'));
+  nl(t('simMinTrigNote'));
+  nl(t('simDisclaim'));
+
+  const cur = simLast && co && simLast.ticker === co.ticker ? simLast : null;
+  if (!cur) { out.appendChild(el('p', 'hint', t('simIdle'))); return; }
+  if (cur.fail) { out.appendChild(el('p', 'hint simerr', cur.fail)); return; }
+  const R = cur.result;
+
+  /* 「屏幕上这组数到底是按什么跑出来的」—— 下拉可以在按按钮之后被改动,
+   * 不写这一行,面板就会用旧结果回答新问题。 */
+  const head = el('p', 'simcount');
+  head.appendChild(document.createTextNode(
+    t('simHoldOpt')[cur.hold] + ' · ' + (cur.presetId === 'custom' ? t('simCustom') : t('simPresetName')[cur.presetId])
+    + ' · ' + cur.ruleText + ' · ' + t('simExit').hold
+    + (R.from && R.to ? ' · ' + R.from + ' ~ ' + R.to : '')));
+  trg.appendChild(head);
+  const live = simRuleNow();
+  if (cur.hold !== simHoldNow() || cur.presetId !== simPresetNow() || (live.rule && live.text !== cur.ruleText)) {
+    out.appendChild(el('p', 'hint simthin', t('simStale')));
+  }
+
+  const tile = (lb, vl, dt, cls, extra) => {
+    const d = el('div', 'tile');
+    d.appendChild(el('div', 'lb', lb));
+    d.appendChild(el('div', 'vl', vl));
+    if (dt) d.appendChild(el('div', 'dt ' + (cls || ''), dt));
+    if (extra) d.appendChild(extra);
+    out.appendChild(d);
+    return d;
+  };
+  const sgn = v => (isFinite(v) ? (v >= 0 ? '+' : '') + v.toFixed(2) + '%' : '—');
+
+  /* 触发次数这一格永远在:它是"没触发"和"没跑"这两种情况唯一的区分。
+   * 副标题给扫过的根数 —— 没有它,"12 次"读不出是十二分之几百还是十二分之十五。
+   * 写成 "n / scanned" 而不是 "n bars":这一格里不该有任何一种语言的单词,
+   * 否则中文界面上会冒出一个英文词,而为它单开一条词条又不值当。 */
+  tile(t('simTrig'), fmtInt(R.n), fmtInt(R.n) + ' / ' + fmtInt(R.scanned), '');
+
+  if (!R.n) {
+    trg.appendChild(el('p', 'simthin', t('simNoTrig')));
+    return;
+  }
+
+  /* ---- 胜率 + 并排的随机对照。样本 < 8 时整格不渲染 ---- */
+  if (R.n >= SIM_MIN_TRIG) {
+    const nEff = Math.min(R.n, R.effN);
+    const ci = wilson(Math.round(R.winPct / 100 * nEff), nEff, 1.96);
+    const box = el('div', '');
+    box.appendChild(el('span', 'simctrl', t('simCtrl')(
+      isFinite(R.ctrl.winPct) ? R.ctrl.winPct.toFixed(0) : '—',
+      isFinite(R.z) ? R.z.toFixed(2) : '—')));
+    if (isFinite(ci.lo)) box.appendChild(el('span', 'simci',
+      '95% CI ' + (ci.lo * 100).toFixed(0) + '–' + (ci.hi * 100).toFixed(0) + '%'));
+    /* .simwin 只有一个用途:让样式表能把**这一格**的三个数(处理组 / 对照 / 区间)
+     * 钉成同一个字号字重。不加类就只能靠 :has(.simctrl) 之类的隐式选择器去认它,
+     * 那种选择器一旦哪天对照挪了位置就会静默失效,而失效的表现正好是排版重新
+     * 把胜率捧成标题 —— 也就是这次要修的那个缺陷本身。理由见 sim.css。 */
+    tile(t('simWin'), R.winPct.toFixed(0) + '%', '', '', box).classList.add('simwin');
+    tile(t('simAvgRet'), sgn(R.avgRet), '', R.avgRet >= 0 ? 'pos' : 'neg');
+    tile(t('simMedRet'), sgn(R.medRet), '', R.medRet >= 0 ? 'pos' : 'neg');
+    /* maxDD 同样恒 ≤ 0,理由同 MAE 那一列 */
+    const dd = tile(t('simMaxDD'), isFinite(R.maxDD) ? R.maxDD.toFixed(2) + '%' : '—', '', 'neg');
+    dd.title = t('simMaxDDTip');
+    tile(t('simMAE'), isFinite(R.avgMAE) ? R.avgMAE.toFixed(2) + '%' : '—', '', 'neg');
+  } else {
+    /* 只触发了 n 次:一句红字 + 下面完整的触发时点表。五个统计格一个都不出。 */
+    trg.appendChild(el('p', 'simthin', t('simThin')(R.n)));
+  }
+
+  /* ---- 触发时点表:全部行,不分页不截断 ---- */
+  const wrap = el('div', 'simtwrap');
+  const tb = el('table', 'mx sim');
+  const hr = el('tr');
+  for (const h of t('simHead')) hr.appendChild(el('th', '', h));
+  tb.appendChild(hr);
+  for (const tr of R.trades) {
+    const row = el('tr');
+    row.appendChild(el('td', '', tr.entryDate));
+    row.appendChild(el('td', '', fmtN(tr.entryPx)));
+    row.appendChild(el('td', '', tr.exitDate));
+    row.appendChild(el('td', '', fmtN(tr.exitPx)));
+    row.appendChild(el('td', tr.retPct >= 0 ? 'pos' : 'neg', sgn(tr.retPct)));
+    /* MAE 恒 ≤ 0(simTrade 把入场根算进去了),所以这一列不带 "+";
+     * 一个写着 "+0.00%" 的「期间最不利」会被读成"这段时间最差也赚了 0"。 */
+    row.appendChild(el('td', tr.maePct < 0 ? 'neg' : '', isFinite(tr.maePct) ? tr.maePct.toFixed(2) + '%' : '—'));
+    tb.appendChild(row);
+  }
+  wrap.appendChild(tb);
+  trg.appendChild(wrap);
+}
+
+/** detail.js 的 renderDetail() 与 partialRefresh() 各追加一行调用(SPEC 3.2)。 */
+function renderSim(co) {
+  const sec = $('simSec');
+  if (!sec) return;
+  /* 没有现价 = 详情页本身就在提示缺价,这块整个收起(与 renderPressure 同一条判据)。 */
+  if (!co || !isFinite(co.price) || co.price <= 0) { sec.hidden = true; return; }
+  const px = state.priceHist.get(co.ticker) || [];
+  /* 没有日线序列就没有可回放的东西。收起而不是留一块空面板:空面板读起来像坏了。 */
+  if (px.length < 2) { sec.hidden = true; return; }
+  sec.hidden = false;
+  /* 换了公司就把上一只票的结果扔掉 —— 屏幕上留着 AAPL 的回测配 MSFT 的标题是最坏的一种错。 */
+  if (simLast && simLast.ticker !== co.ticker) simLast = null;
+  simSyncUI();
+}
 /* ================= 走向概率:六维信号 → 情景权重 → MC ================= */
 function dirScores(co, r) {
   const s = { rev: null, val: null, tech: null };
@@ -1442,20 +3962,137 @@ function dirScores(co, r) {
   }
   return s;
 }
+/* ============ 市场级自动信号:宏观 / 行业 / 流动性(由 _MARKET-* 日线文件驱动) ============ */
+function retPct(px, days) {
+  if (!px || px.length < days + 1) return NaN;
+  const a = px[px.length - 1 - days].price, b = px[px.length - 1].price;
+  return a > 0 ? (b / a - 1) * 100 : NaN;
+}
+function aboveMA(px, k) {
+  const c = px.map(x => x.price), n = Math.min(k, c.length);
+  return c[c.length - 1] > c.slice(-n).reduce((a, b) => a + b, 0) / n;
+}
+const clamp1 = v => Math.max(-1, Math.min(1, Math.round(v * 100) / 100));
+function marketScores() {
+  const out = { m: null, i: null, l: null, why: {} };
+  const get = role => { const m = state.market.get(role); return m && m.px.length >= 70 ? m : null; };
+  const bench = get('BENCH'), sector = get('SECTOR'), credit = get('CREDIT'), rates = get('RATES');
+  if (bench) {
+    const c = bench.px.map(x => x.price);
+    const trend = aboveMA(bench.px, 200) ? 1 : -1;
+    /* 20日已实现波动 → 一年窗口分位(VIX 代理) */
+    const rets = []; for (let i = 1; i < c.length; i++) if (c[i - 1] > 0) rets.push(Math.log(c[i] / c[i - 1]));
+    const W = 20, vols = [];
+    for (let i = W; i <= rets.length; i++) {
+      const s = rets.slice(i - W, i), mu = s.reduce((a, b) => a + b, 0) / W;
+      vols.push(Math.sqrt(s.reduce((a, b) => a + (b - mu) * (b - mu), 0) / W));
+    }
+    const yr = vols.slice(-252), last = vols[vols.length - 1];
+    const vp = Math.round(yr.filter(v => v <= last).length / yr.length * 100);
+    const volSc = vp <= 40 ? 1 : vp >= 70 ? -1 : 0;
+    let rateSc = 0, r3 = NaN;
+    if (rates) { r3 = retPct(rates.px, 63); rateSc = r3 >= 1 ? 1 : r3 <= -1 ? -1 : 0; }
+    out.m = clamp1(0.4 * trend + 0.3 * volSc + 0.3 * rateSc);
+    out.why.m = t('dirWhyMacro')(bench.sym, trend > 0, vp, rates ? rates.sym : null, r3);
+    if (sector) {
+      const rs = retPct(sector.px, 63) - retPct(bench.px, 63);
+      const rsSc = !isFinite(rs) ? 0 : rs >= 5 ? 1 : rs >= 2 ? 0.5 : rs > -2 ? 0 : rs > -5 ? -0.5 : -1;
+      out.i = clamp1(0.6 * rsSc + 0.4 * (aboveMA(sector.px, 200) ? 1 : -1));
+      out.why.i = t('dirWhyInd')(sector.sym, bench.sym, rs, aboveMA(sector.px, 200));
+    }
+  }
+  if (credit) {
+    const t3 = retPct(credit.px, 63);
+    const tSc = !isFinite(t3) ? 0 : t3 >= 1 ? 1 : t3 <= -1 ? -1 : 0;
+    out.l = clamp1(0.6 * tSc + 0.4 * (aboveMA(credit.px, 200) ? 1 : -1));
+    out.why.l = t('dirWhyLiq')(credit.sym, t3, aboveMA(credit.px, 200));
+  }
+  return out;
+}
+/* 情绪面四条腿:目标价动量 0.35 / 评级结构 0.15 / 空头趋势 0.25 / 新闻关键词 0.25
+ * 缺哪条就按剩下的权重归一化,不会因为少一个文件就整块塌掉。 */
+function sentScores(co) {
+  const parts = [], why = [];
+  const tg = co.targets;
+  if (tg && tg.length >= 4) {
+    const last = tg[tg.length - 1], prev = tg[tg.length - 4];   /* 月度表,回看3行≈3个月 */
+    const chg = prev.tgt > 0 ? (last.tgt / prev.tgt - 1) * 100 : NaN;
+    const tgtSc = !isFinite(chg) ? 0 : chg >= 8 ? 1 : chg >= 3 ? 0.5 : chg > -3 ? 0 : chg > -8 ? -0.5 : -1;
+    parts.push([tgtSc, 0.35]);
+    const bChg = isFinite(last.buyPct) && isFinite(prev.buyPct) ? last.buyPct - prev.buyPct : NaN;
+    const rSc = !isFinite(bChg) ? 0 : bChg >= 3 ? 1 : bChg >= 1 ? 0.5 : bChg > -1 ? 0 : bChg > -3 ? -0.5 : -1;
+    parts.push([rSc, 0.15]);
+    why.push(t('dirWhyTgt')(chg, last.buyPct));
+  }
+  const si = state.shortInt.get(co.ticker);
+  if (si && si.length) {
+    const last = si[si.length - 1];
+    const base = [...si].reverse().find(x => (new Date(last.date) - new Date(x.date)) / 86400000 >= 7);
+    let siSc;
+    if (base && base.pct > 0) {
+      const rel = (last.pct - base.pct) / base.pct * 100;   /* 空头占比下降 = 利多 */
+      siSc = rel <= -10 ? 1 : rel <= -3 ? 0.5 : rel < 3 ? 0 : rel < 10 ? -0.5 : -1;
+    } else siSc = last.pct < 2 ? 0.25 : last.pct <= 5 ? 0 : -0.25;   /* 只有单点:按水平轻打分 */
+    parts.push([siSc, 0.25]);
+    why.push(t('dirWhySi')(last.pct, last.days, !!base));
+  }
+  const nw = newsScore(co.ticker);
+  if (nw) { parts.push([nw.s, 0.25]); why.push(nw.why); }
+  if (!parts.length) return { s: null, why: null };
+  const wsum = parts.reduce((a, [, w]) => a + w, 0);
+  return { s: clamp1(parts.reduce((a, [v, w]) => a + v * w, 0) / wsum), why, news: nw };
+}
+/* 同行修正动量:同行 Estimate History 的 (上调-下调)/覆盖数,平均后并入行业面 */
+function peerRevs(co) {
+  const spec = (state.peerSel.get(co.ticker) || '').trim();
+  const list = spec
+    ? spec.split(/[,,;\s]+/).map(s => s.toUpperCase()).filter(s => s && s !== co.ticker)
+    /* 默认同行 = 清单内的其他公司。落榜的那些数据可能已经停了几个月,
+     * 拿它们的修正动量去平均,等于让一批过期样本悄悄参与定价。手动指定的同行不受此限。 */
+    : onRosterTickers().filter(k => k !== co.ticker);
+  const items = [];
+  for (const tk of list) {
+    const p = state.companies.get(tk);
+    if (p && p.rev && isFinite(p.rev.up) && isFinite(p.rev.down) && isFinite(p.rev.n) && p.rev.n > 0)
+      items.push({ tk, sc: Math.max(-1, Math.min(1, (p.rev.up - p.rev.down) / p.rev.n * 2)) });
+  }
+  if (!items.length) return null;
+  return { avg: clamp1(items.reduce((a, b) => a + b.sc, 0) / items.length), items };
+}
 function renderDirection(co, r) {
   const sec = $('dirSec'), chips = $('dirChips'), out = $('dirOut');
   const ph = state.priceHist.get(co.ticker);
   if (!isFinite(co.price) || !ph || ph.length < 30) { sec.hidden = true; return; }
   sec.hidden = false;
-  /* 手动打分器(重建并恢复值) */
-  const man = state.dirManual.get(co.ticker) || { m: 0, i: 0, l: 0 };
-  for (const [id, key] of [['dirMacro', 'm'], ['dirInd', 'i'], ['dirLiq', 'l']]) {
+  /* 打分器:有市场数据时默认"自动",可手动覆盖 */
+  const auto = marketScores();
+  /* 行业面 = 行业ETF相对强弱(价格面)与同行修正动量(盈利面)各占一半 */
+  const pr = peerRevs(co);
+  const sectorRS = auto.i;   /* 保留纯相对强弱分,芯片单独展示 */
+  if (pr) auto.i = sectorRS != null ? clamp1(0.5 * sectorRS + 0.5 * pr.avg) : pr.avg;
+  const peersInp = $('dirPeers');
+  peersInp.value = state.peerSel.get(co.ticker) || '';
+  peersInp.placeholder = t('dirPeersPh');
+  /* 情绪面自动信号 */
+  const sen = sentScores(co);
+  auto.s = sen.s;
+  const man = state.dirManual.get(co.ticker) || { s: 'a', m: 'a', i: 'a', l: 'a' };
+  if (man.s === undefined) man.s = 'a';   /* 兼容旧的 {m,i,l} 存量 */
+  const eff = {};
+  for (const [id, key] of [['dirSent', 's'], ['dirMacro', 'm'], ['dirInd', 'i'], ['dirLiq', 'l']]) {
     const sel = $(id); sel.replaceChildren();
-    for (const [v, lb] of t('dirOptions')) {
-      const o = el('option', '', lb + ' (' + v + ')'); o.value = v;
-      if (parseFloat(v) === man[key]) o.selected = true;
+    if (auto[key] != null) {
+      const o = el('option', '', t('dirAutoOpt')((auto[key] > 0 ? '+' : '') + auto[key].toFixed(1)));
+      o.value = 'a'; if (man[key] === 'a') o.selected = true;
       sel.appendChild(o);
     }
+    for (const [v, lb] of t('dirOptions')) {
+      const o = el('option', '', lb + ' (' + v + ')'); o.value = v;
+      if (man[key] !== 'a' && parseFloat(v) === man[key]) o.selected = true;
+      else if (man[key] === 'a' && auto[key] == null && parseFloat(v) === 0) o.selected = true;
+      sel.appendChild(o);
+    }
+    eff[key] = man[key] === 'a' ? (auto[key] != null ? auto[key] : 0) : man[key];
   }
   /* 自动信号 chips */
   const s = dirScores(co, r);
@@ -1469,9 +4106,14 @@ function renderDirection(co, r) {
   chip(s.rev != null && co.rev ? t('dirChipRev')(co.rev.up, co.rev.down) : t('dirChipRev')('—', '—'), s.rev);
   chip(s.val != null ? t('dirChipVal')(s.valPct) : t('dirChipVal')('—'), s.val);
   chip(s.tech != null ? t('dirChipTech')(s.aboveS, s.aboveL) : t('dirChipTech')(false, false), s.tech);
-  /* 综合倾斜度:基本面0.35 技术0.20 宏观0.15 行业0.20 流动性0.10 */
+  if (sen.s != null) chip(sen.why.join(' · '), sen.s);
+  if (auto.m != null) chip(auto.why.m, auto.m);
+  if (auto.why.i) chip(auto.why.i, sectorRS);
+  if (pr) chip(t('dirChipPeers')(pr.items), pr.avg);
+  if (auto.l != null) chip(auto.why.l, auto.l);
+  /* 综合倾斜度:基本面0.30 技术0.15 情绪0.15 宏观0.15 行业0.15 流动性0.10 */
   const fund = (s.rev != null && s.val != null) ? (s.rev + s.val) / 2 : (s.rev != null ? s.rev : (s.val != null ? s.val : 0));
-  const tilt = 0.35 * fund + 0.20 * (s.tech || 0) + 0.15 * man.m + 0.20 * man.i + 0.10 * man.l;
+  const tilt = 0.30 * fund + 0.15 * (s.tech || 0) + 0.15 * eff.s + 0.15 * eff.m + 0.15 * eff.i + 0.10 * eff.l;
   let wBull = 0.30 + 0.25 * tilt, wBear = 0.30 - 0.25 * tilt;
   wBull = Math.max(0.05, Math.min(0.55, wBull)); wBear = Math.max(0.05, Math.min(0.55, wBear));
   const wMid = 1 - wBull - wBear;
@@ -1597,18 +4239,199 @@ function renderPEBand(co, pe) {
     + (h.length < 36 ? t('peShortWin') : '');
 }
 
+/* ================= 价格走势面板(有 OHLC 画蜡烛,没有就降级成收盘折线) =================
+ *
+ * 这块面板的规矩,写在最前面,因为它比画法重要得多:
+ *
+ * 1. **一条指标线都不画。** SPEC 附录 K 预注册了 4 个指标 × 3 个前瞻期 = 12 格,
+ *    2026-08-06 那一跑 12 格全部未过闸(卡 C3 折间一致性与 C4 效应量,不是样本量)。
+ *    K.8 写死了后果:过不了闸的东西落成素线、无颜色、无徽章、无判语。这里选择更省事的做法 ——
+ *    干脆不画,并在图下方把这件事写成正文。把没过线的均线画成绿色,等于把
+ *    「回测数字说话,过不了就明说这条信号没用」这条规矩作废,那比少一个功能严重得多。
+ * 2. **蜡烛实体的红绿是描述,不是判断。** 它说的是"这一天收盘高于/低于开盘"这个已经发生的事实,
+ *    不含任何对明天的暗示。图例和正文都要把这句话写出来 —— 颜色本身不会自己声明它是描述。
+ * 3. **没有 O/H/L 就不画蜡烛。** 不许用收盘价近似出开盘价("昨收当今开")把图凑成 K 线:
+ *    那画出来的每一根都是编的,而且看上去完全像真的(SPEC K.2 / 4.3 那一类静默事故)。
+ *    降级路径(收盘折线)是**主路径**:盘上今天一份 OHLC 都没有。
+ *
+ * 画法沿用 render/direction.js 的 renderPEBand:createElementNS(svgEl) 手搭,零依赖,不引任何图表库。
+ */
+
+/* 窗口档位。'all' 给 0 = 不截断。默认落在 120 根:252 根挤进 1100px 宽时每根只有 4px,
+ * 蜡烛实体会糊成一片;120 根是"看得清单根"与"看得见趋势"之间的折中。 */
+const KL_WINS = [{ id: 'w60', n: 60 }, { id: 'w120', n: 120 }, { id: 'all', n: 0 }];
+function klWinNow() {
+  const id = state.klWin;
+  return KL_WINS.find(w => w.id === id) || KL_WINS[1];
+}
+/** 一根 K 线的四个数齐不齐。缺一个就当这根没有 OHLC —— 半根蜡烛不是"部分可用"。 */
+function klBarOK(d) {
+  return !!d && isFinite(d.o) && d.o > 0 && isFinite(d.h) && d.h > 0 && isFinite(d.l) && d.l > 0
+    && d.h >= d.l && d.h >= Math.max(d.o, d.price) && d.l <= Math.min(d.o, d.price);
+}
+/** 整段都齐才画蜡烛。混着画(有的根有实体、有的根只有一个点)读起来像数据缺失,
+ *  而实际上它是两种口径混排 —— 宁可整段降级成折线,口径至少是一个。 */
+function klHasOHLC(arr) { return !!(arr && arr.length) && arr.every(klBarOK); }
+/** y 轴刻度步长:取 1/2/5 × 10^k 里刚好不小于 span/5 的那个,免得刻度写成 17.3333 */
+function klStep(span) {
+  const raw = (span || 0) / 5;
+  if (!(raw > 0)) return 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw))), u = raw / mag;
+  return (u <= 1 ? 1 : u <= 2 ? 2 : u <= 5 ? 5 : 10) * mag;
+}
+
+function renderCandles(co) {
+  const sec = $('klSec'), box = $('klChart'), note = $('klNote'), leg = $('klLegend'), tabs = $('klWinTabs');
+  box.replaceChildren(); note.replaceChildren(); leg.replaceChildren();
+  const all = (co && state.priceHist.get(co.ticker)) || [];
+  /* 两根以下画不出任何东西(连一段线都连不起来),整块收起而不是留一个空框 */
+  if (all.length < 2) { sec.hidden = true; return; }
+  sec.hidden = false;
+
+  const win = klWinNow();
+  if (tabs) {
+    for (const b of tabs.querySelectorAll('button')) b.classList.toggle('on', b.dataset.klw === win.id);
+    /* onclick 赋值而不是 addEventListener:renderCandles 每次重绘都会走到这里,
+     * addEventListener 会一次次叠加(与 render/pressure.js 的持有期切换同一个坑)。 */
+    tabs.onclick = ev => {
+      const b = ev.target.closest('button');
+      if (!b || !b.dataset.klw || b.dataset.klw === klWinNow().id) return;
+      state.klWin = b.dataset.klw;
+      renderCandles(co);
+    };
+  }
+
+  const h = win.n > 0 ? all.slice(-win.n) : all;
+  const ohlc = klHasOHLC(h);
+  const n = h.length;
+  const W = 1100, H = 320, L = 52, R = 66, T = 14, B = 28;
+  let mn = Math.min(...h.map(d => ohlc ? d.l : d.price));
+  let mx = Math.max(...h.map(d => ohlc ? d.h : d.price));
+  const pad = (mx - mn) * .06 || Math.max(1, mx * .02);
+  mn -= pad; mx += pad;
+  const step = (W - L - R) / n;
+  const cx = i => L + (i + 0.5) * step;
+  const y = v => T + (mx - v) / (mx - mn) * (H - T - B);
+  const svg = svgEl('svg', {
+    viewBox: `0 0 ${W} ${H}`, role: 'img',
+    'aria-label': ohlc ? '每日开高低收蜡烛图(颜色仅描述当日涨跌事实)' : '每日收盘价折线(导出无 OHLC 列)',
+  });
+
+  /* y 网格 + 右侧价格刻度 */
+  const gs = klStep(mx - mn);
+  for (let v = Math.ceil(mn / gs) * gs; v <= mx; v += gs) {
+    svg.appendChild(svgEl('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: 'var(--grid)', 'stroke-width': 1 }));
+    svg.appendChild(svgEl('text', { x: L - 8, y: y(v) + 4, 'text-anchor': 'end', 'font-size': 11, fill: 'var(--text-muted)' }, fmtN(v)));
+  }
+  /* x 轴:月份变了才写一个标签,且与上一个标签至少隔 70px,不然 252 根会写成一条黑边 */
+  let lastLab = -1e9;
+  for (let i = 0; i < n; i++) {
+    const cur = h[i].date.slice(0, 7);
+    if (i > 0 && cur === h[i - 1].date.slice(0, 7)) continue;
+    if (cx(i) - lastLab < 70) continue;
+    lastLab = cx(i);
+    svg.appendChild(svgEl('text', { x: cx(i), y: H - 8, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--text-muted)' }, cur));
+  }
+
+  if (ohlc) {
+    /* 蜡烛:影线 = 当日最高↔最低,实体 = 开↔收。红绿描述"收盘相对开盘"的方向,
+     * 是已发生事实,不是信号(图例与正文各写一遍,免得只有颜色说话)。 */
+    const bw = Math.max(1.2, Math.min(9, step * 0.68));
+    for (let i = 0; i < n; i++) {
+      const d = h[i], up = d.price >= d.o;
+      const col = up ? 'var(--delta-up)' : 'var(--delta-down)';
+      svg.appendChild(svgEl('line', {
+        class: 'klwick', x1: cx(i), x2: cx(i), y1: y(d.h), y2: y(d.l),
+        stroke: col, 'stroke-width': Math.min(1.4, Math.max(0.8, step * 0.14)),
+      }));
+      const top = y(Math.max(d.o, d.price)), bot = y(Math.min(d.o, d.price));
+      svg.appendChild(svgEl('rect', {
+        class: 'klbody', x: cx(i) - bw / 2, y: top, width: bw,
+        /* 开=收 的十字星实体高度是 0,给 1px 保底,否则那一天在图上整根消失 */
+        height: Math.max(1, bot - top), fill: col,
+      }));
+    }
+  } else {
+    /* 降级:只有收盘价。用中性的 series-1,不按涨跌上色 —— 折线上的颜色没有"当天开收"这个事实可描述,
+     * 涂上去就只剩暗示了。 */
+    let dstr = '';
+    for (let i = 0; i < n; i++) dstr += (i ? 'L' : 'M') + cx(i).toFixed(1) + ',' + y(h[i].price).toFixed(1);
+    svg.appendChild(svgEl('path', {
+      class: 'klline', d: dstr, fill: 'none', stroke: 'var(--series-1)', 'stroke-width': 1.8,
+      'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+    }));
+  }
+
+  /* 最后一根收盘价:一条素色虚线 + 右侧数字。它只是"最新收盘在哪",不是参考位、不是目标价。 */
+  const last = h[n - 1];
+  svg.appendChild(svgEl('line', {
+    x1: L, x2: W - R, y1: y(last.price), y2: y(last.price),
+    stroke: 'var(--axis)', 'stroke-width': 1, 'stroke-dasharray': '4 4',
+  }));
+  svg.appendChild(svgEl('text', {
+    x: W - R + 8, y: y(last.price) + 4, 'font-size': 11.5, 'font-weight': 650, fill: 'var(--text-primary)',
+  }, fmtN(last.price)));
+
+  /* 十字线 + tooltip(与 renderPEBand 同一套写法) */
+  const cross = svgEl('line', { y1: T, y2: H - B, stroke: 'var(--axis)', 'stroke-width': 1, visibility: 'hidden' });
+  svg.appendChild(cross);
+  const hit = svgEl('rect', { x: L, y: T, width: W - L - R, height: H - T - B, fill: 'transparent' });
+  const tip = $('klTip');
+  hit.addEventListener('pointermove', ev => {
+    const bb = $('klBox').getBoundingClientRect();
+    const svgX = (ev.clientX - bb.left) / bb.width * W;
+    const i = Math.max(0, Math.min(n - 1, Math.floor((svgX - L) / step)));
+    const d = h[i];
+    cross.setAttribute('x1', cx(i)); cross.setAttribute('x2', cx(i));
+    cross.setAttribute('visibility', 'visible');
+    tip.replaceChildren();
+    tip.appendChild(el('div', 'v', t('klTipC') + fmtN(d.price)));
+    if (ohlc) tip.appendChild(el('div', 'k', t('klTipO') + fmtN(d.o) + ' · ' + t('klTipH') + fmtN(d.h) + ' · ' + t('klTipL') + fmtN(d.l)));
+    tip.appendChild(el('div', 'k', d.date));
+    tip.style.display = 'block';
+    tip.style.left = Math.min(ev.clientX - bb.left + 14, bb.width - 190) + 'px';
+    tip.style.top = (ev.clientY - bb.top - 52) + 'px';
+  });
+  hit.addEventListener('pointerleave', () => { tip.style.display = 'none'; cross.setAttribute('visibility', 'hidden'); });
+  svg.appendChild(hit);
+  box.appendChild(svg);
+
+  /* 图例:蜡烛模式下两块色片 + 一句"颜色只描述当日方向";折线模式下只有一条线,没有颜色可解释 */
+  const swatch = (bg, txt) => {
+    const s = el('span');
+    const k = el('span', 'sw'); k.style.background = bg; s.appendChild(k);
+    s.appendChild(document.createTextNode(txt)); leg.appendChild(s);
+  };
+  if (ohlc) {
+    swatch('var(--delta-up)', t('klLegUp'));
+    swatch('var(--delta-down)', t('klLegDown'));
+    leg.appendChild(el('span', '', t('klLegDesc')));
+  } else {
+    const s = el('span');
+    const k = el('span', 'ln'); k.style.background = 'var(--series-1)'; s.appendChild(k);
+    s.appendChild(document.createTextNode(t('klLegClose'))); leg.appendChild(s);
+  }
+
+  plRich(note.appendChild(el('span', 'plnl')), t('klRange')(n, h[0].date, last.date, all.length));
+  plRich(note.appendChild(el('span', 'plnl')), t(ohlc ? 'klModeCandle' : 'klModeLine'));
+  plRich(note.appendChild(el('span', 'plnl')), t('klNoInd'));
+}
 /* ================= render root ================= */
 let lastStatusMsg = null;
 function renderAll(statusMsg) {
   const has = state.companies.size > 0;
+  const vis = visibleCompanies();
+  /* 选中的那家被隐藏了(比如刚点了收起),就改选一家画得出来的,别让详情卡片指着表格里没有的行 */
+  if (vis.length && (!state.selected || !vis.some(c => c.ticker === state.selected))) state.selected = vis[0].ticker;
   $('ovCard').hidden = !has;
   if (statusMsg != null) lastStatusMsg = statusMsg;
   if (lastStatusMsg != null || has) {
     const st = $('status'); st.replaceChildren();
     if (lastStatusMsg != null) st.appendChild(el('span', 'ok', lastStatusMsg + ' '));
     if (has) {
-      const withHist = [...state.companies.keys()].filter(k => (state.history.get(k) || []).length >= 12).length;
-      st.appendChild(el('span', '', t('stTotal')(state.companies.size, withHist)));
+      /* 数的是画出来的那批,不是载入的那批 —— 顶上写"6 家"、表格里 4 行,是最难自查的一种不一致 */
+      const withHist = vis.filter(c => (state.history.get(c.ticker) || []).length >= 12).length;
+      st.appendChild(el('span', '', t('stTotal')(vis.length, withHist)));
     }
   }
   if (has) {
@@ -1657,22 +4480,48 @@ function bindPe(id, key) {
   });
 }
 bindPe('peP25', 'p25'); bindPe('peP50', 'p50'); bindPe('peP75', 'p75');
-for (const [id, key] of [['dirMacro', 'm'], ['dirInd', 'i'], ['dirLiq', 'l']]) {
+for (const [id, key] of [['dirSent', 's'], ['dirMacro', 'm'], ['dirInd', 'i'], ['dirLiq', 'l']]) {
   $(id).addEventListener('change', ev => {
     const tk = state.selected; if (!tk) return;
-    const man = state.dirManual.get(tk) || { m: 0, i: 0, l: 0 };
-    man[key] = parseFloat(ev.target.value) || 0;
+    const man = state.dirManual.get(tk) || { s: 'a', m: 'a', i: 'a', l: 'a' };
+    man[key] = ev.target.value === 'a' ? 'a' : (parseFloat(ev.target.value) || 0);
     state.dirManual.set(tk, man);
     const co = state.companies.get(tk);
     renderDirection(co, calcRange(co, state.horizon));
   });
 }
+$('dirPeers').addEventListener('change', ev => {
+  const tk = state.selected; if (!tk) return;
+  state.peerSel.set(tk, ev.target.value);
+  const co = state.companies.get(tk);
+  renderDirection(co, calcRange(co, state.horizon));
+});
 $('pxInput').addEventListener('input', ev => {
   const co = state.companies.get(state.selected); if (!co) return;
   co.price = parseFloat(ev.target.value);
   co.priceSrc = 'user'; co.priceDate = '@manual';
   partialRefresh();
 });
+
+/* ---- 买入模拟面板(SPEC 3.5)----
+ * 四个绑定,只有最后一个会真的跑回放。前三个都只改 state.simPref / 做即时校验:
+ * 一次 simRun 是 ~250 根 × 每根一次 pressureLevels,同步阻塞几百毫秒,
+ * 挂在 change/input 上会把整个面板变成"打一个字卡一下"。 */
+$('simHold').addEventListener('change', ev => {
+  state.simPref.hold = ev.target.value;
+  simSyncUI();                     /* 只重画输入区的状态,不跑回放 */
+});
+$('simPreset').addEventListener('change', ev => {
+  state.simPref.presetId = ev.target.value;
+  simSyncUI();                     /* 里面切 #simRule 的 disabled */
+});
+$('simRule').addEventListener('input', ev => {
+  state.simPref.custom = ev.target.value;
+  /* 只做 parseRule 的即时校验。parseRule 约定**不抛异常**(失败返回 {ok:false}),
+   * 因为在 input 处理器里抛错会连带打断后面所有绑定 —— 主题、语言按钮会一起哑掉。 */
+  simSyncUI();
+});
+$('simRun').addEventListener('click', () => simGo());
 
 /* theme toggle */
 const THEME_KEYS = ['auto', 'light', 'dark'];

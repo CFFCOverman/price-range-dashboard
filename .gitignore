@@ -6,12 +6,19 @@ Assets/
 !companies_template.csv
 !history_template.csv
 
+# 依赖
+node_modules/
+fetcher/node_modules/
+
+# 期权导出收件箱:里面全是 FactSet 授权数据(*.xlsx 其实已经盖住了,
+# 这里再写明一次,是为了挡住哪天手滑一个 git add -f)
+fetcher/options-inbox/
+
+# 本机探测到的期权页地址(因账号权限/版本而异,不该跟着仓库走)
+fetcher/.options-url
+
 # OS / editor noise
 Thumbs.db
 .DS_Store
 ~$*
-
-# workaround junk
 _to_delete/
-
-fetcher/node_modules/

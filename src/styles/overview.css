@@ -1,0 +1,29 @@
+/* ---- overview table ---- */
+table.ov { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+table.ov th {
+  text-align: right; font-size: 12px; font-weight: 600; color: var(--text-muted);
+  padding: 6px 10px; border-bottom: 1px solid var(--grid); cursor: pointer; user-select: none;
+  white-space: nowrap;
+}
+table.ov th:first-child, table.ov td:first-child { text-align: left; }
+table.ov th.sorted { color: var(--text-primary); }
+table.ov td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+table.ov tr.rowc { cursor: pointer; }
+table.ov tr.rowc:hover td { background: var(--ghost); }
+table.ov tr.sel td { background: var(--wash); }
+table.ov td .nm { font-weight: 600; }
+table.ov td .tk { color: var(--text-muted); font-size: 12px; margin-left: 6px; }
+.pos { color: var(--delta-up); } .neg { color: var(--delta-down); }
+/* mini range track in table rows */
+.mini { display: inline-block; width: 130px; height: 14px; position: relative; vertical-align: middle; }
+.mini .track { position: absolute; left: 0; right: 0; top: 6px; height: 2px; background: var(--grid); border-radius: 1px; }
+.mini .band { position: absolute; top: 4px; height: 6px; background: var(--wash-strong); border-radius: 3px; }
+.mini .now { position: absolute; top: 2px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--series-2); border: 2px solid var(--surface-1); transform: translateX(-50%); }
+/* 表格下方"另有 N 家不在拉取清单里"的开关。做得像一行说明而不是按钮:
+   它是一条状态提示,顺带可以点开——不该抢主表格的注意力。 */
+.offroster {
+  margin-top: 8px; padding: 6px 10px; font-size: 12px; color: var(--text-muted);
+  cursor: pointer; user-select: none; border-top: 1px dashed var(--grid);
+}
+.offroster:hover { color: var(--text-secondary); background: var(--ghost); }

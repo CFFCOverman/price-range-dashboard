@@ -1,0 +1,51 @@
+/* pressure / support levels */
+.plh { font-size: 12.5px; font-weight: 650; margin: 12px 0 0; letter-spacing: .02em; }
+.plh.up { color: var(--delta-down); }        /* 上方压力 = 挡住上涨,用告警色 */
+.plh.down { color: var(--delta-up); }        /* 下方支撑 = 托住下跌 */
+table.mx.pl td:first-child { color: var(--text-primary); font-weight: 600; }
+table.mx.pl td, table.mx.pl th { padding: 5px 8px; font-size: 12px; }
+/* 表头不折行:「本期触及概率」「证据等级」断成两行以后,列宽会随数据抖动 */
+table.mx.pl th { white-space: nowrap; }
+/* 这里曾经有 6 条 .plbar / .plbarf* —— 随 strength 一起整组删除。
+ * 不留空壳类名:留着,下一个人只要写一行 <span class="plbar"> 就能把 0–100 分请回来,
+ * 而进度条这个视觉隐喻本身就在宣称「越长越可信」,那正是被回测否掉的那件事。 */
+.pltag { display: inline-block; padding: 1px 6px; border-radius: 9px; font-size: 10.5px; line-height: 1.5;
+  border: 1px solid var(--border); color: var(--text-secondary); cursor: help; white-space: nowrap; margin-right: 4px; }
+.pltag.opt { border-color: var(--delta-down); color: var(--delta-down); }
+.pltag.tech { border-color: var(--series-1); color: var(--series-1); }
+
+/* ---- 持有期切换器(静态标签在 index.html 的 #plSec 里) ---- */
+.plholdrow { display: flex; align-items: center; gap: 10px; margin: 8px 0 2px; }
+.plholdrow label { font-size: 11.5px; color: var(--text-muted); letter-spacing: .02em; }
+.plholdrow .tabs button { font-size: 11.5px; padding: 4px 11px; }
+
+/* ---- 证据等级徽章:五档只用既有变量区分,不引入新色值 ----
+ * verified 是唯一允许旁边出现百分比的一档,所以只有它给正色描边;
+ * pending / descriptive / inconclusive 一律走灰,falsified 走告警色 ——
+ * 视觉上必须一眼能看出「这条没验过」。inconclusive 跟着灰而不是跟着告警色是有意的:
+ * 「样本不够,判不出」不是一个坏消息,是一个空白,给它红色等于替它宣告了一个没有的结论。 */
+.plev { display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 10.5px; line-height: 1.5;
+  border: 1px solid var(--border); color: var(--text-muted); cursor: help; white-space: nowrap; }
+.plev.verified { border-color: var(--delta-up); color: var(--delta-up); }
+.plev.pending { border-color: var(--axis); color: var(--text-muted); background: var(--ghost); }
+.plev.descriptive { border-color: var(--axis); color: var(--text-muted); }
+.plev.inconclusive { border-color: var(--axis); color: var(--text-muted); }
+.plev.falsified { border-color: var(--delta-down); color: var(--delta-down); }
+/* 未验证腿的「概率」格:这里永远不会有百分号,只有 plOptPending 的文案 */
+.plpend { color: var(--text-muted); font-size: 11.5px; cursor: help; }
+.plreach { font-variant-numeric: tabular-nums; font-weight: 650; }
+td.pldist { font-variant-numeric: tabular-nums; }
+
+/* ---- 表格下方的常驻正文:plBounceNote / plNoStrength / plHorizonNote ----
+ * 这三段**不是 tooltip**。少掉一个功能而把理由藏进悬浮提示,用户只会读成「你们做少了」。 */
+.plsay { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.plsay p { margin: 0 0 6px; font-size: 11.5px; line-height: 1.55; color: var(--text-secondary); }
+.plsay p:last-child { margin-bottom: 0; }
+.plsay strong { color: var(--text-primary); font-weight: 650; }
+
+/* 图下方的估值参考线图例:虚线样式与 SVG 里那几条一致 */
+.plleg { margin: 6px 0 0; font-size: 11px; color: var(--text-muted); cursor: help; display: flex; align-items: center; gap: 6px; }
+.plleg i { display: inline-block; width: 22px; height: 0; border-top: 1px dashed var(--axis); }
+/* #plNote 里每条说明各占一行:挤成一段以后 why 的四五句话没人读得完 */
+.plnl { display: block; margin-top: 4px; }
+.plnl:first-child { margin-top: 0; }

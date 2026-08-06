@@ -1,0 +1,52 @@
+{
+  "styles": [
+    "src/styles/base.css",
+    "src/styles/overview.css",
+    "src/styles/detail.css",
+    "src/styles/pressure.css",
+    "src/styles/sim.css",
+    "src/styles/charts.css"
+  ],
+  "scripts": [
+    "src/js/core/utils.js",
+    "src/js/core/csv.js",
+    "src/js/core/state.js",
+    "src/js/core/i18n.js",
+    "src/js/ingest/companies.js",
+    "src/js/valuation/calc.js",
+    "src/js/ingest/demo.js",
+    "src/js/ingest/xlsx-model.js",
+    "src/js/ingest/estimates.js",
+    "src/js/ingest/snapshot.js",
+    "src/js/ingest/resolve.js",
+    "src/js/ingest/charting.js",
+    "src/js/ingest/targets.js",
+    "src/js/ingest/signals.js",
+    "src/js/ingest/price-summary.js",
+    "src/js/ingest/roster.js",
+    "src/js/ingest/files.js",
+    "src/js/ingest/folder.js",
+    "src/js/render/overview.js",
+    "src/js/render/detail.js",
+    "src/js/valuation/volstats.js",
+    "src/js/pressure/params.js",
+    "src/js/pressure/scale.js",
+    "src/js/pressure/grid.js",
+    "src/js/pressure/optionwalls.js",
+    "src/js/pressure/engine.js",
+    "src/js/render/pressure.js",
+    "src/js/sim/rules.js",
+    "src/js/sim/engine.js",
+    "src/js/render/sim.js",
+    "src/js/direction/scores.js",
+    "src/js/render/direction.js",
+    "src/js/render/candles.js",
+    "src/js/app/render-root.js",
+    "src/js/app/events.js"
+  ],
+  "shell": "src/index.html",
+  "outputs": [
+    "index.html",
+    "price-range-dashboard.html"
+  ]
+}

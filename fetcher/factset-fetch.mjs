@@ -1,485 +1,85 @@
 /**
- * factset-fetch.mjs — 自动抓取 Price Range Dashboard 所需的 FactSet 数据
+ * factset-fetch.mjs — 自动抓取 Price Range Dashboard 所需的 FactSet 数据(入口)
  *
  * 抓什么(每个 ticker):
  *   1. Estimate History FY1 + FY2(逐月一致预期:Mean/Low/High/上调下调家数/P⁄E)→ xlsx
  *   2. 当前价格(从页面头部)→ 汇总进 companies.csv
- *   3. Charting 日线数据导出(尽力而为;失败会提示手动)→ xlsx
- * 输出全部写入 OUT_DIR(默认 Assets 文件夹),仪表盘"连接文件夹/重新扫描"即可食用。
+ *   3. Targets & Ratings(History 视图月度表:目标价均值/评级分布)→ xlsx
+ *   4. Ownership 空头持仓(回补天数/占流通盘%)→ short-interest.csv(逐日累积)
+ *   5. StreetAccount 新闻标题(近一年)→ "{ticker} News.csv"(逐轮累积去重)
+ *   6. 期权链未平仓量 OI(尽力而为;账号无期权权限就跳过)→ "{ticker} Options.csv"(逐轮累积)
+ *   7. Charting 日线数据导出(尽力而为;失败会提示手动)→ xlsx
+ *      顺带尽力开启成交量序列 → 仪表盘压力位用真实筹码分布(拿不到就退回停留时间口径,不阻断)
+ * 输出全部写入仓库根的 Assets/ —— 按数据类型分子目录(estimates / charting / targets /
+ * news / options / summary),日志与台账在 Assets/_logs/。仪表盘的文件夹扫描会往下钻 3 层
+ * 且按文件名认数据,所以分不分子目录都能"连接文件夹/重新扫描"直接食用。
+ *
+ * 代码在哪(FactSet 改版时按这张表找,不用通读全文):
+ *   lib/    config 路径与开关 · log 进度条 · ledger 台账 · browser 启动与跨 iframe 原语
+ *           tickers/markets 清单 · menu 控制台 · registry 产出登记 · health 体检
+ *           companies 新鲜度与 csv · round 单轮编排 · selftest 纯函数自检
+ *   steps/  一个抓取步骤一个文件:estimates / price / targets / short-interest /
+ *           news / options / charting,外加 ticker.mjs(单公司 8 步编排)
+ *   页面被重新设计时,坏掉的一定是 steps/ 里的某一个文件 —— 台账 sources.txt 的
+ *   "失败环节"列会直接点名是哪一步,照名字打开对应文件即可。
+ *
+ * 出问题时:菜单输 chk 做数据体检,或直接看 Assets/_logs/sources.txt 台账 ——
+ * 每个产出文件一行,FAIL 行的"失败环节"会指出断在导航/等待页面/切换 Report Type/定位表格/解析行/写文件 哪一步。
  *
  * 首次使用:
  *   npm init -y && npm i playwright xlsx
  *   node factset-fetch.mjs --login     ← 打开浏览器,手动登录 FactSet 一次(登录态存在本地 profile 里)
  * 日常使用:
  *   node factset-fetch.mjs             ← 全自动跑完 TICKERS 列表
+ *   node factset-fetch.mjs --selftest  ← 只跑纯函数自检,不开浏览器
  *
  * 注意:请遵守你的 FactSet 许可条款;本脚本仅自动化你有权手动执行的导出,低频个人使用。
  */
-import { chromium } from 'playwright';
-import * as XLSX from 'xlsx';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
-import readline from 'node:readline/promises';
-import { exec } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+/* 这一行必须排在 config 之前:config 的 OUT_DIR 是模块顶层 const,一旦求值就定死了,
+ * 而 ESM 的 import 全部先于模块体执行——把"自检改写输出目录"做成一个更早的 import 是唯一时机。
+ * 详见 lib/selftest-env.mjs 顶部的说明。 */
+import './lib/selftest-env.mjs';
+import { FETCHER_DIR, LOGIN_ONLY, OUT_DIR } from './lib/config.mjs';
 
-// ================= 配置 =================
-const TICKERS_DEFAULT = ['NVDA-US', 'GOOGL-US'];  // 首次默认;之后以 tickers.txt 为准
-const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-/* 输出目录相对脚本定位(fetcher 的上一级 /Assets)——整个项目文件夹可整体搬迁/克隆,零改动可用;FS_OUT 环境变量可覆盖 */
-const OUT_DIR = process.env.FS_OUT || path.resolve(SCRIPT_DIR, '..', 'Assets');
-const TICKERS_FILE = path.join(SCRIPT_DIR, 'tickers.txt');   // 一行一个代码,# 开头为注释,记事本随时可改
-const TICKERS_JSON_OLD = path.join(SCRIPT_DIR, 'tickers.json');
-const APP_HTML = ['price-range-dashboard.html', 'index.html']
-  .map(f => path.join(path.dirname(OUT_DIR), f)).find(f => { try { return fs.existsSync(f); } catch { return false; } })
-  || path.join(path.dirname(OUT_DIR), 'price-range-dashboard.html');
-const PROFILE = path.join(os.homedir(), '.factset-bot-profile');   // 独立浏览器 profile(保存登录态)
-const BASE = 'https://my.apps.factset.com';
-const LOGIN_ONLY = process.argv.includes('--login');
-const HEADLESS = false;                            // FactSet 登录/SSO 建议始终有头运行
-// ========================================
-
-/* ============ 进度条(TTY 动态刷新;无终端时打印里程碑) ============ */
-const isTTY = !!process.stdout.isTTY;
-let barState = null;
-function drawBar() {
-  if (!barState || !isTTY) return;
-  const { done, total, label } = barState;
-  const W = 26, f = Math.min(W, Math.round(done / total * W));
-  const pct = String(Math.round(done / total * 100)).padStart(3);
-  process.stdout.write('\r[' + '█'.repeat(f) + '░'.repeat(W - f) + '] ' + pct + '% (' + done + '/' + total + ') ' + String(label).slice(0, 50) + '    ');
-}
-function barClear() { if (isTTY && barState) process.stdout.write('\r' + ' '.repeat(110) + '\r'); }
-function bar(done, total, label) {
-  barState = { done, total, label };
-  if (isTTY) drawBar();
-  else console.log(`[进度 ${Math.round(done / total * 100)}%] (${done}/${total}) ${label}`);
-}
-function barEnd() { if (isTTY && barState) { drawBar(); process.stdout.write('\n'); } barState = null; }
-const log = (...a) => { barClear(); console.log(new Date().toISOString().slice(11, 19), ...a); drawBar(); };
-fs.mkdirSync(OUT_DIR, { recursive: true });
-
-/* ============ 源出清单:fetcher/sources.txt(第二个管理文件,自动维护 文件↔FactSet源头 对照) ============ */
-const SOURCES_FILE = path.join(SCRIPT_DIR, 'sources.txt');
-const sourceMap = new Map();
-try {
-  if (fs.existsSync(SOURCES_FILE)) {
-    for (const line of fs.readFileSync(SOURCES_FILE, 'utf8').split(/\r?\n/)) {
-      if (!line.trim() || line.startsWith('#')) continue;
-      const i = line.indexOf(' | ');
-      if (i > 0) sourceMap.set(line.slice(0, i).trim(), line);
-    }
-  }
-} catch {}
-function recordSource(file, src) { sourceMap.set(file, file + ' | ' + src); }
-function writeSources() {
-  const head = '# 数据源出清单 — 由 factset-fetch 自动维护(每次拉取更新对应条目,勿手改格式)\n'
-    + '# 格式: 文件名 | FactSet 页签路径 | 财年/内容 | 表格说明 | URL | 抓取时间(UTC)\n';
-  fs.writeFileSync(SOURCES_FILE, head + [...sourceMap.values()].sort().join('\n') + '\n');
-}
-
-/* --selftest:不开浏览器,验证核心逻辑(财年判定/标签位移/xlsx 写读回) */
+/* --selftest 优先短路:此路径不碰浏览器,也不能创建 readline(否则无终端环境会挂住),
+ * 所以下面的主流程全部用动态 import —— 静态 import 会在自检之前就把菜单模块执行掉。 */
 if (process.argv.includes('--selftest')) {
-  let fail = 0;
-  const eq = (got, want, name) => {
-    if (got === want) console.log('  PASS', name, '=', got);
-    else { console.log('  FAIL', name, 'got', got, 'want', want); fail++; }
-  };
-  eq(fyTag("Jan '27E"), 'FY1', "fyTag Jan'27E");
-  eq(fyTag("Jan '28E"), 'FY2', "fyTag Jan'28E");
-  eq(fyTag("Dec '26E"), 'FY1', "fyTag Dec'26E");
-  eq(fyTag("Dec '27E"), 'FY2', "fyTag Dec'27E");
-  eq(shiftLabel("Jan '27E", 1), "Jan '28E", 'shiftLabel +1');
-  eq(shiftLabel("Dec '27E", -1), "Dec '26E", 'shiftLabel -1');
-  const fake13 = [["28 Jul '26", '9.00', '-', '47', '35', '1', '8.20', '9.85', '0.32', '0.3', '0.02', '21.9', '0.6']];
-  const fake12 = [["28 Jul '26", '12.75', '45', '35', '1', '9.65', '16.45', '1.29', '0.9', '0.11', '15.4', '0.4']];
-  eq(saveEstimateXlsx('TEST-US', 'FY1', [['junk'], ...fake13]), true, 'save 13-col');
-  eq(saveEstimateXlsx('TEST-US', 'FY2', [['junk'], ...fake12]), true, 'save 12-col');
-  const wbBack = XLSX.read(fs.readFileSync(path.join(OUT_DIR, 'TEST-US FY2 Estimate History.xlsx')), { type: 'buffer' });
-  const back = XLSX.utils.sheet_to_json(wbBack.Sheets['TEST-US'], { header: 1 });
-  eq(String(back[2][2]), 'Sharp Cons', 'header col3');
-  eq(String(back[3][1]), '12.75', 'FY2 mean roundtrip');
-  eq(String(back[3][6]), '9.65', 'FY2 low in col7 (Sharp Cons 补位正确)');
-  console.log(fail === 0 ? 'SELFTEST OK' : `SELFTEST ${fail} FAILURES`);
-  process.exit(fail === 0 ? 0 : 1);
+  const { runSelftest } = await import('./lib/selftest.mjs');
+  await runSelftest();   /* async(里面有 await 的断言);自行 process.exit(0/1) */
 }
 
-/* ============ 拉取清单:tickers.txt(一行一个,# 注释),控制台可批量增删或直接弹记事本编辑 ============ */
-const VALID = /^[A-Z.]{1,6}-[A-Z]{2}$/;
-function loadTickers() {
-  try {
-    if (fs.existsSync(TICKERS_FILE)) {
-      const list = fs.readFileSync(TICKERS_FILE, 'utf8').split(/\r?\n/)
-        .map(s => s.replace(/#.*$/, '').trim().toUpperCase())
-        .filter(s => s && VALID.test(s));
-      if (list.length) return [...new Set(list)];
-    }
-    if (fs.existsSync(TICKERS_JSON_OLD)) {   // 兼容旧版 json,自动迁移
-      const list = JSON.parse(fs.readFileSync(TICKERS_JSON_OLD, 'utf8')).tickers;
-      saveTickers(list);
-      return list;
-    }
-  } catch {}
-  return [...TICKERS_DEFAULT];
-}
-function saveTickers(list) {
-  fs.writeFileSync(TICKERS_FILE,
-    '# Price Range Dashboard 拉取清单 — 一行一个代码(如 NVDA-US),# 开头为注释\n' +
-    '# 可直接用记事本编辑保存;也可在运行时的控制台里增删。\n' +
-    list.join('\n') + '\n');
-}
-function printList(list) {
-  console.log('\n当前拉取清单(' + list.length + ' 家):');
-  list.forEach((t, i) => console.log('   ' + String(i + 1).padStart(2) + '. ' + t));
-}
-let TICKERS = loadTickers();
-if (!fs.existsSync(TICKERS_FILE)) saveTickers(TICKERS);
-const RL = (!LOGIN_ONLY && process.stdin.isTTY)
-  ? readline.createInterface({ input: process.stdin, output: process.stdout })
-  : null;   /* 无终端(如定时任务):跳过所有交互 */
-const ask = q => RL
-  ? Promise.race([RL.question(q), new Promise(res => RL.once('close', () => res('')))])
-  : Promise.resolve('');
-/** 清单菜单。round=0 首轮(回车=开始);round>0 完成后(回车=退出,有改动才继续拉)。返回是否继续拉取 */
-async function manageMenu(round) {
-  if (!RL) return round === 0;
-  let changed = false;
-  printList(TICKERS);
-  console.log(round === 0
-    ? '操作:输代码添加(可多个,逗号/空格分隔)| -代码 删除 | edit 编辑清单 | sources 源出台账 | 回车 开始拉取'
-    : '本轮完成。想继续:输代码添加/删除后回车(未过期的公司不会重复拉)| edit / sources 可用 | 直接回车 = 退出');
-  while (true) {
-    const ans = (await ask('> ')).trim();
-    if (!ans) break;
-    if (/^edit$/i.test(ans)) {
-      saveTickers(TICKERS);
-      const before = TICKERS.join(',');
-      exec(`start notepad "${TICKERS_FILE}"`);
-      await ask('已打开记事本(tickers.txt)—— 编辑保存后回到这里按回车刷新清单 ');
-      TICKERS = loadTickers();
-      if (TICKERS.join(',') !== before) changed = true;
-      printList(TICKERS);
-      continue;
-    }
-    if (/^(sources|src)$/i.test(ans)) {
-      if (!fs.existsSync(SOURCES_FILE)) writeSources();
-      exec(`start notepad "${SOURCES_FILE}"`);
-      console.log('已打开源出台账(sources.txt,只读性质——每次拉取自动更新,手改会被覆盖)');
-      continue;
-    }
-    for (let tok of ans.split(/[,,;\s]+/).filter(Boolean)) {
-      tok = tok.toUpperCase();
-      if (tok.startsWith('-')) {
-        const t = tok.slice(1);
-        if (TICKERS.includes(t)) { TICKERS = TICKERS.filter(x => x !== t); changed = true; console.log('  已删除', t); }
-        else console.log('  ⚠ 清单里没有', t);
-      } else if (!VALID.test(tok)) {
-        console.log('  ⚠ 跳过无法识别的代码:', tok, '(格式应如 AMZN-US / ASML-US)');
-      } else if (!TICKERS.includes(tok)) {
-        TICKERS.push(tok); changed = true; console.log('  已添加', tok);
-      } else console.log('  已在清单中:', tok);
-    }
-    saveTickers(TICKERS);
-    printList(TICKERS);
-    console.log(round === 0 ? '继续增删,或回车开始拉取' : '继续增删,或回车开始拉取新增(回车前无改动则退出)');
-  }
-  saveTickers(TICKERS);
-  if (!TICKERS.length) { console.log('清单为空,退出。'); return false; }
-  return round === 0 ? true : changed;
-}
+/* 先把旧版本留下的文件搬到位,再让任何模块去读它们(tickers.txt 尤其不能读空) */
+const { migrateLegacyLayout } = await import('./lib/migrate.mjs');
+const migrateNote = migrateLegacyLayout();
 
-/* ============ 浏览器按需启动:菜单先出现,按回车开始拉取时才弹 Chrome 窗口 ============ */
-let ctx = null, page = null;
-async function ensureBrowser() {
-  if (ctx) return;
-  log('⏳ 正在启动浏览器……会弹出一个 Chrome 窗口用于访问 FactSet(那不是仪表盘),拉取期间请不要关闭或操作它。');
-  ctx = await chromium.launchPersistentContext(PROFILE, {
-    channel: 'chrome', headless: HEADLESS, viewport: { width: 1600, height: 900 },
-    acceptDownloads: true,
-  });
-  page = ctx.pages()[0] || await ctx.newPage();
+const browser = await import('./lib/browser.mjs');   /* ctx 是会被重新赋值的活绑定,必须整体持有 */
+const { log } = await import('./lib/log.mjs');
+const { RL, manageMenu } = await import('./lib/menu.mjs');
+const { runRound } = await import('./lib/round.mjs');
+const { maybeMonthlyBacktest } = await import('./lib/backtest.mjs');
 
-  if (LOGIN_ONLY) {
-    await page.goto(BASE);
-    log('请在打开的浏览器里完成 FactSet 登录,然后关闭浏览器窗口。登录态会被记住。');
-    await page.waitForEvent('close', { timeout: 0 }).catch(() => {});
-    await ctx.close();
-    process.exit(0);
-  }
-
-  /* 自动登录检测:未登录时在同一窗口等你登完,自动继续(无需单独 login 命令) */
-  log('⏳ 正在检查 FactSet 登录状态,请稍等……');
-  await page.goto(BASE + '/workstation/', { waitUntil: 'domcontentloaded' }).catch(() => {});
-  await page.waitForTimeout(5000);
-  if (!/my\.apps\.factset\.com/.test(page.url()) || /login|auth|id\.factset/i.test(page.url())) {
-    log('检测到未登录 —— 请在打开的窗口里登录 FactSet,登录完成后脚本会自动继续……');
-    await page.waitForURL(u => /my\.apps\.factset\.com/.test(u.href) && !/login|auth/i.test(u.href), { timeout: 0 });
-    await page.waitForTimeout(6000);
-  }
-  log('✔ 已登录 FactSet。');
-}
-if (LOGIN_ONLY) await ensureBrowser();   /* --login 模式无需菜单,直接开窗 */
-
-/** 进入某 ticker 的 Estimate History 页,返回 {navFrame, tableFrame} */
-async function openEstimateHistory(ticker) {
-  await page.goto(`${BASE}/workstation/navigator/company-security/estimate-history/${ticker}`, { waitUntil: 'domcontentloaded' });
-  const nav = page.frameLocator('iframe[src*="company-security"]');
-  const tbl = nav.frameLocator('iframe[src*="estimate-reports"]');
-  await tbl.locator('tr').nth(5).waitFor({ timeout: 45000 });   // 等表格渲染
-  await page.waitForTimeout(1500);
-  return { nav, tbl };
-}
-
-/** 从内层 iframe 抓表格 → 二维数组 */
-async function scrapeTable(tbl) {
-  return await tbl.locator('body').evaluate(body => {
-    return [...body.querySelectorAll('tr')].map(r =>
-      [...r.querySelectorAll('th,td')].map(c => c.innerText.trim()));
-  });
-}
-
-/** 在所有 frame 的可见文本里找第一个匹配 */
-async function findTextInFrames(reSource) {
-  for (const f of page.frames()) {
-    try {
-      const m = await f.evaluate(src => {
-        const mm = document.body && document.body.innerText.match(new RegExp(src));
-        return mm ? mm[0] : null;
-      }, reSource);
-      if (m) return m;
-    } catch {}
-  }
-  return null;
-}
-/** 对精确文本的叶子元素派发完整鼠标事件序列(自定义控件需要) */
-async function clickTextInFrames(txt, pickLast) {
-  for (const f of page.frames()) {
-    try {
-      const ok = await f.evaluate(([t, last]) => {
-        const els = [...document.querySelectorAll('*')].filter(e => e.children.length === 0 && e.textContent.trim() === t);
-        if (!els.length) return false;
-        const el = els[last ? els.length - 1 : 0];
-        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
-          el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
-        }
-        return true;
-      }, [txt, !!pickLast]);
-      if (ok) return true;
-    } catch {}
-  }
-  return false;
-}
-/** 财年标签 → FY1/FY2/FY3:按财年末距今的月数判定,绝不靠假设 */
-function fyTag(label) {
-  const MONTHS = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
-  const m = label.match(/([A-Z][a-z]{2}) '(\d{2})E/);
-  if (!m) return null;
-  const end = new Date(2000 + +m[2], MONTHS[m[1]], 0);
-  const months = (end - Date.now()) / 86400000 / 30.44;
-  return months < 12 ? 'FY1' : months < 24 ? 'FY2' : 'FY3';
-}
-function shiftLabel(label, years) {
-  const m = label.match(/([A-Z][a-z]{2}) '(\d{2})E/);
-  return `${m[1]} '${String(+m[2] + years).padStart(2, '0')}E`;
-}
-async function currentPeriod() { return await findTextInFrames("[A-Z][a-z]{2} '\\d{2}E"); }
-async function switchPeriod(label) {
-  const cur = await currentPeriod();
-  if (!cur) return false;
-  if (!(await clickTextInFrames(cur, false))) return false;   // 打开财年下拉
-  await page.waitForTimeout(1200);
-  if (!(await clickTextInFrames(label, true))) { await page.keyboard.press('Escape').catch(() => {}); return false; }
-  await page.waitForTimeout(4500);
-  return (await currentPeriod()) === label;
-}
-
-/** 表格数组 → 仪表盘可识别的 Estimate History xlsx(B2 写入数据源出处,app 解析不受影响) */
-function saveEstimateXlsx(ticker, fyTag, rows, srcInfo) {
-  const HEAD = ['Date','Mean','Sharp Cons','Num of Est','Num Up','Num Down','Low','High','Std Dev','Chg (%)','Chg Amt','P/E (x)','PEG (x)'];
-  const data = rows.filter(r => /^\d{1,2} [A-Z][a-z]{2} '\d{2}$/.test(r[0] || ''))
-    .map(r => r.length === 12 ? [...r.slice(0, 2), '-', ...r.slice(2)] : r);   // 无 Sharp Cons 列时补齐
-  if (!data.length) { log(`  ⚠ ${ticker} ${fyTag}: 未抓到数据行`); return false; }
-  const src = srcInfo || `FactSet Company/Security > Estimates > Estimate History (${ticker})`;
-  const ws = XLSX.utils.aoa_to_sheet([[ticker], ['Estimate History', src], HEAD, ...data]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, ticker.slice(0, 31));
-  const f = path.join(OUT_DIR, `${ticker} ${fyTag} Estimate History.xlsx`);
-  XLSX.writeFile(wb, f);
-  const span = data.length > 1 ? `${data[data.length - 1][0]} ~ ${data[0][0]}` : data[0][0];
-  log(`  ✔ ${path.basename(f)} (${data.length} 行, ${span})`);
-  recordSource(path.basename(f), src);
-  return true;
-}
-
-/** 页面头部抓当前价格 */
-async function scrapePrice() {
-  const t = await findTextInFrames('\\$[\\d,]+\\.\\d{2}');
-  return t ? parseFloat(t.replace(/[$,]/g, '')) : NaN;
-}
-
-/** Charting 日线导出(尽力而为) */
-async function fetchCharting(ticker) {
-  try {
-    await page.goto(`${BASE}/workstation/charting/`, { waitUntil: 'domcontentloaded' });
-    const ch = page.frameLocator('iframe[src*="/charting/"]');
-    const box = ch.locator('input').first();
-    await box.waitFor({ timeout: 30000 });
-    await page.waitForTimeout(3000);
-    await box.click(); await box.fill(ticker); await box.press('Enter');
-    await page.waitForTimeout(6000);
-    // 打开下载菜单(按 title/aria-label 全帧搜索)→ Download data to Excel
-    let opened = false;
-    for (const f of page.frames()) {
-      try {
-        opened = await f.evaluate(() => {
-          const cand = [...document.querySelectorAll('[title],[aria-label]')]
-            .find(e => /download/i.test((e.title || '') + (e.getAttribute('aria-label') || '')));
-          if (!cand) return false;
-          for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
-            cand.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
-          }
-          return true;
-        });
-        if (opened) break;
-      } catch {}
-    }
-    if (!opened) throw new Error('未找到下载按钮');
-    await page.waitForTimeout(1000);
-    const [download] = await Promise.all([
-      page.waitForEvent('download', { timeout: 30000 }),
-      clickTextInFrames('Download data to Excel', false),
-    ]);
-    const f = path.join(OUT_DIR, `${ticker} Daily Charting.xlsx`);
-    await download.saveAs(f);
-    log(`  ✔ ${path.basename(f)}`);
-    recordSource(path.basename(f), `FactSet 页签: Charting > 下载菜单 > Download data to Excel | ${ticker} | 表格: 价格/成交量及图上指标序列(频率与年限按账号保存的图表设置) | ${BASE}/workstation/charting/ | ${new Date().toISOString().slice(0, 16)}Z`);
-    return true;
-  } catch (e) {
-    log(`  ⚠ ${ticker} Charting 自动导出失败(UI 可能改版),请手动导一次:`, e.message.split('\n')[0]);
-    return false;
-  }
-}
-
-// ================= 主流程 =================
-const today = new Date().toISOString().slice(0, 10);
-const FRESH_HOURS = 20;   /* 文件在此小时数内视为最新,跳过重复拉取 */
-function isFresh(file) {
-  try { return (Date.now() - fs.statSync(path.join(OUT_DIR, file)).mtimeMs) < FRESH_HOURS * 3600e3; } catch { return false; }
-}
-/* companies.csv 增量维护:先载入已有行,拉到新价格才覆盖对应公司 */
-const CSV_HEADER = 'ticker,name,currency,price,price_date,eps_fy1_low,eps_fy1_mean,eps_fy1_high,eps_fy2_low,eps_fy2_mean,eps_fy2_high';
-const COMPANIES_CSV = path.join(OUT_DIR, 'companies.csv');
-const priceMap = new Map();
-try {
-  if (fs.existsSync(COMPANIES_CSV)) {
-    for (const line of fs.readFileSync(COMPANIES_CSV, 'utf8').split(/\r?\n/).slice(1)) {
-      const tk = (line.split(',')[0] || '').trim().toUpperCase();
-      if (tk) priceMap.set(tk, line);
-    }
-  }
-} catch {}
-
-async function fetchTicker(ticker, R, adv) {
-  const freshFy1 = isFresh(`${ticker} FY1 Estimate History.xlsx`);
-  const freshFy2 = isFresh(`${ticker} FY2 Estimate History.xlsx`);
-  const freshCh  = isFresh(`${ticker} Daily Charting.xlsx`);
-  if (freshFy1 && freshFy2 && freshCh && priceMap.has(ticker)) {
-    R.FY1 = R.FY2 = R.价格 = R.日线 = true; R.fresh = true;
-    log(`==== ${ticker} ==== 本地数据未过期(<${FRESH_HOURS}h),整体跳过`);
-    adv(4, `${ticker} · 已最新`);
-    return;
-  }
-  log(`==== ${ticker} ====`);
-  if (freshFy1 && freshFy2) {
-    R.FY1 = R.FY2 = true;
-    if (priceMap.has(ticker)) R.价格 = true;
-    log(`  估值数据未过期,跳过 Estimate History 页`);
-    adv(3, `${ticker} · 估值已最新`);
-  } else {
-    adv(0, `${ticker} · 打开 Estimate History…`);
-    const { nav, tbl } = await openEstimateHistory(ticker);
-    const price = await scrapePrice();
-    const p0 = await currentPeriod();
-    const tag0 = (p0 ? fyTag(p0) : null) || 'FY1';
-    const ehUrl = `${BASE}/workstation/navigator/company-security/estimate-history/${ticker}`;
-    const srcOf = lbl => `FactSet 页签: Company/Security > Estimates > Estimate History | 财年 ${lbl} | 表格: 逐月一致预期(Mean/Low/High/上调下调家数/P⁄E) | ${ehUrl} | 抓取于 ${new Date().toISOString().slice(0, 16)}Z`;
-    log(`  当前财年: ${p0}(${tag0})  价格: ${price}`);
-    R[tag0] = saveEstimateXlsx(ticker, tag0, await scrapeTable(tbl), srcOf(p0 || tag0));
-    adv(1, `${ticker} · ${tag0} 完成`);
-    /* 切到"另一个"财年:当前是 FY1 → +1 年;当前是 FY2 → −1 年 */
-    if (p0 && (tag0 === 'FY1' || tag0 === 'FY2')) {
-      const other = shiftLabel(p0, tag0 === 'FY1' ? 1 : -1);
-      adv(0, `${ticker} · 切换财年 → ${other}…`);
-      if (await switchPeriod(other)) {
-        const tblO = nav.frameLocator('iframe[src*="estimate-reports"]');
-        await page.waitForTimeout(1500);
-        R[fyTag(other)] = saveEstimateXlsx(ticker, fyTag(other), await scrapeTable(tblO), srcOf(other));
-      } else {
-        log(`  ⚠ 财年切换到 ${other} 失败,本轮只有 ${tag0};可在 FactSet 手动切换后重跑`);
-      }
-    }
-    adv(1, `${ticker} · 财年数据完成`);
-    if (isFinite(price)) {
-      priceMap.set(ticker, [ticker, ticker, 'USD', price, today, '', '', '', '', '', ''].join(','));
-      R.价格 = true;
-    }
-    adv(1, `${ticker} · 价格记录`);
-  }
-  if (freshCh) {
-    R.日线 = true;
-    log(`  日线未过期,跳过 Charting`);
-    adv(1, `${ticker} · 日线已最新`);
-  } else {
-    adv(0, `${ticker} · Charting 日线导出…`);
-    R.日线 = await fetchCharting(ticker);
-    adv(1, `${ticker} · 完成`);
-  }
-}
-
-let appOpened = false;
-async function runRound() {
-  await ensureBrowser();
-  const results = {};
-  const TOTAL = TICKERS.length * 4;   /* 每家 4 步:当前财年 / 另一财年 / 价格 / 日线 */
-  log(`⏳ 开始拉取 ${TICKERS.length} 家公司的数据(每家最多 4 项),请稍等……本地 ${FRESH_HOURS} 小时内的最新数据会自动跳过。`);
-  let done = 0;
-  const adv = (n, label) => { done = Math.min(done + n, TOTAL); bar(done, TOTAL, label); };
-  for (const ticker of TICKERS) {
-    const R = results[ticker] = { FY1: false, FY2: false, 价格: false, 日线: false };
-    const base = done;
-    try { await fetchTicker(ticker, R, adv); }
-    catch (e) { log(`  ✖ ${ticker} 失败:`, e.message.split('\n')[0]); }
-    if (done < base + 4) adv(base + 4 - done, `${ticker} · 完成`);
-  }
-  barEnd();
-  fs.writeFileSync(COMPANIES_CSV, CSV_HEADER + '\n' + [...priceMap.values()].join('\n') + '\n');
-  log(`✔ companies.csv 已更新(${priceMap.size} 家)`);
-  recordSource('companies.csv', `FactSet 页签: Company/Security > Estimates > Estimate History | 各公司页头实时价格汇总 | ${priceMap.size} 家 | ${BASE}/workstation/navigator/company-security/estimate-history/ | ${new Date().toISOString().slice(0, 16)}Z`);
-  writeSources();
-  log(`✔ 源出清单已更新: ${SOURCES_FILE}`);
-  console.log('\n================ 拉取结果 ================');
-  for (const [tk, R] of Object.entries(results)) {
-    console.log('  ' + tk.padEnd(10)
-      + Object.entries(R).filter(([k]) => k !== 'fresh').map(([k, v]) => (v ? ' ✔' : ' ✖') + k).join('  ')
-      + (R.fresh ? '  (本地最新,未重拉)' : ''));
-  }
-  const misses = Object.values(results).reduce((a, R) => a + ['FY1', 'FY2', '价格', '日线'].filter(k => !R[k]).length, 0);
-  console.log(misses === 0 ? '全部完成 ✔' : `有 ${misses} 项未完成(✖),可重跑或按提示手动补。`);
-  console.log('==========================================');
-  if (!appOpened && process.platform === 'win32' && fs.existsSync(APP_HTML)) {
-    appOpened = true;
-    log('正在打开 Price Range Dashboard……点「重连上次文件夹」→「允许」载入数据(之后再拉取只需在页面里点「重新扫描」)。');
-    exec(`start "" "${APP_HTML}"`);
-  }
-}
+if (LOGIN_ONLY) await browser.ensureBrowser();   /* --login 模式无需菜单,直接开窗 */
 
 /* ============ 轮次循环:拉取 → 回菜单(可加新公司)→ 只拉新增/过期 → 回车退出 ============ */
 console.log('============ FactSet 数据拉取 · Price Range Dashboard ============');
-console.log('  输出目录: ' + OUT_DIR);
+console.log('  输出目录: ' + OUT_DIR + '  (按类型分子目录,日志与台账在 _logs/)');
+console.log('  配置目录: ' + FETCHER_DIR + '  (tickers.txt / markets.txt / .options-url)');
+if (migrateNote) console.log(migrateNote);
 console.log('  流程: 确认清单 → 回车开始 → 自动弹出 Chrome 拉取(请勿操作该窗口)→ 打开仪表盘');
 console.log('==================================================================');
+
+/* 对齐检查放在菜单之前:Assets/ 里有数据、清单里却没登记的标的,每一轮都在被静默跳过,
+ * 而仪表盘扫的是文件夹不是清单——所以它照样显示,只是数据停在几周前。补进清单,并当场告诉你补了谁。 */
+const { reconcileReport } = await import('./lib/reconcile.mjs');
+reconcileReport({ apply: true });
+
+/* 对齐完再写 roster.csv —— 顺序不能反:对齐那一步会把"有数据没登记"的代码补进清单,
+ * 先写就会写出一份少了它们的清单,仪表盘据此把刚补进来的公司藏起来一整轮。
+ * 同时清理落榜满一年的数据(挪进 _to_delete/,不删)。见 lib/roster.mjs 顶部。 */
+const { rosterReport } = await import('./lib/roster.mjs');
+rosterReport({ apply: true });
 let round = 0;
+let btDone = false;   /* 每次启动最多自动跑一轮回测,见循环体末尾 */
 while (true) {
   if (round > 0 || RL) {
     const proceed = await manageMenu(round);
@@ -487,8 +87,12 @@ while (true) {
   }
   await runRound();
   round++;
+  /* 每月一次自动回测,一次启动只触发一回(加了两只票再拉一轮,不该再跑一遍同样的回测)。
+   * 放在抓取之后:回测读的就是刚落盘的这批数据,顺序反了测的是上个月的盘。
+   * 它只出报告 —— 权重要不要动,是看完报告的人决定的,不是这段代码决定的。 */
+  if (!btDone) { btDone = true; maybeMonthlyBacktest(new Date().toISOString().slice(0, 10)); }
   if (!RL) break;   /* 无终端(定时任务):单轮结束 */
 }
 if (RL) RL.close();
-if (ctx) await ctx.close();
+if (browser.ctx) await browser.ctx.close();
 log('已退出。');

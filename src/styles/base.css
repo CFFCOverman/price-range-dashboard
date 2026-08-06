@@ -1,0 +1,146 @@
+:root { color-scheme: light dark; }
+.app {
+  color-scheme: light;
+  --page:         #f9f9f7;
+  --surface-1:    #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary:#52514e;
+  --text-muted:   #898781;
+  --grid:         #e1e0d9;
+  --axis:         #c3c2b7;
+  --border:       rgba(11,11,11,0.10);
+  --series-1:     #2a78d6;
+  --series-2:     #eb6834;
+  --delta-up:     #006300;
+  --delta-down:   #d03b3b;
+  --wash:         rgba(42,120,214,0.10);
+  --wash-strong:  rgba(42,120,214,0.28);
+  --ghost:        rgba(11,11,11,0.045);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .app {
+    color-scheme: dark;
+    --page:         #0d0d0d;
+    --surface-1:    #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary:#c3c2b7;
+    --text-muted:   #898781;
+    --grid:         #2c2c2a;
+    --axis:         #383835;
+    --border:       rgba(255,255,255,0.10);
+    --series-1:     #3987e5;
+    --series-2:     #d95926;
+    --delta-up:     #0ca30c;
+    --delta-down:   #e66767;
+    --wash:         rgba(57,135,229,0.14);
+    --wash-strong:  rgba(57,135,229,0.34);
+    --ghost:        rgba(255,255,255,0.06);
+  }
+}
+:root[data-theme="dark"] .app {
+  color-scheme: dark;
+  --page:         #0d0d0d;
+  --surface-1:    #1a1a19;
+  --text-primary: #ffffff;
+  --text-secondary:#c3c2b7;
+  --text-muted:   #898781;
+  --grid:         #2c2c2a;
+  --axis:         #383835;
+  --border:       rgba(255,255,255,0.10);
+  --series-1:     #3987e5;
+  --series-2:     #d95926;
+  --delta-up:     #0ca30c;
+  --delta-down:   #e66767;
+  --wash:         rgba(57,135,229,0.14);
+  --wash-strong:  rgba(57,135,229,0.34);
+  --ghost:        rgba(255,255,255,0.06);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.app[data-lang="en"] .lz { display: none !important; }
+.app:not([data-lang="en"]) .le { display: none !important; }
+html, body { margin: 0; padding: 0; }
+.app {
+  min-height: 100vh;
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 20px 24px 64px; }
+header.top { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 10px 0 18px; }
+header.top h1 { font-size: 20px; font-weight: 650; margin: 0; }
+header.top .sub { color: var(--text-secondary); font-size: 13px; }
+.spacer { flex: 1; }
+button, .btn {
+  font: inherit; color: var(--text-primary);
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+button:hover, .btn:hover { background: var(--ghost); }
+button.primary { background: var(--series-1); color: #fff; border-color: transparent; }
+button.primary:hover { filter: brightness(1.06); }
+a.dl { color: var(--series-1); text-decoration: none; border-bottom: 1px solid var(--border); }
+.card {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 20px; margin-bottom: 18px;
+}
+.card h2 { font-size: 15px; font-weight: 650; margin: 0 0 4px; }
+.card .hint { color: var(--text-muted); font-size: 12.5px; margin: 0 0 12px; }
+.drop {
+  border: 1.5px dashed var(--axis); border-radius: 10px;
+  padding: 18px; text-align: center; color: var(--text-secondary);
+  transition: background .15s;
+}
+.drop.over { background: var(--wash); border-color: var(--series-1); }
+.drop input { display: none; }
+.loadrow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.status { font-size: 12.5px; color: var(--text-secondary); }
+.status .ok { color: var(--delta-up); font-weight: 600; }
+.status .warn { color: var(--delta-down); font-weight: 600; }
+details.help { margin-top: 12px; font-size: 12.5px; color: var(--text-secondary); }
+details.help summary { cursor: pointer; color: var(--text-primary); font-weight: 600; }
+details.help code {
+  background: var(--ghost); border-radius: 4px; padding: 1px 5px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px;
+}
+details.help table { border-collapse: collapse; margin: 8px 0; }
+details.help th, details.help td { border: 1px solid var(--grid); padding: 4px 9px; text-align: left; }
+/* ---- 窄视口:帮助表格改成堆叠卡片,别让它把整页撑出横向滚动条 ----------------
+ * 病灶:这两张表没有 width,走 shrink-to-fit;可用宽度 = 380 − 48(.wrap) − 42(.card)
+ * = 290px,但它们的 **min-content 是 444px** —— 第三列里 `FE_ESTIMATE("EPS",
+ * "LOW|MEAN|HIGH",…,+1)` 是一个不含空格的 token,word-break 默认不拆,于是那一列
+ * 的最小宽度被这条 code 顶到 ~299px。shrink-to-fit 取 max(min-content, available),
+ * 结果表格死死占住 444px,右边缘伸出视口 109.2px(表格自己不滚,是**整页**在滚)。
+ *
+ * 为什么选"堆叠"而不是给表格套 overflow-x:auto 横滚:
+ *   1. 横滚只是把 444px 藏进一个滚动容器 —— 单元格的 border box 仍然停在视口外,
+ *      "#app 子树里最靠右的元素不伸出视口"这条断言照样红;真正读的时候也还是
+ *      每读一行就要左右拉一次,三列表格横滚的可读性很差;
+ *   2. 堆叠让 code token **整条不折行**地显示(`eps_fy1_low / _mean / _high`、
+ *      `FE_ESTIMATE(...)` 都完整),而第三种方案 table-layout:fixed + code 允许
+ *      任意断行会把标识符从中间劈开(`eps_fy1_lo` / `w / _mean`)—— 一个被截断的
+ *      字段名比排版难看危险得多,它会被照抄进 CSV 表头。
+ *   放弃横滚的代价:失去三列对齐的扫读性。290px 宽下三列各 ~96px 本来也扫不动,
+ *   所以这个代价是名义上的。
+ * 断点 560px:表格 min-content 444 + 48 + 42 = 534px 时刚好放得下,留一点余量。
+ * 桌面宽度完全不进这个 media block —— 1280px 下仍是原样的三列表格。 */
+@media (max-width: 560px) {
+  details.help table, details.help tbody, details.help tr,
+  details.help th, details.help td { display: block; }
+  details.help table { width: 100%; }
+  details.help tr { border: 1px solid var(--grid); border-radius: 6px; margin: 6px 0; padding: 3px 0; }
+  /* 表头三格竖着排是三行没有宾语的标签,纯噪音;第三列的语境改用 ::before 补回来 */
+  details.help tr:first-child { display: none; }
+  details.help th, details.help td { border: 0; padding: 2px 9px; }
+  details.help td:nth-child(3)::before {
+    content: "FactSet:"; color: var(--text-muted); margin-right: 5px;
+  }
+  /* 堆叠之后只剩一条 token 还是放不下:`FE_ESTIMATE("EPS","LOW|MEAN|HIGH",…,+1)`
+   * 单独就有 280px,而单元格净宽只有 270px。用 break-word 而不是 anywhere:
+   * break-word 只在"这一个词单独一行也放不下"时才强拆,列名类短 token
+   * (eps_fy1_low、FG_PE_NTM)一个都不会被劈开;anywhere 还会参与 min-content
+   * 计算,等于允许到处拆。这里被拆的是一条函数调用示例,不是要照抄的列名。 */
+  details.help code { overflow-wrap: break-word; }
+}

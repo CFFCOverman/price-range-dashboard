@@ -1,0 +1,407 @@
+/* ================= i18n(动态字符串;静态文本用 .lz/.le 成对元素) ================= */
+let LANG = 'zh';
+const I18N = {
+  zh: {
+    colCompany: '公司', colPrice: '现价', colLow: '核心下沿', colHigh: '核心上沿', colMid: '中枢空间', colPos: '现价位置(核心区间)',
+    rowNoCalc: '缺少估值分位或 EPS ≤ 0 — 点击行补充', noPx: '缺现价', priceZero: '现价 0%',
+    tipCore: '核心区间 ', tipMid: '中枢 ', tipPrice: '现价 ',
+    tMid: '中枢(基准 EPS × PE 中位)', tCore: '核心区间 P25–P75', tExt: '极端区间 P10–P90', tPe: '当前 NTM PE', tTgt: '分析师目标价(参考)',
+    vsPrice: ' vs 现价', histPct: n => '历史 ' + n + '% 分位',
+    needPct: '请在上方输入该公司的估值分位(P25 / P50 / P75)。', needEps: '缺少 EPS 预测(或基准 EPS ≤ 0),无法测算。',
+    mxCorner: 'EPS \\ 估值', mxMedian: 'PE 中位', mxOpt: '乐观 EPS ', mxBase: '基准 EPS ', mxPes: '悲观 EPS ',
+    mxUnit: cur => '单位:' + cur + ' · 括注为相对现价空间。',
+    mxBaseGap: (v, d) => '⚠ 估值分位与 EPS 可能不是同一个口径:分位库最新一点 × 基准 EPS = ' + fmtN(v)
+      + ',与现价差 ' + fmtPct(d) + ' —— 多半是载入了别的财年的 Estimate History,此时中枢连正负号都可能是反的。',
+    plV10: 'PE P10', plV25: 'PE P25', plV50: 'PE 中位', plV75: 'PE P75', plV90: 'PE P90',
+    plUp: '上行压力', plDown: '下行支撑', plZone: '价位带', plDist: '距现价', plBasis: '依据',
+    plKind: { tech: '技术', val: '估值', opt: '期权' },
+    plKindTip: {
+      tech: '成交/停留密集区 + 前高前低聚集',
+      val: '基准 EPS × 该 P/E 分位反推的价位',
+      opt: '期权未平仓量(OI)在该行权价堆积 —— 到期前有钉住效应,过了到期日即失效',
+    },
+    /* ---- 压力位面板(SPEC 3.5 第二张表,逐字);表头两条见 plTracks / plEvidenceCol ---- */
+    plHorizon: '持有期',
+    plHorizonNote: '长中短期不是三套算法,是同一把尺子的三个刻度:持有期越长,同一个位置的不确定性越大,带子就越宽(√5 : √21 : √63 ≈ 1 : 2 : 3.6)。',
+    plDistU: '距离(σ)',
+    plReach: '本期触及概率',
+    plReachTip: '未来 N 个交易日内**至少触及一次**的概率。它不是「守得住的概率」,也不是「收盘会落在那里的概率」;它对上下对称,不含任何方向判断。',
+    plNoStrength: '这张表不再给「强度分」。旧版那个 0–100 分与后续走势的相关系数是 +0.01 —— 它看上去像信息,实际上不是,所以整列删掉了。',
+    plBounceNote: '**我们不预测支撑位会不会守住。** 用距离匹配的对照测过,在这份数据上测不出任何优于对照的守位能力(最大 z ≈ 1.2,门槛 2)。这一栏的位置只回答「够不够得着」,不回答「挡不挡得住」。',
+    /* 五档,不是四档:'inconclusive'(测不出)是本轮新加的。它和 'falsified' 的区别是
+     * 「样本不够,不能下结论」对「测够了,结论是没有」—— 把前者写成后者是在冒领一个结论。 */
+    plEvidence: { verified: '已验证', pending: '未验证', descriptive: '仅描述',
+      inconclusive: '测不出', falsified: '已证伪' },
+    plEvidenceTip: {
+      /* 旧文案是「该口径通过了样本外校准检验(见 tools/backtest.mjs G 组)」。那句话在 2026-08-06 变成了
+       * 假话:G 组三个持有期的可靠性图最大偏差是 0.2213 / 0.2035 / 0.2648,全部超过预注册门槛 0.10 ——
+       * 它引用的正是那个判它 miscalibrated 三次的 G 组。现在这一档暂时没有任何一条腿够得上。 */
+      verified: '要拿到这一档,SPEC 3.9 预注册的三条判据必须同时过:样本外 Brier skill 过门槛、'
+        + '10 折 CV 下界 > 0、可靠性图 10 桶最大偏差 ≤ 0.10。本轮(2026-08-06)没有任何一条腿够得上,'
+        + '所以这个徽章现在不会出现在表里',
+      pending: '没有通过、或者还没做完样本外检验 —— 只记录,不下结论,也不出百分比',
+      descriptive: '只是把已知的数画出来,不含任何预测主张',
+      inconclusive: '检验做了,但独立样本不够,判不出有没有 —— 这是空白,不是结论',
+      falsified: '检验过,没通过 —— 面板保留它是为了不让同一个错误再被重新发明',
+    },
+    plValRef: '估值参考线(不是压力位)',
+    plValRefTip: 'P/E 分位反推的价位。本仓库自己的回测已判定它系统性偏低(D 组 valAnchorBias:中位偏离为负,方向命中率低于 50%),所以它只画在图上作参照,不进压力/支撑表。',
+    plOptPending: n => 'OI 墙 ' + n + ' 面 · 未验证',
+    plOptPendingTip: '可回测的期权快照只有 4–5 天(其中一天是残链),没有时间序列就没法检验「这堵墙顶住没有」。这一轨只标注,不参与任何统计。',
+    /* 纯技术轨的位置在 reach 降级之后也走「不出百分比」那条分支,而它一面 OI 墙都没有,
+     * 再套 plOptPending 会印出「OI 墙 0 面」这种既不对也看不懂的话 —— 所以单给一条。 */
+    plReachPending: '未过校准检验 · 不出概率',
+    plReachPendingTip: '触及概率这一轨在 2026-08-06 这一轮被降级:样本外 Brier skill 是正的(+0.24 / +0.11 / +0.39),'
+      + '但可靠性图 10 桶的最大偏差是 0.22 / 0.20 / 0.26,全都超过预注册门槛 0.10 —— 也就是「排序大致对,刻度不对」。'
+      + '刻度不对的概率印成百分数会被当成可以下注的数,所以这一列现在只报位置和 σ 距离,不报概率。'
+      /* 2026-08-06 追记:降级之后又搜了一轮参数。搜完仍然过不了,这件事必须写在面板上 ——
+       * 只写「未验证」会被读成「还没顾上测」,而实际情况是测了、搜了、没测出来。 */
+      + '同一天又按 SPEC 3.9 许可的范围搜过一轮参数(σ 窗口 × 密度半衰期 × 再校准系数 c),'
+      + '用嵌套留一票交叉验证诚实评分:配置只在训练票里挑,留出票不参与挑选。两轮六格无一过线,'
+      + '留出折的最大偏差最好也只到 0.13。这条信号在现有数据下测不出效果,不是还没测。',
+    /* SPEC 3.5 的表里给了 plEvidence(徽章文案)却没给这两个**列名**,而同一份规格的第 4 步
+     * 又要求表里有「来源轨 / 证据等级」两列 —— 缺的两条在这里补齐,措辞照列名原样。 */
+    plTracks: '来源轨',
+    plEvidenceCol: '证据等级',
+    plWall: (oi, dte, side) => 'OI ' + oi + ' · ' + dte + '天' + (side === 'C' ? ' 看涨为主' : ' 看跌为主'),
+    plDte: '天',
+    plOptNote: (list, win) => '期权轨:未平仓量(OI)墙,在 60 天以内的到期日里取窗口内 OI 最重的三个 ' + list
+      + ';只看现价 ±' + win + '% 内的行权价。OI 不区分买卖方,只能读作"此处有阻滞",不能拿来推方向;'
+      + 'max pain 仅作磁吸位参考,未计入压力位。到期日一过该轨即失效,需要重新拉取。',
+    plNone: '缺少足够的日线价格序列(至少 40 个交易日),无法定位压力/支撑位。导入 Charting 日线文件后重试。',
+    plNoneUp: '上方在回看窗口内没有明显密集区 —— 属于"上方无套牢盘"的形态,阻力主要来自估值。',
+    plNoneDown: '下方在回看窗口内没有明显密集区 —— 缺少承接盘,回落时容易走急。',
+    plInBand: p => '⚠ 现价正处在一条密集带内(' + p + '),上下都黏,方向意义要等突破后才明确。',
+    plBasisVol: '成交量加权(真实筹码分布)',
+    plBasisTime: '停留时间加权(Charting 导出没有成交量列 —— 在 FactSet 图表里加一条 Volume 序列再导出即可升级为真实筹码分布)',
+    /* 末句「强度为 0–100 相对刻度」随 strength 一起删除:那一列已经不存在,
+     * 留着这句话会让用户在表里找一个找不到的东西。 */
+    plNote: (basis, n, a, b, hl) => '技术轨:' + basis + ',回看 ' + a + ' ~ ' + b + '(' + n + ' 根),权重半衰期 ' + hl + ' 天 —— 越近的成交权重越高。'
+      + '估值轨:基准 EPS × 历史 P/E 分位(只动估值这一个变量,与核心区间不是同一个问题)。',
+    plAxisWt: '密集度',
+    plSwing: n => n + ' 次前高/前低',
+    plTouch: '触及',
+    /* ---- 买入模拟面板(SPEC 3.5 第一张表,逐字) ---- */
+    simTitle: '买入逻辑模拟',
+    simHold: '持有期',
+    simHoldOpt: { short: '短线(5 个交易日)', mid: '中线(21 个交易日)', long: '长线(63 个交易日)' },
+    simPreset: '买入规则',
+    simCustom: '自定义',
+    simRuleHint: '可用条件:`nearSupport(0.5)` 靠近下方支撑 · `nearResistance(0.5)` 靠近上方压力 · `breakResistance()` 向上突破最近压力 · `pullbackPct(20,0.08)` 20 日内回撤 8% · `maCross(20,60)` 均线金叉 · `reachBelow(0.4)` 上方压力本期够不着。用 and 连接。',
+    simRuleErr: p => '看不懂这一段:' + p + ' —— 只认上面列出的条件名和 and',
+    simRun: '立即模拟',
+    simTrig: '触发次数',
+    simWin: '胜率',
+    simAvgRet: '平均收益',
+    simMedRet: '中位收益',
+    simMaxDD: '最大回撤',
+    simMAE: '平均最大不利偏移',
+    simCtrl: (w, z) => '随机入场对照 ' + w + '%(z=' + z + ')',
+    simMaxDDTip: '最大回撤 = 把每一笔按时间顺序接成一条权益曲线后的最大回撤,不是单笔最大亏损',
+    simThin: n => '只触发了 ' + n + ' 次,少于 8 次 —— 胜率不显示,下面只列触发时点。样本这么少时,胜率是噪声,不是结论。',
+    simNoTrig: '这条规则在这段历史里一次都没触发 —— 先把条件放宽,或者换一只票',
+    simCost: bps => '已扣单边 ' + bps + 'bp 往返成本(假设值,不是实测滑点)',
+    simHead: ['入场日', '入场价', '出场日', '出场价', '收益%', '期间最不利%'],
+    simDisclaim: '这里模拟的是「按这条规则在过去一年会怎样」。一年 × 10 只票在统计上非常薄,而且这一年是单边上行行情 —— 任何「一直买就一直赚」的结果,先怀疑是行情不是规则,所以旁边永远并排放着随机入场的对照。',
+    /* ---- 以下五条不在 SPEC 3.5 的表里,是实现这张面板必须有的话;加进来的理由各写一句 ---- */
+    /* 预设/谓词在 rules.js 里只有 id(labelKey),名字必须由词表给,否则下拉里是一串英文标识符 */
+    simPresetName: { supportBuy: '靠近支撑买', breakoutBuy: '突破压力买', dipBuy: '回撤买', trendBuy: '均线金叉买', roomBuy: '上方够不着才买' },
+    simPredName: { nearSupport: '靠近下方支撑', nearResistance: '靠近上方压力', breakResistance: '向上突破最近压力',
+      pullbackPct: '区间内回撤', maCross: '均线金叉', reachBelow: '上方压力本期够不着' },
+    /* SIM_PRESETS 的 exitKey 指向这里:出场规则必须在面板上写出来,否则"持有期"读起来像"最长持有期" */
+    simExit: { hold: '持有到期平仓,不设止盈止损' },
+    /* 三句话里的第三句(SPEC 3.5 第 7 条)。不能用 simThin 顶替:那句话带实际触发次数,是事后的 */
+    simMinTrigNote: '触发次数少于 8 次时,本面板不显示胜率,只列触发时点 —— 小样本的胜率是噪声。',
+    /* 改了下拉却没按按钮时,屏幕上的数还是上一次的。不说这一句,用户会把旧结果当成新规则的结果 */
+    simStale: '⚠ 选项改过了,下面还是上一次的结果 —— 按「立即模拟」重跑。',
+    simIdle: '选好持有期和买入规则,按「立即模拟」跑一次逐根回放。输入不会自动开跑:一次回放要把这只票的每一根日线都重算一遍压力位,量级在几百毫秒,自动跑会把输入框卡死。',
+    mxCoreTip: '这一格就是上方核心区间的端点(悲观 EPS × P25 = 下沿,乐观 EPS × P75 = 上沿)',
+    mxLegBase: '中枢 = 基准 EPS × PE 中位',
+    mxLegCore: '核心区间两端 = 悲观×P25 / 乐观×P75',
+    mxFlag: {
+      swapped: '⚠ 数据源里的 EPS 低/高值是反的,已自动对调后计算(建议核对 Estimate History 列顺序)。',
+      meanOutside: '⚠ 基准 EPS 落在低/高区间之外,矩阵按原样显示未做修正(数据源口径可能不一致)。',
+      lossLow: '⚠ 悲观情景 EPS ≤ 0(预计亏损),P/E 乘数法在亏损下失效,该行已退回用基准 EPS 计算。',
+      lossHigh: '⚠ 乐观情景 EPS ≤ 0,已退回用基准 EPS 计算。',
+    },
+    blMid: '中枢 ', blPrice: '现价 ', peCur: '当前 ',
+    peStats: (n, a, b) => '样本 ' + n + ' 个月(' + a + ' ~ ' + b + ')', peMedianShort: '中位',
+    peShortWin: ' · ⚠ 样本不足 3 年,分位代表性有限', pctOf: n => '(' + n + '% 分位)',
+    /* ---- 价格走势面板(render/candles.js)。这几条文案是面板的一半:
+     *      颜色不会自己声明"我只是描述",没过闸的指标也不会自己说"我没过闸",全靠这里写出来。 ---- */
+    klWinNames: { w60: '近 60 根', w120: '近 120 根', all: '全部' },
+    klRange: (n, a, b, tot) => '画出 ' + n + ' 根,' + a + ' → ' + b
+      + (tot > n ? '(序列共 ' + tot + ' 根,窗口只截了尾部)' : '') + '。',
+    klModeCandle: '每根蜡烛 = 一个交易日的开/高/低/收:影线是当日最高↔最低,实体是开盘↔收盘。'
+      + '实体的红绿**只描述**"当天收盘高于还是低于开盘"这件已经发生的事,不是买卖信号,也不含任何对之后走势的判断。',
+    klModeLine: '这是**收盘折线,不是 K 线**:画蜡烛需要 Open / High / Low 三列,当前导出只有收盘价,'
+      + '缺一列就画不出实体与影线(SPEC 附录 K.2 判为 pending_no_ohlc)。'
+      + '这里不用"昨收当开"之类的近似把它凑成 K 线 —— 那样每一根都是编的,而且看上去完全像真的。'
+      + '导出带上这三列之后,这张图会自动切回蜡烛。',
+    klNoInd: '**图上不画任何技术指标线,也不给判语。**SPEC 附录 K 预注册的 4 个指标(均线状态 / 55 日突破 / RSI14 / 带量突破)'
+      + ' × 3 个前瞻期(5 / 21 / 63 日)共 12 格,在 2026-08-06 这一跑上**全部未过验收闸门** —— '
+      + '卡住的是 C3 折间一致性与 C4 效应量,不是样本量。按 K.8,过不了闸的东西落成素线、无颜色、无徽章、无判语;'
+      + '这里索性一条都不画。把没过线的指标画成绿色,等于把"回测数字说话"这条规矩作废。',
+    klLegUp: '收 ≥ 开', klLegDown: '收 < 开', klLegClose: '收盘价',
+    klLegDesc: '颜色只描述当日开收方向,不是信号',
+    klTipO: '开 ', klTipH: '高 ', klTipL: '低 ', klTipC: '收 ',
+    stTotal: (n, m) => ' 当前:' + n + ' 家公司,' + m + ' 家有历史估值序列。',
+    demoLoaded: '已载入演示数据(数值为示意,非真实行情)。',
+    priceManual: '手动输入', priceSnap: '快照收盘价', priceDerived: '由模型 PE 反推', priceWait: '现价待输入',
+    themeNames: { auto: '主题:自动', light: '主题:亮色', dark: '主题:暗色' },
+    cmpCoreM: '乘数法核心 P25–P75', cmpExtM: '乘数法极端 P10–P90',
+    cmpVol: n => '波动率 ±1σ(1年,' + n + ' 个月价格)', cmpW52: '52周实际区间', cmpTgt: '分析师目标价',
+    cmpNote: '各方法回答的问题不同:乘数法是"值多少",波动率是"一年通常晃多远",52周是"实际走过哪里",目标价是"卖方怎么看"。多条带子重叠的价位,信息量最高。',
+    fsUnsupported: '此环境不支持文件夹访问(需 Chrome/Edge 本地打开);请继续用拖拽导入。',
+    fsScanned: (dir, n) => '已扫描文件夹 "' + dir + '":' + n + ' 个数据文件,按修改时间从旧到新导入(最新生效)。',
+    fsNoFiles: dir => '文件夹 "' + dir + '" 里没有 csv/xlsx 文件。',
+    fsDenied: '未获得文件夹读取权限。',
+    chartMsg: (tk, n, a, b) => tk + ' 价格序列 ' + n + ' 个点(' + a + ' ~ ' + b + ',用于波动率区间)',
+    chartLtm: v => ';当前 LTM PE ' + v + 'x(LTM 序列是趋势性口径,不用于分位测算,仅参考)',
+    chartNoTicker: 'Charting 文件无法确定属于哪家公司 — 请把 ticker 写进文件名(如 "NVDA-US Charting.xlsx")后重导',
+    psNoTicker: 'Price Summary 无法确定属于哪家公司 — 请把 ticker 写进文件名后重导',
+    psMsg: (tk, p) => tk + ' 最新价格 ' + p + '(Price Summary)',
+    dirOptions: [['+1', '明显利多'], ['+0.5', '偏多'], ['0', '中性/未评估'], ['-0.5', '偏空'], ['-1', '明显利空']],
+    dirChipRev: (u, d) => '修正动量 ' + u + '↑/' + d + '↓', dirChipVal: p => '估值位 ' + p + '% 分位',
+    dirChipTech: (a, b) => '技术 ' + (a ? 'MA50上' : 'MA50下') + '·' + (b ? 'MA200上' : 'MA200下'),
+    dirChipNA: '(缺数据)',
+    dirAutoOpt: v => '自动·依市场数据 (' + v + ')',
+    dirWhyMacro: (b, up, vp, rsym, r3) => '宏观 ' + b + (up ? '>MA200' : '<MA200') + ' · 波动' + vp + '%分位' + (rsym && isFinite(r3) ? ' · ' + rsym + ' 3月' + (r3 >= 0 ? '+' : '') + r3.toFixed(1) + '%' : ''),
+    dirWhyInd: (s, b, rs, ma) => '行业 ' + s + '−' + b + ' 3月' + (isFinite(rs) ? (rs >= 0 ? '+' : '') + rs.toFixed(1) + '%' : '—') + ' · ' + (ma ? '>MA200' : '<MA200'),
+    dirWhyLiq: (s, t3, ma) => '流动性 ' + s + ' 3月' + (isFinite(t3) ? (t3 >= 0 ? '+' : '') + t3.toFixed(1) + '%' : '—') + ' · ' + (ma ? '>MA200' : '<MA200'),
+    mktMsg: (sym, role, n) => '市场序列 ' + sym + '(' + role + ',' + n + ' 行)已载入',
+    mktRole: { BENCH: '基准', SECTOR: '行业', CREDIT: '信用', RATES: '利率' },
+    dirChipPeers: items => '同行修正 ' + items.slice(0, 4).map(x => x.tk.split('-')[0] + (x.sc >= 0 ? '+' : '') + x.sc.toFixed(1)).join(' ') + (items.length > 4 ? ' 等' + items.length + '家' : ''),
+    dirPeersPh: '如 AMD-US, AVGO-US(空=其他全部)',
+    dirWhyTgt: (chg, buy) => '目标价 3月' + (isFinite(chg) ? (chg >= 0 ? '+' : '') + chg.toFixed(1) + '%' : '—') + ' · 买入类占比' + (isFinite(buy) ? buy.toFixed(0) + '%' : '—'),
+    dirWhySi: (pct, days, hasTrend) => '空头 ' + pct + '%流通盘·回补' + (isFinite(days) ? days : '—') + '天' + (hasTrend ? '' : '(单点,按水平轻打分)'),
+    dirWhyNews: (p, n, tot, prev) => '新闻30日 利多' + p + '/利空' + n + '(共' + tot + '条' + (prev ? ',前60日' + prev + '条' : '') + ')',
+    dirWhyNewsQuiet: prev => '近30日无新闻(前60日 ' + prev + ' 条)',
+    tgtMsg: (tk, n, tgt) => tk + ' 目标价/评级月度历史 ' + n + ' 个点(最新目标价均值 ' + fmtN(tgt) + ')',
+    tgtNoTicker: '目标价历史无法归属公司(请先导入该公司的估值/快照文件)',
+    mSiRows: n => ':空头持仓记录 ' + n + ' 行',
+    mNewsRows: (tk, n) => ':' + tk + ' 新闻 ' + n + ' 条',
+    mNewsNoTicker: ':新闻文件未能归属到清单里的公司(文件名需形如 "NVDA-US News.csv")',
+    mOptRows: (tk, n, e) => ':' + tk + ' 期权链 ' + n + ' 个行权价 / ' + e + ' 个到期日',
+    mOptNoTicker: ':期权文件未能归属到清单里的公司(文件名需形如 "NVDA-US Options.csv")',
+    dirPUp: 'P(6个月后上涨)', dirPUp10: 'P(涨超 +10%)', dirPDn10: 'P(跌超 -10%)', dirMedian: '终点中位数',
+    dirWeights: (b, m, u) => '情景权重 熊 ' + b + '% / 中 ' + m + '% / 牛 ' + u + '%',
+    dirNote: (lo, md, hi) => '情景锚:熊 ' + lo + '(P10×悲观EPS)· 中 ' + md + '(现价,零重估)· 牛 ' + hi + '(PE中位×FY2均值)。自动信号来自已导入数据;三个手动维度默认中性,鼠标悬停标签查看 FactSet 取数指引。财报日前后请重新评估。不构成投资建议。',
+    dirNeedData: '需要现价与价格历史(日线/月度均可)才能计算方向概率。',
+    mEmptyFile: ':空文件或无法解析', mHistRows: n => ':读入 ' + n + ' 行历史估值', mCoRows: n => ':读入 ' + n + ' 家公司',
+    mRosterRows: n => ':拉取清单 ' + n + ' 家(清单外的公司默认不显示)',
+    ovHidden: n => '另有 ' + n + ' 家不在拉取清单里,已隐藏 —— 点这里展开',
+    ovHiddenOn: n => '正在显示全部,其中 ' + n + ' 家不在拉取清单里(数据可能已停止更新)—— 点这里收起',
+    mBadCols: ':无法识别列名(需要 companies 或 history 模板格式)',
+    mXlsxNone: ':未识别(需含 "Earnings Per Share" / "Estimate History" / Snapshot "Previous Close" 之一)',
+    mNeedNet: '无法加载 xlsx 解析库(首次解析 xlsx 需联网)', mParseFail: ':解析失败 ',
+    gaapNote: (a, b) => ';注意 GAAP ' + a + ' 与 Non-GAAP ' + b + ' 差异较大,请确认与 PE 口径一致',
+    derivedNote: (p, pe) => ';现价 ≈ ' + p + '(FY1 PE ' + pe + 'x 反推,可手动修正)',
+    peRefNote: s => ';历史年度 PE 参考:' + s + '(点数太少,分位仍需月度序列或手动输入)',
+    estHead: (tk, d) => tk + ' 一致预期(' + d + ')EPS 低 ', estMid: ' / 均 ', estHigh: ' / 高 ',
+    peSeries: (n, a, b) => ';P/E 月度序列 ' + n + ' 个点(' + a + ' ~ ' + b + ')',
+    truncNote: n => '【原始 ' + n + ' 点,仅采用最近 24 个月:Estimate History 跟踪固定财年,早期 P/E 是"当时股价 ÷ 多年后盈利",与近期口径不可比;要用真正的多年估值带,请导出 NTM PE 月度序列(history.csv)】',
+    shortWin: ',窗口较短,分位代表性有限', keepLonger: n => ';已有更长的 PE 序列(' + n + ' 点),未覆盖',
+    estFarSkip: fy => ';第 ' + fy + ' 个财年,只借它的价格序列 —— EPS 与 P/E 分位仍以 FY1 为准(混用会让中枢反号)',
+    jumpNote: p => ';注意:最新一致预期较上月变动 ' + p + ',可能含一次性损益,请核对口径',
+    snapHead: tk => tk + ' 快照:现价 ', snapClose: '(收盘)', snapW52: ' · 52周 ', snapTgt: ' · 分析师目标价 ',
+    snapPeRef: s => ';年度 PE 参考:' + s,
+    modelEpsNote: '(EPS 高低值缺失时用均值代替,可在详情里补)',
+  },
+  en: {
+    colCompany: 'Company', colPrice: 'Price', colLow: 'Core low', colHigh: 'Core high', colMid: 'Mid upside', colPos: 'Position in core range',
+    rowNoCalc: 'Missing PE percentiles or EPS ≤ 0 — click row to fill in', noPx: 'no price', priceZero: 'Price 0%',
+    tipCore: 'Core ', tipMid: 'Mid ', tipPrice: 'Price ',
+    tMid: 'Mid (base EPS × median PE)', tCore: 'Core range P25–P75', tExt: 'Extreme range P10–P90', tPe: 'Current NTM P/E', tTgt: 'Analyst target (ref)',
+    vsPrice: ' vs price', histPct: n => n + '% of history',
+    needPct: 'Enter PE percentiles (P25 / P50 / P75) above.', needEps: 'No EPS forecast (or base EPS ≤ 0) — cannot compute.',
+    mxCorner: 'EPS \\ multiple', mxMedian: 'Median PE', mxOpt: 'High EPS ', mxBase: 'Base EPS ', mxPes: 'Low EPS ',
+    mxUnit: cur => 'Unit: ' + cur + ' · sub-notes are % vs current price.',
+    mxBaseGap: (v, d) => '⚠ The P/E percentiles and the EPS may be on different bases: latest percentile point × base EPS = ' + fmtN(v)
+      + ', which is ' + fmtPct(d) + ' away from the current price — usually an Estimate History for a different fiscal year; the mid can even have the wrong sign.',
+    plV10: 'PE P10', plV25: 'PE P25', plV50: 'Median PE', plV75: 'PE P75', plV90: 'PE P90',
+    plUp: 'Upside pressure', plDown: 'Downside support', plZone: 'Zone', plDist: 'vs price', plBasis: 'Basis',
+    plKind: { tech: 'Technical', val: 'Valuation', opt: 'Options' },
+    plKindTip: {
+      tech: 'Traded-volume / time-at-price congestion plus clustered swing highs and lows',
+      val: 'Price implied by base EPS × this P/E percentile',
+      opt: 'Open interest piled up at this strike — it pins price until expiry, then stops existing',
+    },
+    plHorizon: 'Horizon',
+    plHorizonNote: 'Long/mid/short are not three algorithms but three notches on one ruler: the longer the horizon, the wider the band around the same level (√5 : √21 : √63 ≈ 1 : 2 : 3.6).',
+    plDistU: 'Distance (σ)',
+    plReach: 'Touch probability',
+    plReachTip: 'Probability of touching this level **at least once** within the next N sessions. It is not the probability that the level holds, nor that price closes there; it is symmetric and carries no directional view.',
+    plNoStrength: 'This table no longer shows a "strength" score. The old 0–100 score correlated +0.01 with what happened next — it looked like information and wasn\'t, so the column is gone.',
+    plBounceNote: '**We do not predict whether a level will hold.** Tested against distance-matched controls, no track beat control on any horizon (max z ≈ 1.2 against a threshold of 2). This table answers "can price reach it," not "will it stop there."',
+    plEvidence: { verified: 'Verified', pending: 'Unverified', descriptive: 'Descriptive',
+      inconclusive: 'Inconclusive', falsified: 'Falsified' },
+    plEvidenceTip: {
+      verified: 'Earning this grade requires all three criteria pre-registered in SPEC 3.9 at once: '
+        + 'out-of-sample Brier skill above threshold, 10-fold CV lower bound > 0, and reliability-diagram '
+        + 'max deviation ≤ 0.10 across the 10 buckets. As of 2026-08-06 no track clears all three, '
+        + 'so this badge does not currently appear in the table',
+      pending: 'Either failed out-of-sample testing or not yet tested — recorded, not concluded, no percentage shown',
+      descriptive: 'Just plotting known numbers; makes no predictive claim',
+      inconclusive: 'The test ran but there were too few independent observations to tell either way — a blank, not a result',
+      falsified: 'Tested and failed — kept visible so the same idea does not get reinvented',
+    },
+    plValRef: 'Valuation reference (not a level)',
+    plValRefTip: 'Prices implied by P/E percentiles. This repo\'s own backtest flagged them as systematically low (group D valAnchorBias: negative median deviation, directional hit rate under 50%), so they are drawn as reference only and never enter the level tables.',
+    plOptPending: n => n + ' OI wall(s) · unverified',
+    plOptPendingTip: 'Only 4–5 usable option snapshots exist (one of them a partial chain). Without a time series there is no way to test whether a wall held. This track annotates only; it enters no statistics.',
+    plReachPending: 'Failed calibration · no probability',
+    plReachPendingTip: 'The touch-probability track was downgraded in the 2026-08-06 round: out-of-sample Brier skill is '
+      + 'positive (+0.24 / +0.11 / +0.39), but the reliability diagram\'s max deviation across 10 buckets is '
+      + '0.22 / 0.20 / 0.26, all above the pre-registered threshold of 0.10 — the ranking is roughly right, the scale is not. '
+      + 'A miscalibrated probability printed as a percentage reads like a number you can bet on, so this column now '
+      + 'reports only the level and its σ distance. '
+      + 'The same day, a parameter search was run over the range SPEC 3.9 permits (σ window × density half-life × '
+      + 'recalibration coefficient c), scored by nested leave-one-ticker-out cross-validation: configurations are '
+      + 'chosen inside the training tickers only, and the held-out ticker takes no part in the choice. Zero of six '
+      + 'cells across two rounds cleared the gates; the best held-out max deviation was still 0.13. '
+      + 'This signal cannot be shown to work on the data we have — not "not measured yet".',
+    plTracks: 'Source track',
+    plEvidenceCol: 'Evidence',
+    plWall: (oi, dte, side) => 'OI ' + oi + ' · ' + dte + 'd' + (side === 'C' ? ' call-heavy' : ' put-heavy'),
+    plDte: 'd',
+    plOptNote: (list, win) => 'Options track: open-interest walls for the three expiries within 60 days that carry the most open interest in the window ' + list
+      + '; strikes within ±' + win + '% of spot only. OI does not distinguish buyers from sellers, so read it as friction at that price, never as direction; '
+      + 'max pain is shown as a magnet reference only and is not scored as a level. The whole track expires with the contracts — re-fetch after each expiry.',
+    plNone: 'Not enough daily price history (need at least 40 sessions) to locate pressure levels. Import a Charting daily file and retry.',
+    plNoneUp: 'No meaningful congestion above within the lookback — little trapped supply overhead; resistance is mostly valuation-driven.',
+    plNoneDown: 'No meaningful congestion below within the lookback — thin support, so pullbacks can move fast.',
+    plInBand: p => '⚠ Price is currently inside a congestion zone (' + p + '), so it is sticky in both directions — direction only becomes meaningful after a breakout.',
+    plBasisVol: 'volume-weighted (true volume-at-price)',
+    plBasisTime: 'time-at-price weighted (the Charting export has no Volume column — add a Volume series in the FactSet chart and re-export to upgrade to true volume-at-price)',
+    plNote: (basis, n, a, b, hl) => 'Technical track: ' + basis + ', lookback ' + a + ' ~ ' + b + ' (' + n + ' bars), ' + hl + '-day weight half-life so recent trade counts more. '
+      + 'Valuation track: base EPS × historical P/E percentiles (one variable only — a different question from the core range).',
+    plAxisWt: 'Density',
+    plSwing: n => n + ' swing highs/lows',
+    plTouch: 'touches',
+    /* ---- Buy-rule simulation panel (SPEC 3.5 first table, verbatim) ---- */
+    simTitle: 'Buy-rule simulation',
+    simHold: 'Holding period',
+    simHoldOpt: { short: 'Short (5 sessions)', mid: 'Mid (21 sessions)', long: 'Long (63 sessions)' },
+    simPreset: 'Buy rule',
+    simCustom: 'Custom',
+    simRuleHint: 'Available conditions: `nearSupport(0.5)` near support below · `nearResistance(0.5)` near resistance above · `breakResistance()` breaks the nearest resistance · `pullbackPct(20,0.08)` 8% drawdown within 20 sessions · `maCross(20,60)` golden cross · `reachBelow(0.4)` resistance above is out of reach this period. Join with `and`.',
+    simRuleErr: p => "Can't parse: " + p + ' — only the condition names listed above and `and` are accepted',
+    simRun: 'Run simulation',
+    simTrig: 'Triggers',
+    simWin: 'Win rate',
+    simAvgRet: 'Mean return',
+    simMedRet: 'Median return',
+    simMaxDD: 'Max drawdown',
+    simMAE: 'Mean adverse excursion',
+    simCtrl: (w, z) => 'Random-entry control ' + w + '% (z=' + z + ')',
+    simMaxDDTip: 'Max drawdown of the equity curve formed by chaining trades in time order — not the worst single trade',
+    simThin: n => 'Only ' + n + ' triggers (fewer than 8) — win rate withheld. Below are the trigger points. At this sample size a win rate is noise, not a finding.',
+    simNoTrig: 'This rule never triggered over the available history — loosen the condition or pick another ticker',
+    simCost: bps => 'Includes ' + bps + 'bp round-trip cost (an assumption, not measured slippage)',
+    simHead: ['Entry', 'Entry px', 'Exit', 'Exit px', 'Return %', 'Worst %'],
+    simDisclaim: 'This replays "what this rule would have done over the past year." One year × 10 tickers is statistically thin, and that year was a one-way bull market — treat any "always buy, always win" result as the market, not the rule. That is why a random-entry control sits next to every number.',
+    /* ---- the five below are not in the SPEC 3.5 table; each is required to render the panel ---- */
+    simPresetName: { supportBuy: 'Buy near support', breakoutBuy: 'Buy the breakout', dipBuy: 'Buy the dip', trendBuy: 'Buy the golden cross', roomBuy: 'Buy only when there is room' },
+    simPredName: { nearSupport: 'near support below', nearResistance: 'near resistance above', breakResistance: 'breaks the nearest resistance',
+      pullbackPct: 'drawdown within window', maCross: 'golden cross', reachBelow: 'resistance above out of reach' },
+    simExit: { hold: 'Exit at the end of the holding period; no stop-loss, no take-profit' },
+    simMinTrigNote: 'With fewer than 8 triggers this panel withholds the win rate and only lists the trigger points — a small-sample win rate is noise.',
+    simStale: '⚠ Options changed; the numbers below are still the previous run — press "Run simulation" again.',
+    simIdle: 'Pick a holding period and a buy rule, then press "Run simulation" for a bar-by-bar replay. Typing does not start a run: one replay recomputes every pressure level on every daily bar of this ticker, which takes a few hundred milliseconds and would freeze the input box.',
+    mxCoreTip: 'This cell is an endpoint of the core range above (low EPS × P25 = floor, high EPS × P75 = ceiling)',
+    mxLegBase: 'Mid = base EPS × median PE',
+    mxLegCore: 'Core range ends = low×P25 / high×P75',
+    mxFlag: {
+      swapped: '⚠ Low/high EPS arrived inverted from the source and were swapped before computing (check Estimate History column order).',
+      meanOutside: '⚠ Base EPS falls outside the low/high band; shown as-is with no correction (source definitions may differ).',
+      lossLow: '⚠ Low-case EPS ≤ 0 (expected loss). P/E multiples break down on losses, so that row falls back to base EPS.',
+      lossHigh: '⚠ High-case EPS ≤ 0 — fell back to base EPS.',
+    },
+    blMid: 'Mid ', blPrice: 'Price ', peCur: 'Now ',
+    peStats: (n, a, b) => n + ' monthly obs (' + a + ' ~ ' + b + ')', peMedianShort: 'Median',
+    peShortWin: ' · ⚠ under 3y of data — percentiles are tentative', pctOf: n => ' (' + n + '%ile)',
+    klWinNames: { w60: 'Last 60', w120: 'Last 120', all: 'All' },
+    klRange: (n, a, b, tot) => n + ' bars drawn, ' + a + ' → ' + b
+      + (tot > n ? ' (series has ' + tot + '; the window shows only its tail)' : '') + '.',
+    klModeCandle: 'One candle = one trading day: the wick spans the day\'s high and low, the body spans open to close. '
+      + 'The red/green body **only describes** whether that day closed above or below its own open — a statement about what already happened. '
+      + 'It is not a buy/sell signal and carries no claim about what comes next.',
+    klModeLine: 'This is a **close-only line, not a candlestick chart**: candles need Open / High / Low columns and the current export has close only, '
+      + 'so there are no bodies and no wicks to draw (SPEC appendix K.2 calls this pending_no_ohlc). '
+      + 'No "yesterday\'s close as today\'s open" approximation is used to fake candles — every bar would then be invented, and invented bars look exactly like real ones. '
+      + 'Once the export carries those three columns this panel switches to candles on its own.',
+    klNoInd: '**No indicator line is drawn here, and no verdict is given.** The four indicators pre-registered in SPEC appendix K '
+      + '(MA state / 55-day breakout / RSI14 / volume-confirmed breakout) × three horizons (5 / 21 / 63 days) make 12 cells, '
+      + 'and on the 2026-08-06 run **all 12 failed the acceptance gate** — they fail C3 (fold-to-fold consistency) and C4 (effect size), not sample size. '
+      + 'Per K.8 anything that fails the gate is drawn as a plain line with no colour, no badge and no verdict; this panel simply draws none of them. '
+      + 'Painting a failed indicator green would void the rule that the backtest numbers decide.',
+    klLegUp: 'close ≥ open', klLegDown: 'close < open', klLegClose: 'Close',
+    klLegDesc: 'colour only describes that day\'s open-to-close direction — not a signal',
+    klTipO: 'O ', klTipH: 'H ', klTipL: 'L ', klTipC: 'C ',
+    stTotal: (n, m) => ' Now: ' + n + ' companies, ' + m + ' with PE history.',
+    demoLoaded: 'Demo data loaded (illustrative, not real quotes).',
+    priceManual: 'manual', priceSnap: 'snapshot close', priceDerived: 'derived from model PE', priceWait: 'price needed',
+    themeNames: { auto: 'Theme: Auto', light: 'Theme: Light', dark: 'Theme: Dark' },
+    cmpCoreM: 'Multiples core P25–P75', cmpExtM: 'Multiples extreme P10–P90',
+    cmpVol: n => 'Volatility ±1σ (1y, ' + n + ' monthly prices)', cmpW52: '52-week actual range', cmpTgt: 'Analyst target',
+    cmpNote: 'Each method answers a different question: multiples = what it is worth; volatility = how far a year typically swings; 52-week = where it actually traded; target = the sell side\'s view. Prices where several bands overlap carry the most information.',
+    fsUnsupported: 'Folder access is not available here (needs Chrome/Edge opening the local file); keep using drag & drop.',
+    fsScanned: (dir, n) => 'Scanned folder "' + dir + '": ' + n + ' data files, imported oldest→newest (latest wins).',
+    fsNoFiles: dir => 'No csv/xlsx files in folder "' + dir + '".',
+    fsDenied: 'Folder read permission was not granted.',
+    chartMsg: (tk, n, a, b) => tk + ' price series: ' + n + ' points (' + a + ' ~ ' + b + ', feeds the volatility band)',
+    chartLtm: v => '; current LTM PE ' + v + 'x (LTM series is trend-drifting — reference only, not used for percentiles)',
+    chartNoTicker: 'Cannot tell which company this Charting file belongs to — put the ticker in the filename (e.g. "NVDA-US Charting.xlsx") and re-import',
+    psNoTicker: 'Cannot tell which company this Price Summary belongs to — put the ticker in the filename and re-import',
+    psMsg: (tk, p) => tk + ' latest price ' + p + ' (Price Summary)',
+    dirOptions: [['+1', 'clearly bullish'], ['+0.5', 'lean bullish'], ['0', 'neutral / not assessed'], ['-0.5', 'lean bearish'], ['-1', 'clearly bearish']],
+    dirChipRev: (u, d) => 'Revisions ' + u + '↑/' + d + '↓', dirChipVal: p => 'Valuation ' + p + '%ile',
+    dirChipTech: (a, b) => 'Tech ' + (a ? '>MA50' : '<MA50') + '·' + (b ? '>MA200' : '<MA200'),
+    dirChipNA: '(no data)',
+    dirAutoOpt: v => 'Auto · from market data (' + v + ')',
+    dirWhyMacro: (b, up, vp, rsym, r3) => 'Macro ' + b + (up ? '>MA200' : '<MA200') + ' · vol ' + vp + '%ile' + (rsym && isFinite(r3) ? ' · ' + rsym + ' 3m ' + (r3 >= 0 ? '+' : '') + r3.toFixed(1) + '%' : ''),
+    dirWhyInd: (s, b, rs, ma) => 'Industry ' + s + '−' + b + ' 3m ' + (isFinite(rs) ? (rs >= 0 ? '+' : '') + rs.toFixed(1) + '%' : '—') + ' · ' + (ma ? '>MA200' : '<MA200'),
+    dirWhyLiq: (s, t3, ma) => 'Liquidity ' + s + ' 3m ' + (isFinite(t3) ? (t3 >= 0 ? '+' : '') + t3.toFixed(1) + '%' : '—') + ' · ' + (ma ? '>MA200' : '<MA200'),
+    mktMsg: (sym, role, n) => 'Market series ' + sym + ' (' + role + ', ' + n + ' rows) loaded',
+    mktRole: { BENCH: 'benchmark', SECTOR: 'sector', CREDIT: 'credit', RATES: 'rates' },
+    dirChipPeers: items => 'Peer revisions ' + items.slice(0, 4).map(x => x.tk.split('-')[0] + (x.sc >= 0 ? '+' : '') + x.sc.toFixed(1)).join(' ') + (items.length > 4 ? ' +' + (items.length - 4) : ''),
+    dirPeersPh: 'e.g. AMD-US, AVGO-US (blank = all others)',
+    dirWhyTgt: (chg, buy) => 'Target 3m ' + (isFinite(chg) ? (chg >= 0 ? '+' : '') + chg.toFixed(1) + '%' : '—') + ' · buy-class ' + (isFinite(buy) ? buy.toFixed(0) + '%' : '—'),
+    dirWhySi: (pct, days, hasTrend) => 'Short int ' + pct + '% float · ' + (isFinite(days) ? days : '—') + 'd to cover' + (hasTrend ? '' : ' (single point)'),
+    dirWhyNews: (p, n, tot, prev) => 'News 30d ' + p + '+ / ' + n + '− (' + tot + ' items' + (prev ? ', prior 60d ' + prev : '') + ')',
+    dirWhyNewsQuiet: prev => 'No news in 30d (prior 60d: ' + prev + ')',
+    tgtMsg: (tk, n, tgt) => tk + ' targets/ratings history: ' + n + ' monthly points (latest mean target ' + fmtN(tgt) + ')',
+    tgtNoTicker: 'Targets history could not be attributed (import the company\'s estimate/snapshot file first)',
+    mSiRows: n => ': ' + n + ' short-interest rows',
+    mNewsRows: (tk, n) => ': ' + tk + ' — ' + n + ' headlines',
+    mNewsNoTicker: ': news file could not be matched to a company (name it like "NVDA-US News.csv")',
+    mOptRows: (tk, n, e) => ': ' + tk + ' — ' + n + ' strikes across ' + e + ' expiries',
+    mOptNoTicker: ': options file could not be matched to a company (name it like "NVDA-US Options.csv")',
+    dirPUp: 'P(up in 6 months)', dirPUp10: 'P(gain > +10%)', dirPDn10: 'P(loss > -10%)', dirMedian: 'Median endpoint',
+    dirWeights: (b, m, u) => 'Scenario weights: bear ' + b + '% / base ' + m + '% / bull ' + u + '%',
+    dirNote: (lo, md, hi) => 'Anchors: bear ' + lo + ' (P10 × low EPS) · base ' + md + ' (current price, no repricing) · bull ' + hi + ' (median PE × FY2 mean). Auto signals come from imported data; the three manual factors default to neutral — hover their labels for FactSet sourcing hints. Re-assess around earnings. Not investment advice.',
+    dirNeedData: 'Needs current price and a price history (daily or monthly) to compute direction probability.',
+    mEmptyFile: ': empty or unparsable', mHistRows: n => ': read ' + n + ' PE history rows', mCoRows: n => ': read ' + n + ' companies',
+    mRosterRows: n => ': fetch roster — ' + n + ' companies (anything off-roster is hidden by default)',
+    ovHidden: n => n + ' more not on the fetch roster, hidden — click to show',
+    ovHiddenOn: n => 'Showing all; ' + n + ' of them are off the fetch roster (data may have stopped updating) — click to hide',
+    mBadCols: ': unrecognized columns (need the companies or history template)',
+    mXlsxNone: ': unrecognized (needs "Earnings Per Share" / "Estimate History" / snapshot "Previous Close")',
+    mNeedNet: 'could not load xlsx parser (network needed on first xlsx)', mParseFail: ': parse failed ',
+    gaapNote: (a, b) => '; note: GAAP ' + a + ' vs non-GAAP ' + b + ' differ materially — check consistency with the PE series',
+    derivedNote: (p, pe) => '; price ≈ ' + p + ' (derived from FY1 PE ' + pe + 'x, adjustable)',
+    peRefNote: s => '; annual PE refs: ' + s + ' (too few points — percentiles still need a monthly series or manual input)',
+    estHead: (tk, d) => tk + ' consensus (' + d + ') EPS low ', estMid: ' / mean ', estHigh: ' / high ',
+    peSeries: (n, a, b) => '; P/E monthly series: ' + n + ' points (' + a + ' ~ ' + b + ')',
+    truncNote: n => ' [of ' + n + ' raw points only the last 24 months are used: Estimate History tracks a fixed fiscal year, so early P/E points price earnings many years out and are not comparable; for a true multi-year band export an NTM PE monthly series (history.csv)]',
+    shortWin: ', short window — percentiles are tentative', keepLonger: n => '; kept the existing longer PE series (' + n + ' points)',
+    estFarSkip: fy => '; fiscal year ' + fy + ' — only its price series is used; EPS and P/E percentiles still come from FY1 (mixing them can flip the sign of the mid)',
+    jumpNote: p => '; note: latest consensus moved ' + p + ' vs prior month — possibly one-off items, check the basis',
+    snapHead: tk => tk + ' snapshot: price ', snapClose: ' (close)', snapW52: ' · 52wk ', snapTgt: ' · analyst target ',
+    snapPeRef: s => '; annual PE refs: ' + s,
+    modelEpsNote: ' (missing EPS low/high fall back to the mean — editable in detail)',
+  },
+};
+const t = k => (I18N[LANG][k] !== undefined ? I18N[LANG][k] : I18N.zh[k]);
+

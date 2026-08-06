@@ -1,0 +1,59 @@
+/* ================= 买入逻辑模拟面板 =================
+ * 排版上只有两条非商量不可的规矩,别的都可以调:
+ *   ① 随机对照的胜率与 z **和胜率并排**,同一个格子里、同样的字号量级 —— 不许缩成 tooltip。
+ *      一个没有对照的胜率在单边行情里永远好看,把对照藏起来等于把"这可能只是行情"藏起来。
+ *   ② 触发时点表**不分页、不折叠、不截断**。用户要的就是"每一次触发的时间点";
+ *      这里只给一个 max-height + 滚动,行数一条不减。 */
+
+.simrow { align-items: flex-end; }
+.simrow .simrulecell { flex: 1 1 320px; min-width: 240px; }
+.simrow .simrulecell input { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
+.simrow input:disabled { opacity: .5; cursor: not-allowed; }
+#simRun { align-self: flex-end; }
+
+/* 文法提示 / 解析错误。错误态是**一行红字**,不是 alert、不是抛异常 —— 见 events.js 那段注释。 */
+#simHint { margin-top: 2px; line-height: 1.55; }
+#simHint code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px; padding: 0 3px; border-radius: 3px; background: var(--ghost); color: var(--text-secondary); }
+#simHint .simerr { color: var(--delta-down); font-weight: 600; }
+#simHint .simok { color: var(--delta-up); }
+
+/* KPI 格沿用 .kpis 的栅格;胜率那一格里塞了对照,所以单独给它三行的行高。
+ *
+ * ---- 三个数**同号同重**,这条声明不许拆 ----
+ * 原来是:处理组 21px/650 的近黑,对照 11px/400 的灰,区间 10.5px 的灰。
+ * 三个数在字面上确实"并排"了,第 ① 条的字面要求算是满足了 —— 可它同一句话里
+ * 还写着「同样的字号量级」,而 21 : 11 : 10.5 不是同一个量级,是主标题配脚注。
+ * 这件事的代价是具体的:supportBuy 的处理组 45.0% 对上对照 62.5%,
+ * z ≈ −0.93;拿 1260 个样本的无条件 5 日胜率 52.4% 做基线,处理组根本没跑赢过什么。
+ * 再把对照重抽 200 次,它自己的 sd 就有 7.9pp —— 那个 62.5% 是一次 +1.3σ 的抽签。
+ * 也就是说这一格里唯一被排版捧成"结论"的数字,恰恰是三个数里最没有内容的那个。
+ * 排版会替数字说话,而这句话是假的。所以三行合用同一条声明:字号、字重、颜色
+ * 一起写死在这里,谁都不能单独长大;要改就三个一起改,改完 [13] 那条断言会拦。
+ *
+ * 顺带把胜率从 21px 的展示号降下来:这一行是这排格子里唯一带对照的数,
+ * 而对照说的就是"它不是发现"。它读起来该像三个并列的数,不像一个标题。 */
+#simOut .tile.simwin .vl,
+#simOut .tile.simwin .simctrl,
+#simOut .tile.simwin .simci {
+  font-size: 13.5px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+#simOut .simctrl { display: block; margin-top: 3px; }
+#simOut .simci { display: block; margin-top: 3px; }
+
+/* 触发时点表 */
+#simTrig { margin-top: 10px; }
+#simTrig .simtwrap { max-height: 340px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+table.mx.sim { margin: 0; }
+table.mx.sim th { position: sticky; top: 0; background: var(--surface-1); z-index: 1; white-space: nowrap; }
+table.mx.sim td, table.mx.sim th { padding: 4px 8px; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+table.mx.sim td.pos { color: var(--delta-up); }
+table.mx.sim td.neg { color: var(--delta-down); }
+#simTrig .simcount { font-size: 11px; color: var(--text-muted); margin: 0 0 4px; }
+
+/* 样本太薄时那句话:不是 tooltip,是占一整行的正文 */
+.simthin { color: var(--delta-down); font-size: 11.5px; line-height: 1.55; margin: 6px 0; }
+/* 免责/口径三句话,常驻可见 */
+#simNote { line-height: 1.55; }
+#simNote .simnl { display: block; margin-top: 4px; }
+#simNote .simnl:first-child { margin-top: 0; }

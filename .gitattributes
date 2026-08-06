@@ -1,0 +1,20 @@
+# 换行符约定
+#
+# 起因:根目录的 run-factset.bat 被以 LF 结尾写进仓库,双击直接报错。
+# cmd.exe 解析 .bat 时对 LF-only 的容忍度很低——单行命令碰运气能过,
+# 多行 `if ... (` 块基本必坏,而且报的是"命令语法不正确"这种指不到位置的错。
+# 所以这里把 .bat / .cmd 钉死成 CRLF,无论谁在什么平台上 checkout。
+
+* text=auto
+
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+*.sh   text eol=lf
+*.mjs  text eol=lf
+*.js   text eol=lf
+
+# 二进制,别碰
+*.xlsx binary
+*.xls  binary
+*.png  binary

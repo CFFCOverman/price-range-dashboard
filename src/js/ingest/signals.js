@@ -1,0 +1,81 @@
+/* short-interest.csv(fetcher 逐日累积)*/
+function ingestShortInt(recs) {
+  let n = 0;
+  for (const r of recs) {
+    const tk = String(r.ticker || '').toUpperCase();
+    const days = parseFloat(r.days_to_cover), pct = parseFloat(r.pct_of_float);
+    if (!tk || !r.date || !isFinite(pct)) continue;
+    const arr = state.shortInt.get(tk) || [];
+    if (!arr.some(x => x.date === r.date)) { arr.push({ date: r.date, days, pct }); n++; }
+    arr.sort((a, b) => a.date < b.date ? -1 : 1);
+    state.shortInt.set(tk, arr);
+  }
+  return n;
+}
+/* "{ticker} News.csv"(fetcher 从 StreetAccount 累积)—— 归属靠文件名前缀 */
+function ingestNews(recs, fileName) {
+  const tk = ((/^([A-Z.]{1,6}-[A-Z]{2})/.exec(fileName || '') || [])[1] || '').toUpperCase();
+  const ticker = tk && state.companies.has(tk) ? tk : (tk ? resolveTicker(fileName, tk, NaN) : null);
+  if (!ticker || !state.companies.has(ticker)) return { ticker: null, text: t('mNewsNoTicker') };
+  const seen = new Map();
+  for (const r of (state.news.get(ticker) || [])) seen.set(r.date + '|' + r.headline, r);
+  for (const r of recs) {
+    const date = String(r.date || '').trim(), headline = String(r.headline || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || headline.length < 4) continue;
+    seen.set(date + '|' + headline, { date, headline });
+  }
+  const arr = [...seen.values()].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  state.news.set(ticker, arr);
+  return { ticker, text: t('mNewsRows')(ticker, arr.length) };
+}
+/* "{ticker} Options.csv"(fetcher 从期权链累积)—— 列 asof,expiry,strike,call_oi,put_oi
+ * 同一个 (到期日, 行权价) 只保留 asof 最新的一条:OI 是存量数字,昨天的快照没有意义。 */
+function ingestOptions(recs, fileName) {
+  const tk = ((/^([A-Z.]{1,6}-[A-Z]{2})/.exec(fileName || '') || [])[1] || '').toUpperCase();
+  const ticker = tk && state.companies.has(tk) ? tk : (tk ? resolveTicker(fileName, tk, NaN) : null);
+  if (!ticker || !state.companies.has(ticker)) return { ticker: null, text: t('mOptNoTicker') };
+  const seen = new Map();
+  for (const r of (state.options.get(ticker) || [])) seen.set(r.expiry + '|' + r.strike, r);
+  for (const r of recs) {
+    const expiry = String(r.expiry || '').trim();
+    const strike = parseFloat(r.strike);
+    const callOI = parseFloat(r.call_oi), putOI = parseFloat(r.put_oi);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry) || !isFinite(strike) || strike <= 0) continue;
+    if (!isFinite(callOI) && !isFinite(putOI)) continue;
+    const rec = { asof: String(r.asof || '').trim(), expiry, strike,
+      callOI: isFinite(callOI) ? callOI : 0, putOI: isFinite(putOI) ? putOI : 0 };
+    const key = expiry + '|' + strike, old = seen.get(key);
+    if (!old || (rec.asof || '') >= (old.asof || '')) seen.set(key, rec);
+  }
+  const arr = [...seen.values()].sort((a, b) => a.expiry < b.expiry ? -1 : a.expiry > b.expiry ? 1 : a.strike - b.strike);
+  state.options.set(ticker, arr);
+  const exp = [...new Set(arr.map(r => r.expiry))].length;
+  return { ticker, text: t('mOptRows')(ticker, arr.length, exp) };
+}
+
+/* 关键词情绪:只用于"方向倾斜",不做精细 NLP —— 每条标题最多计一次多/空 */
+const NEWS_POS = /\b(upgrad\w*|rais\w*|beat\w*|tops?|topped|record|surge\w*|jump\w*|soar\w*|rall\w*|outperform\w*|overweight|initiat\w+ (?:at |with )?buy|buy rating|strong|stronger|expand\w*|partnership|approval|approved|wins?|won|awarded|secur(?:es|ed)|boost\w*|upside|higher|guidance raised|accelerat\w*|profit\w* rose)\b/gi;
+const NEWS_NEG = /\b(downgrad\w*|cut\w*|lower\w*|miss\w*|lawsuit\w*|probe\w*|investigat\w*|recall\w*|delay\w*|halt\w*|weak\w*|warn\w*|plunge\w*|slump\w*|sink\w*|tumbl\w*|fell|falls?|drop\w*|layoff\w*|resign\w*|ban(?:s|ned)?|restrict\w*|curb\w*|underperform\w*|underweight|sell rating|loss(?:es)?|declin\w*|concern\w*|shortfall|subpoena|antitrust|fine[ds]?)\b/gi;
+const NEWS_WIN = 30, NEWS_PREV = 90;   /* 打分窗口 30 日;31–90 日只作条数对照,不参与打分 */
+function newsScore(ticker, todayISO) {
+  const arr = state.news.get(ticker);
+  if (!arr || !arr.length) return null;
+  const now = todayISO ? new Date(todayISO + 'T00:00:00Z') : new Date();
+  const ageD = d => (now - new Date(d + 'T00:00:00Z')) / 86400000;
+  let nPos = 0, nNeg = 0, tot = 0, prev = 0;
+  for (const r of arr) {
+    const a = ageD(r.date);
+    if (a < 0 || a > NEWS_PREV) continue;
+    if (a > NEWS_WIN) { prev++; continue; }
+    tot++;
+    const p = (r.headline.match(NEWS_POS) || []).length;
+    const n = (r.headline.match(NEWS_NEG) || []).length;
+    if (p > n) nPos++; else if (n > p) nNeg++;
+  }
+  if (!tot && !prev) return null;
+  if (!tot) return { s: 0, why: t('dirWhyNewsQuiet')(prev), tot: 0, prev };
+  /* 分母下限 4:只有一两条新闻时不至于把分数拉满 */
+  const s = clamp1((nPos - nNeg) / Math.max(4, nPos + nNeg));
+  return { s, why: t('dirWhyNews')(nPos, nNeg, tot, prev), tot, prev, nPos, nNeg };
+}
+/* Price Summary 导出:实时/最新价格页 */

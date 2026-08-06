@@ -1,0 +1,7 @@
+# 市场级数据清单(走向概率的宏观/行业/流动性自动信号)—— 只拉日线
+# 每行: SYMBOL 角色    角色可选: BENCH=市场基准  SECTOR=行业  CREDIT=信用/流动性  RATES=利率
+# 行业请换成贴合你持仓的 ETF(半导体 SOXX-US / 软件 IGV-US / 云 SKYY-US 等);全部删掉 = 不拉市场数据
+SPY-US    BENCH
+SOXX-US   SECTOR
+HYG-US    CREDIT
+IEF-US    RATES

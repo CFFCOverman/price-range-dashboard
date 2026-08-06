@@ -1,8 +1,17 @@
 # Price Range Dashboard 拉取清单 — 一行一个代码(如 NVDA-US),# 开头为注释
 # 可直接用记事本编辑保存;也可在运行时的控制台里增删。
+#
+# 下面是你主动删掉的标的:它们在 Assets/ 里还有历史数据,但启动时的"清单与数据对齐"
+# 不会再把它们补回来。想恢复:删掉对应的 ignore 行,或在控制台里直接输入该代码。
+# ignore: QQQ-US
+# ignore: SPY-US
+#
 NVDA-US
 GOOGL-US
 AMD-US
 ASML-US
 MSFT-US
 SPCX-US
+TSM-US
+AAPL-US
+AMZN-US

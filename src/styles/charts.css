@@ -1,0 +1,19 @@
+/* charts */
+.chartbox { position: relative; margin-top: 10px; }
+.chartbox svg { display: block; width: 100%; height: auto; }
+.tip {
+  position: absolute; pointer-events: none; z-index: 5; display: none;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 10px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.13);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.tip .v { font-weight: 650; font-size: 13px; }
+.tip .k { color: var(--text-secondary); }
+.tip .key { display: inline-block; width: 12px; height: 2.5px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.legendline { display: flex; gap: 16px; align-items: center; font-size: 12px; color: var(--text-secondary); margin-top: 6px; flex-wrap: wrap; }
+.legendline .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+.legendline .ln { display: inline-block; width: 14px; height: 2.5px; border-radius: 2px; vertical-align: 3px; margin-right: 5px; }
+.legendline .dt2 { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: -1px; margin-right: 5px; }
+.footnote { color: var(--text-muted); font-size: 12px; margin-top: 14px; }
+.empty { color: var(--text-muted); padding: 22px 0; text-align: center; }
+svg text { font-family: inherit; }

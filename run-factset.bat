@@ -1,0 +1,61 @@
+@echo off
+setlocal
+chcp 65001 >nul 2>&1
+title Price Range Dashboard - FactSet fetch
+rem ===========================================================
+rem  Price Range Dashboard - FactSet data fetch (Windows entry)
+rem  Double-click to run. First run installs dependencies.
+rem
+rem  Deliberately ASCII-only and CRLF-terminated: cmd.exe reads
+rem  a .bat with the console codepage active at that moment, so
+rem  non-ASCII text here gets mangled, and LF-only line endings
+rem  break multi-line IF blocks. All Chinese output comes from
+rem  the Node script, which has no such problem.
+rem ===========================================================
+
+cd /d "%~dp0fetcher"
+if not exist "factset-fetch.mjs" goto nodir
+
+where node >nul 2>nul
+if errorlevel 1 goto nonode
+
+if exist "node_modules" goto run
+echo [setup] Installing dependencies (playwright, xlsx). This runs once.
+call npm.cmd install
+if errorlevel 1 goto noinstall
+echo [setup] Registering local Chrome for playwright.
+call npx.cmd playwright install chrome
+echo.
+echo [note] If you have never logged in to FactSet here, run: run-factset.bat --login
+echo.
+
+:run
+echo.
+echo [run] Starting. A browser window will open by itself - please do not touch it.
+echo       If it stops on the login page, log in once and the script continues.
+echo.
+node factset-fetch.mjs %*
+goto done
+
+:nodir
+echo [ERROR] Could not find the fetcher folder next to this file.
+echo         Expected: %~dp0fetcher\factset-fetch.mjs
+echo         This .bat must stay at the repository root.
+goto done
+
+:nonode
+echo [ERROR] Node.js not found on PATH.
+echo         Install the LTS build from https://nodejs.org and run this again.
+goto done
+
+:noinstall
+echo [ERROR] npm install failed - the reason is in the output above.
+goto done
+
+:done
+echo.
+echo Data   -^> Assets\        (sorted into sub-folders by type)
+echo Logs   -^> Assets\_logs\  (sources.txt and fetch-YYYY-MM-DD.log)
+echo Next   -^> open index.html and click Rescan folder.
+echo.
+pause

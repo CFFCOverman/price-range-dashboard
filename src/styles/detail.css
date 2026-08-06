@@ -1,0 +1,35 @@
+/* ---- detail ---- */
+.detrow { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.detcol { flex: 1 1 420px; min-width: 320px; }
+.dethead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.dethead .price { font-size: 30px; font-weight: 650; }
+.dethead .cur { color: var(--text-muted); font-size: 12px; }
+select, input[type="number"] {
+  font: inherit; color: var(--text-primary); background: var(--surface-1);
+  border: 1px solid var(--axis); border-radius: 7px; padding: 5px 8px;
+}
+input[type="number"] { width: 86px; text-align: right; font-variant-numeric: tabular-nums; }
+.tabs { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.tabs button { border: 0; border-radius: 0; padding: 5px 14px; background: transparent; }
+.tabs button.on { background: var(--series-1); color: #fff; }
+.formrow { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin: 10px 0 4px; }
+.formrow label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 3px; }
+.kpis { display: flex; gap: 12px; flex-wrap: wrap; margin: 14px 0 6px; }
+.tile { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; min-width: 148px; }
+.tile .lb { font-size: 12px; color: var(--text-muted); }
+.tile .vl { font-size: 21px; font-weight: 650; margin-top: 2px; }
+.tile .dt { font-size: 12px; margin-top: 2px; }
+/* matrix */
+table.mx { border-collapse: collapse; font-variant-numeric: tabular-nums; margin-top: 8px; width: 100%; }
+table.mx th, table.mx td { padding: 7px 10px; text-align: right; border: 1px solid var(--grid); font-size: 13px; }
+table.mx th { font-weight: 600; color: var(--text-muted); font-size: 12px; }
+table.mx th:first-child { text-align: left; }
+table.mx td:first-child { text-align: left; color: var(--text-secondary); font-size: 12.5px; white-space: nowrap; }
+table.mx td .sub { display: block; font-size: 11px; }
+table.mx td.med { font-weight: 650; }
+table.mx td.base { outline: 2px solid var(--series-1); outline-offset: -2px; border-radius: 2px; }
+table.mx td.core { outline: 2px dashed var(--series-2); outline-offset: -2px; border-radius: 2px; font-weight: 650; cursor: help; }
+.mxKey { display: inline-block; width: 11px; height: 11px; vertical-align: -1px; margin-right: 4px; border-radius: 2px; }
+.mxKey.base { border: 2px solid var(--series-1); }
+.mxKey.core { border: 2px dashed var(--series-2); }
+.hint.warn { color: var(--delta-down); margin: 6px 0 0; }

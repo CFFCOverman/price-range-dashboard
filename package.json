@@ -1,0 +1,30 @@
+{
+  "name": "price-range-dashboard",
+  "version": "18.0.0",
+  "private": true,
+  "type": "module",
+  "description": "股价区间仪表盘:源码在 src/ 分模块开发,构建回零依赖单文件 HTML 交付",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "build:check": "node tools/build.mjs --check",
+    "setup": "node tools/setup.mjs",
+    "setup:selftest": "node tools/setup.mjs --selftest",
+    "test": "node tools/doctor.mjs --preflight && node tests/test-app.mjs",
+    "test:full": "node tools/doctor.mjs --preflight && node tests/test-app.mjs --require-data",
+    "doctor": "node tools/doctor.mjs",
+    "doctor:selftest": "node tools/doctor.mjs --selftest",
+    "test:fetch": "node fetcher/factset-fetch.mjs --selftest",
+    "backtest": "node tools/backtest.mjs",
+    "backtest:selftest": "node tools/backtest.mjs --selftest",
+    "paramsearch": "node tools/paramsearch.mjs",
+    "ledger:write": "node tools/ledger.mjs --write",
+    "ledger:param": "node tools/ledger.mjs --param",
+    "ledger:resolve": "node tools/ledger.mjs --resolve",
+    "fetch": "node fetcher/factset-fetch.mjs",
+    "fetch:login": "node fetcher/factset-fetch.mjs --login"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1",
+    "xlsx": "^0.18.5"
+  }
+}

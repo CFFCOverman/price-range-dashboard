@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="author" content="Xuhao Chao">
+<title>股价区间仪表盘 · Price Range Dashboard</title>
+<style>
+/*@build:styles*/
+</style>
+</head>
+<body>
+<div class="app" id="app">
+<div class="wrap">
+
+<header class="top">
+  <h1><span class="lz">股价区间仪表盘</span><span class="le">Price Range Dashboard</span></h1>
+  <span class="sub"><span class="lz">乘数法:EPS 预测区间 × 历史估值分位 → 隐含价格区间</span><span class="le">Multiples method: EPS forecast range × historical valuation percentiles → implied price range</span></span>
+  <span class="spacer"></span>
+  <button id="langBtn" title="Switch language">EN</button>
+  <button id="themeBtn" title="切换主题"></button>
+</header>
+
+<section class="card">
+  <h2><span class="lz">数据导入</span><span class="le">Data import</span></h2>
+  <p class="hint"><span class="lz">从 FactSet 导出文件拖到下方即可,支持 CSV 和多种 xlsx 导出,可混合拖入。重复导入同名公司会互相补全。</span><span class="le">Drag FactSet exports below — CSV and several xlsx formats are recognized and can be mixed. Re-importing the same ticker merges data.</span></p>
+  <div class="drop" id="drop">
+    <span class="lz">将 <strong>companies.csv</strong> / <strong>history.csv</strong> / FactSet <strong>.xlsx</strong>(模型 / Estimate History / Snapshot)拖到这里,或</span>
+    <span class="le">Drop <strong>companies.csv</strong> / <strong>history.csv</strong> / FactSet <strong>.xlsx</strong> (model / Estimate History / Snapshot) here, or</span>
+    <label style="color:var(--series-1);cursor:pointer;text-decoration:underline"><span class="lz">点击选择文件</span><span class="le">browse files</span><input type="file" id="fileInput" accept=".csv,.xlsx,.xls,text/csv" multiple></label>
+  </div>
+  <div class="loadrow">
+    <button class="primary" id="dirBtn"><span class="lz">连接文件夹</span><span class="le">Connect folder</span></button>
+    <button id="rescanBtn" hidden><span class="lz">重新扫描</span><span class="le">Rescan</span></button>
+    <button id="reconnectBtn" hidden><span class="lz">重连上次文件夹</span><span class="le">Reconnect last folder</span></button>
+    <button id="demoBtn"><span class="lz">载入演示数据</span><span class="le">Load demo data</span></button>
+    <a class="dl" id="dlCompanies" download="companies_template.csv"><span class="lz">下载 companies 模板</span><span class="le">companies template</span></a>
+    <a class="dl" id="dlHistory" download="history_template.csv"><span class="lz">下载 history 模板</span><span class="le">history template</span></a>
+    <span class="status" id="status"><span class="lz">尚未载入数据。</span><span class="le">No data loaded yet.</span></span>
+  </div>
+  <details class="help">
+    <summary><span class="lz">CSV 字段说明 &amp; FactSet 取数提示 &amp; 方法说明</span><span class="le">File formats, FactSet field hints &amp; methodology notes</span></summary>
+    <div class="le">
+      <p><strong>companies.csv</strong> (one row per company): <code>ticker, name, currency, price, price_date, eps_fy1_low/_mean/_high, eps_fy2_low/_mean/_high</code>. FactSet: <code>FG_PRICE</code>, <code>FE_ESTIMATE("EPS","LOW|MEAN|HIGH",…)</code>.</p>
+      <p><strong>history.csv</strong> (one row per month, 5–10y recommended): <code>ticker, date, pe_ntm</code> (or <code>price</code> + <code>eps_ntm</code>; a <code>price</code> column also feeds the volatility band). FactSet: <code>FG_PE_NTM</code>.</p>
+      <p><strong>FactSet model .xlsx</strong> ("Earnings Per Share" block): reads FY1/FY2 annual EPS means; derives price from the Valuation block's FY1 forward PE.</p>
+      <p><strong>Estimate History .xlsx</strong>: reads latest consensus EPS low/mean/high and the monthly P/E series. It tracks a <strong>fixed fiscal year</strong>, so only the most recent 24 months are used for percentiles — for a true 5–10y valuation band export an NTM PE monthly series. The full price series (P/E × mean) still feeds the volatility band.</p>
+      <p><strong>Snapshot .xlsx</strong> ("Previous Close"): real closing price, 52-week range, analyst target/rating, annual PE references. Price precedence: manual &gt; snapshot/CSV &gt; model-derived.</p>
+      <p><strong>Other methods not computed here:</strong> DCF + sensitivity (needs cash-flow assumptions; unstable when near-term FCF is depressed by heavy capex), option-implied volatility bands (needs option IV data), technical support/resistance (needs daily price history). The statistical volatility band in the comparison panel uses realized monthly volatility: price × e<sup>±σ</sup> over one year, a 68% band under a lognormal assumption.</p>
+    </div>
+    <div class="lz">
+    <p><strong>companies.csv</strong>(每家公司一行):</p>
+    <table>
+      <tr><th>列</th><th>含义</th><th>FactSet 参考字段(以你的版本/授权为准)</th></tr>
+      <tr><td><code>ticker</code></td><td>代码(两个文件需一致)</td><td>—</td></tr>
+      <tr><td><code>name</code> <code>currency</code></td><td>名称、币种</td><td>—</td></tr>
+      <tr><td><code>price</code> <code>price_date</code></td><td>现价及日期</td><td><code>FG_PRICE</code></td></tr>
+      <tr><td><code>eps_fy1_low / _mean / _high</code></td><td>FY1 一致预期 EPS 低/均值/高</td><td><code>FE_ESTIMATE("EPS","LOW|MEAN|HIGH",…,+1)</code></td></tr>
+      <tr><td><code>eps_fy2_low / _mean / _high</code></td><td>FY2 同上</td><td>同上,期数 +2</td></tr>
+    </table>
+    <p><strong>history.csv</strong>(每家公司每月一行,建议 5–10 年):</p>
+    <table>
+      <tr><th>列</th><th>含义</th><th>FactSet 参考字段</th></tr>
+      <tr><td><code>ticker</code> <code>date</code></td><td>代码、月末日期 (YYYY-MM-DD)</td><td>—</td></tr>
+      <tr><td><code>pe_ntm</code></td><td>NTM 市盈率;也可改为提供 <code>price</code> + <code>eps_ntm</code> 两列,由 app 计算</td><td><code>FG_PE_NTM</code></td></tr>
+    </table>
+    <p>没有历史序列时,可以在公司详情里手动输入估值分位(P25/P50/P75)。</p>
+    <p><strong>FactSet 公司模型 .xlsx</strong>(含 "Earnings Per Share" 区块):自动读取 FY1/FY2 年度 EPS 预测均值,并用 Valuation 区块的 FY1 PE 反推现价。</p>
+    <p><strong>FactSet Estimate History .xlsx</strong>(含 "Estimate History" 表格):自动读取最新一致预期的 EPS 低/均/高,以及月度 P/E 序列并计算分位。注意:Estimate History 跟踪的是<strong>固定财年</strong>,窗口拉太长时早期 P/E 是"当时股价 ÷ 多年后盈利",口径与近期不可比,因此 app 最多采用最近 24 个月;真正的 5–10 年估值带请导出 <strong>NTM PE 月度序列</strong>(history.csv 格式)。</p>
+    <p><strong>FactSet Snapshot .xlsx</strong>(含 "Previous Close" 的快照页):自动读取真实收盘价、52 周区间、分析师目标价/评级和年度 PE 参考。现价来源优先级:手动输入 &gt; 快照/CSV 实价 &gt; 模型反推。所有文件可以同时拖入,互相补全同一家公司。首次解析 xlsx 需联网加载解析库。</p>
+    <p><strong>本工具未计算的其他测算方法:</strong>DCF + 敏感性矩阵(需现金流假设;近期 FCF 被大额资本开支压低的公司结果极不稳定)、期权隐含波动率区间(需期权 IV 数据)、技术面支撑/阻力(需日线价格)。方法对比面板里的"波动率统计区间"用已实现月度波动率计算:现价 × e<sup>±σ</sup>(一年期),对数正态假设下约 68% 概率带。history.csv 若含 <code>price</code> 列,也会用于波动率计算。</p>
+    </div>
+  </details>
+</section>
+
+<section class="card" id="ovCard" hidden>
+  <h2><span class="lz">公司总览 · 隐含上行/下行空间</span><span class="le">Overview · implied upside / downside</span></h2>
+  <p class="hint"><span class="lz">核心区间 = 悲观 EPS × PE 25 分位 ~ 乐观 EPS × PE 75 分位;中枢 = 基准 EPS × PE 中位数。点击行查看详情,点击表头排序。</span><span class="le">Core range = low EPS × P25 PE ~ high EPS × P75 PE; mid = mean EPS × median PE. Click a row for detail, click headers to sort.</span></p>
+  <div id="ovTableWrap"></div>
+  <div class="chartbox" id="ovChartBox">
+    <div id="ovChart"></div>
+    <div class="tip" id="ovTip"></div>
+  </div>
+  <div class="legendline">
+    <span><span class="sw" style="background:var(--wash-strong)"></span><span class="lz">核心区间(相对现价 %)</span><span class="le">Core range (% vs price)</span></span>
+    <span><span class="dt2" style="background:var(--series-1)"></span><span class="lz">中枢</span><span class="le">Mid</span></span>
+    <span><span class="lz">竖线 = 现价 (0%)</span><span class="le">Vertical line = current price (0%)</span></span>
+  </div>
+</section>
+
+<section class="card" id="detCard" hidden>
+  <h2><span class="lz">公司详情</span><span class="le">Company detail</span></h2>
+  <div class="formrow">
+    <div><label><span class="lz">公司</span><span class="le">Company</span></label><select id="coSel"></select></div>
+    <div><label><span class="lz">现价</span><span class="le">Price</span></label><input type="number" step="0.01" id="pxInput" placeholder="必填"></div>
+    <div><label><span class="lz">预测期</span><span class="le">Horizon</span></label>
+      <span class="tabs" id="hzTabs">
+        <button data-h="fy1" class="on">FY1</button><button data-h="fy2">FY2</button>
+      </span>
+    </div>
+    <div><label><span class="lz">EPS 悲观</span><span class="le">EPS low</span></label><input type="number" step="0.01" id="epsLow"></div>
+    <div><label><span class="lz">EPS 基准</span><span class="le">EPS base</span></label><input type="number" step="0.01" id="epsMean"></div>
+    <div><label><span class="lz">EPS 乐观</span><span class="le">EPS high</span></label><input type="number" step="0.01" id="epsHigh"></div>
+    <button id="epsReset"><span class="lz">重置 EPS</span><span class="le">Reset EPS</span></button>
+  </div>
+  <div class="formrow" id="peManualRow" hidden>
+    <span class="status warn-note" style="color:var(--delta-down)"><span class="lz">该公司无历史估值序列,请手动输入分位:</span><span class="le">No PE history for this company — enter percentiles manually:</span></span>
+    <div><label><span class="lz">PE 25分位</span><span class="le">PE P25</span></label><input type="number" step="0.1" id="peP25"></div>
+    <div><label><span class="lz">PE 中位数</span><span class="le">PE median</span></label><input type="number" step="0.1" id="peP50"></div>
+    <div><label><span class="lz">PE 75分位</span><span class="le">PE P75</span></label><input type="number" step="0.1" id="peP75"></div>
+  </div>
+
+  <div class="dethead" id="detHead"></div>
+  <div class="kpis" id="detKpis"></div>
+
+  <div class="detrow">
+    <div class="detcol">
+      <h2 style="font-size:13.5px;margin-top:10px"><span class="lz">情景矩阵:EPS × 估值分位 → 隐含股价</span><span class="le">Scenario matrix: EPS × PE percentile → implied price</span></h2>
+      <div id="mxWrap"></div>
+    </div>
+    <div class="detcol">
+      <h2 style="font-size:13.5px;margin-top:10px"><span class="lz">区间全景(现价所处位置)</span><span class="le">Range overview (where price sits)</span></h2>
+      <div class="chartbox"><div id="bulletChart"></div></div>
+      <div class="legendline">
+        <span><span class="sw" style="background:var(--wash)"></span><span class="lz">极端区间 P10–P90</span><span class="le">Extreme P10–P90</span></span>
+        <span><span class="sw" style="background:var(--wash-strong)"></span><span class="lz">核心区间 P25–P75</span><span class="le">Core P25–P75</span></span>
+        <span><span class="ln" style="background:var(--series-1)"></span><span class="lz">中枢</span><span class="le">Mid</span></span>
+        <span><span class="dt2" style="background:var(--series-2)"></span><span class="lz">现价</span><span class="le">Price</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="cmpSec" hidden>
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">方法对比(同一把价格尺)</span><span class="le">Method comparison (one shared price axis)</span></h2>
+    <div class="chartbox"><div id="cmpChart"></div></div>
+    <p class="hint" id="cmpNote" style="margin-top:6px"></p>
+  </div>
+
+  <div id="plSec" hidden>
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">上行压力位 / 下行支撑位(技术面 × 估值面 × 期权面三轨)</span><span class="le">Upside pressure / downside support (technical × valuation × options)</span></h2>
+    <!-- 持有期切换:必须是**静态**标签。render/pressure.js 只往上挂 onclick,不新建节点 ——
+         动态建节点会让 app/events.js 顶层的 $('id') 有机会取到 null,而那会把整个脚本块从抛错处炸断。
+         这里选的是 h(5/21/63 个交易日),**不是** 上面那个 FY1/FY2 财年切换,两者不能互相传。 -->
+    <div class="plholdrow">
+      <label><span class="lz">持有期</span><span class="le">Horizon</span></label>
+      <span class="tabs" id="plHoldTabs">
+        <button type="button" data-plh="short"><span class="lz">短线 · 5 日</span><span class="le">Short · 5d</span></button><button type="button" data-plh="mid" class="on"><span class="lz">中线 · 21 日</span><span class="le">Mid · 21d</span></button><button type="button" data-plh="long"><span class="lz">长线 · 63 日</span><span class="le">Long · 63d</span></button>
+      </span>
+    </div>
+    <div class="detrow">
+      <div class="detcol">
+        <div class="chartbox"><div id="plChart"></div></div>
+      </div>
+      <div class="detcol"><div id="plTable"></div></div>
+    </div>
+    <p class="hint" id="plNote" style="margin-top:6px"></p>
+  </div>
+
+  <!-- ================= 买入逻辑模拟(SPEC 3.5) =================
+       这一块的每一个带 id 的节点都**必须**静态写在这里:app/events.js 在顶层直接
+       `$('simRun').addEventListener(...)`,`$()` 取到 null 就是 TypeError,
+       而那会把整个脚本块从抛错处往下全部停掉 —— 页面看起来是白的,控制台只有一行错。
+       (注释里刻意不把那个尖括号标签名写全:build.mjs 拿"产物里恰好一个脚本标签"做硬校验,
+        它是纯字符串计数,注释里出现一次也会被算成两个,构建直接失败。)
+       select 里的 option 也是静态的(值写死,文案由 render/sim.js 按语种填):
+       option 装不下 .lz/.le 成对 span,但它们不是 $() 的目标,静态占位 + 填文案最省事。 -->
+  <div id="simSec" hidden>
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">买入逻辑模拟</span><span class="le">Buy-rule simulation</span></h2>
+    <div class="formrow simrow">
+      <div><label><span class="lz">持有期</span><span class="le">Holding period</span></label>
+        <select id="simHold"><option value="short"></option><option value="mid"></option><option value="long"></option></select></div>
+      <div><label><span class="lz">买入规则</span><span class="le">Buy rule</span></label>
+        <select id="simPreset"><option value="supportBuy"></option><option value="breakoutBuy"></option><option value="dipBuy"></option><option value="trendBuy"></option><option value="roomBuy"></option><option value="custom"></option></select></div>
+      <div class="simrulecell"><label><span class="lz">自定义条件</span><span class="le">Custom condition</span></label>
+        <input id="simRule" disabled autocomplete="off" spellcheck="false" placeholder="nearSupport(0.5) and reachBelow(0.4)"></div>
+      <!-- 唯一触发计算的入口。回放要跑 ~250 根 × 每根一次 pressureLevels,同步几百毫秒,
+           所以它绝不能挂在 input 上 —— 那会把输入框卡死(bindEps 踩过这个坑)。 -->
+      <button id="simRun"><span class="lz">立即模拟</span><span class="le">Run simulation</span></button>
+    </div>
+    <p class="hint" id="simHint"></p>
+    <div class="kpis" id="simOut"></div>
+    <div id="simTrig"></div>
+    <p class="hint" id="simNote"></p>
+  </div>
+
+  <div id="dirSec" hidden>
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">走向概率(六维信号 → 情景加权蒙特卡洛,6 个月)</span><span class="le">Direction probability (six-factor scenario-weighted Monte Carlo, 6 months)</span></h2>
+    <div class="formrow" id="dirChips"></div>
+    <div class="formrow">
+      <div><label title="自动信号=目标价3月动量+买入评级占比变化(Targets Ratings 文件)+空头持仓趋势(short-interest.csv);也可手动覆盖"><span class="lz">情绪面</span><span class="le">Sentiment</span></label><select id="dirSent"></select></div>
+      <div><label title="自动信号=基准ETF趋势+波动率分位+利率ETF趋势(fetcher 的 _MARKET-BENCH/RATES 文件);也可手动覆盖"><span class="lz">宏观面</span><span class="le">Macro</span></label><select id="dirMacro"></select></div>
+      <div><label title="自动信号=行业ETF对基准的3月相对强弱+MA200(_MARKET-SECTOR 文件);也可手动覆盖"><span class="lz">行业面</span><span class="le">Industry</span></label><select id="dirInd"></select></div>
+      <div><label title="自动信号=高收益债ETF 3月趋势+MA200,代理信用/流动性(_MARKET-CREDIT 文件);也可手动覆盖"><span class="lz">流动性面</span><span class="le">Liquidity</span></label><select id="dirLiq"></select></div>
+      <div><label title="同行的 Estimate History 修正动量平均值,并入行业面自动信号(与行业ETF相对强弱各占一半)。把同行加进 tickers.txt 拉一轮即可"><span class="lz">同行分组(行业盈利信号)</span><span class="le">Peer group (industry earnings)</span></label><input id="dirPeers" style="min-width:200px"></div>
+    </div>
+    <div class="kpis" id="dirOut"></div>
+    <p class="hint" id="dirNote"></p>
+  </div>
+  <!-- ================= 价格走势(蜡烛 / 收盘折线) =================
+       这一块的每个带 id 的节点同样**必须**静态写在这里 —— 理由与上面 simSec 那段一模一样:
+       动态建节点会让顶层 $() 有机会取到 null,而那会把整个脚本块从抛错处炸断。
+       窗口切换按钮由 render/candles.js 用 onclick 赋值(不是 addEventListener,重绘会叠加)。
+       图上不画任何技术指标:预注册的 12 格全部未过闸,详见面板下方正文与 SPEC 附录 K.8。 -->
+  <div id="klSec" hidden>
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">价格走势(有开/高/低就画蜡烛,没有则为收盘折线)</span><span class="le">Price history (candles when OHLC is present, close-only line otherwise)</span></h2>
+    <div class="plholdrow">
+      <label><span class="lz">窗口</span><span class="le">Window</span></label>
+      <span class="tabs" id="klWinTabs">
+        <button type="button" data-klw="w60"><span class="lz">近 60 根</span><span class="le">Last 60</span></button><button type="button" data-klw="w120" class="on"><span class="lz">近 120 根</span><span class="le">Last 120</span></button><button type="button" data-klw="all"><span class="lz">全部</span><span class="le">All</span></button>
+      </span>
+    </div>
+    <div class="chartbox" id="klBox">
+      <div id="klChart"></div>
+      <div class="tip" id="klTip"></div>
+    </div>
+    <div class="legendline" id="klLegend"></div>
+    <p class="hint" id="klNote" style="margin-top:6px"></p>
+  </div>
+
+  <div id="peBandSec">
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">NTM 市盈率历史带(分位为水平参考线)</span><span class="le">NTM P/E history band (percentiles as reference lines)</span></h2>
+    <div class="chartbox" id="peBandBox">
+      <div id="peBandChart"></div>
+      <div class="tip" id="peTip"></div>
+    </div>
+    <p class="hint" id="peStatsLine" style="margin-top:6px"></p>
+  </div>
+
+  <p class="footnote"><span class="lz">方法说明:隐含价 = EPS 情景 × 历史 NTM PE 分位。区间反映"盈利预测不确定性 × 估值波动范围"的组合,不构成投资建议;估值分位基于导入的历史窗口,窗口选择本身即是假设。</span><span class="le">Method: implied price = EPS scenario × historical PE percentile. Ranges combine earnings uncertainty with valuation volatility; not investment advice. Percentiles depend on the imported history window — the window itself is an assumption.</span></p>
+</section>
+
+<p class="footnote" style="text-align:center;margin-top:26px">© 2026 Xuhao Chao · Price Range Dashboard v12 · MIT License · <span class="lz">所有数据仅在你的浏览器本地处理,不会上传</span><span class="le">All data is processed locally in your browser — nothing is uploaded</span></p>
+
+</div>
+</div>
+<script>
+'use strict';
+/*@build:scripts*/
+</script>
+</body>
+</html>
