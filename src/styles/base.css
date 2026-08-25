@@ -99,6 +99,7 @@ a.dl { color: var(--series-1); text-decoration: none; border-bottom: 1px solid v
 .status { font-size: 12.5px; color: var(--text-secondary); }
 .status .ok { color: var(--delta-up); font-weight: 600; }
 .status .warn { color: var(--delta-down); font-weight: 600; }
+.status.warn { color: var(--delta-down); font-weight: 600; }
 details.help { margin-top: 12px; font-size: 12.5px; color: var(--text-secondary); }
 details.help summary { cursor: pointer; color: var(--text-primary); font-weight: 600; }
 details.help code {

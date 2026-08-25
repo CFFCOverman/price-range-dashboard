@@ -8,6 +8,7 @@ const I18N = {
     tMid: '中枢(基准 EPS × PE 中位)', tCore: '核心区间 P25–P75', tExt: '极端区间 P10–P90', tPe: '当前 NTM PE', tTgt: '分析师目标价(参考)',
     vsPrice: ' vs 现价', histPct: n => '历史 ' + n + '% 分位',
     needPct: '请在上方输入该公司的估值分位(P25 / P50 / P75)。', needEps: '缺少 EPS 预测(或基准 EPS ≤ 0),无法测算。',
+    pricePositive: '现价必须大于 0。', priceRequired: '现价不能为空。', priceRestored: '无效输入已撤销，现价已恢复为 {0}。', peOrderError: '估值分位必须大于 0，且满足 P25 ≤ P50 ≤ P75。',
     mxCorner: 'EPS \\ 估值', mxMedian: 'PE 中位', mxOpt: '乐观 EPS ', mxBase: '基准 EPS ', mxPes: '悲观 EPS ',
     mxUnit: cur => '单位:' + cur + ' · 括注为相对现价空间。',
     mxBaseGap: (v, d) => '⚠ 估值分位与 EPS 可能不是同一个口径:分位库最新一点 × 基准 EPS = ' + fmtN(v)
@@ -215,6 +216,7 @@ const I18N = {
     tMid: 'Mid (base EPS × median PE)', tCore: 'Core range P25–P75', tExt: 'Extreme range P10–P90', tPe: 'Current NTM P/E', tTgt: 'Analyst target (ref)',
     vsPrice: ' vs price', histPct: n => n + '% of history',
     needPct: 'Enter PE percentiles (P25 / P50 / P75) above.', needEps: 'No EPS forecast (or base EPS ≤ 0) — cannot compute.',
+    pricePositive: 'Price must be greater than 0.', priceRequired: 'Price cannot be blank.', priceRestored: 'Invalid input was undone; price was restored to {0}.', peOrderError: 'PE percentiles must be positive and ordered P25 ≤ P50 ≤ P75.',
     mxCorner: 'EPS \\ multiple', mxMedian: 'Median PE', mxOpt: 'High EPS ', mxBase: 'Base EPS ', mxPes: 'Low EPS ',
     mxUnit: cur => 'Unit: ' + cur + ' · sub-notes are % vs current price.',
     mxBaseGap: (v, d) => '⚠ The P/E percentiles and the EPS may be on different bases: latest percentile point × base EPS = ' + fmtN(v)
@@ -404,4 +406,3 @@ const I18N = {
   },
 };
 const t = k => (I18N[LANG][k] !== undefined ? I18N[LANG][k] : I18N.zh[k]);
-

@@ -118,7 +118,7 @@ function renderOvChart(rows) {
       tip.appendChild(el('div', 'k', t('tipMid') + fmtN(r.mid) + '(' + fmtPct(r.midPct) + ')· ' + t('tipPrice') + fmtN(co.price)));
       const bb = $('ovChartBox').getBoundingClientRect();
       tip.style.display = 'block';
-      tip.style.left = Math.min(ev.clientX - bb.left + 14, bb.width - 300) + 'px';
+      tip.style.left = Math.max(0, Math.min(ev.clientX - bb.left + 14, bb.width - 300)) + 'px';
       tip.style.top = (ev.clientY - bb.top + 14) + 'px';
     });
     hit.addEventListener('pointerleave', () => tip.style.display = 'none');
@@ -127,4 +127,3 @@ function renderOvChart(rows) {
   });
   box.appendChild(svg);
 }
-

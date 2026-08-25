@@ -50,11 +50,11 @@ function ingestHistory(recs) {
     n++;
   }
   for (const [tk, arr] of buf) {
-    arr.sort((a, b) => a.date < b.date ? -1 : 1);
+    arr.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
     state.history.set(tk, arr);   // replace whole series for that ticker
   }
   for (const [tk, arr] of pbuf) {
-    arr.sort((a, b) => a.date < b.date ? -1 : 1);
+    arr.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
     setPriceHist(tk, arr);
   }
   return n;
@@ -63,10 +63,19 @@ function ingestHistory(recs) {
 /* 价格序列择优:长的赢,但带成交量的序列值 1.5 倍长度——
  * 因为筹码分布靠成交量加权,一条稍短但有量的日线比一条更长的纯收盘价序列有用得多。 */
 const hasVol = a => !!(a && a.length && a.some(d => isFinite(d.vol) && d.vol > 0));
+function normalizePriceHist(arr) {
+  const byDate = new Map();
+  for (const d of (arr || [])) if (d && d.date) byDate.set(d.date, d);
+  return [...byDate.values()].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+}
 function setPriceHist(ticker, arr) {
   if (!arr || !arr.length) return;
+  /* 同日重复行以本次输入中最后一行为准，再恢复严格升序。否则 as-of 截断
+   * 虽不一定报错，却会让“当天收盘”取决于排序实现如何摆放相等元素。 */
+  const next = normalizePriceHist(arr);
+  if (!next.length) return;
   const old = state.priceHist.get(ticker) || [];
   const score = a => a.length * (hasVol(a) ? 1.5 : 1);
-  if (score(arr) > score(old)) state.priceHist.set(ticker, arr);
+  /* 文件按旧→新导入；质量同分时必须让后导入者覆盖，才能刷新同长度日线。 */
+  if (score(next) >= score(old)) state.priceHist.set(ticker, next);
 }
-

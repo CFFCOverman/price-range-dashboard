@@ -36,7 +36,7 @@ function ingestChartingSheet(sheetName, aoa, fileName) {
   const ohlcIdx = w => hdr.findIndex(h => new RegExp('(^| - )' + w + '$', 'i').test(h));
   const oi = ohlcIdx('Open'), hi2 = ohlcIdx('High'), li2 = ohlcIdx('Low');
   const hasOHLCCols = oi >= 0 && hi2 >= 0 && li2 >= 0;
-  const px = []; let lastPE = NaN;
+  let px = []; let lastPE = NaN;
   for (let i = 1; i < aoa.length; i++) {
     const r = aoa[i] || [];
     const d = toISODate(r[di]); const p = parseFloat(r[ci]);
@@ -54,8 +54,9 @@ function ingestChartingSheet(sheetName, aoa, fileName) {
     px.push(rec);
     if (pi >= 0) { const v = parseFloat(r[pi]); if (isFinite(v) && v > 0) lastPE = v; }
   }
+  /* 公司与市场序列走同一套“同日末行覆盖 + 严格升序”，避免市场收益/MA 重复计日。 */
+  px = normalizePriceHist(px);
   if (px.length < INGEST_MIN_BARS) return null;
-  px.sort((a, b) => a.date < b.date ? -1 : 1);
   /* 市场级序列(fetcher 输出 "_MARKET-角色 SYMBOL Daily Charting.xlsx")→ 存入 market,不建公司 */
   const mm = /_MARKET-(BENCH|SECTOR|CREDIT|RATES)\s+([A-Z.]{1,6}-[A-Z]{2})/i.exec(fileName || '');
   if (mm) {

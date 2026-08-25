@@ -6,8 +6,10 @@ function ingestShortInt(recs) {
     const days = parseFloat(r.days_to_cover), pct = parseFloat(r.pct_of_float);
     if (!tk || !r.date || !isFinite(pct)) continue;
     const arr = state.shortInt.get(tk) || [];
-    if (!arr.some(x => x.date === r.date)) { arr.push({ date: r.date, days, pct }); n++; }
-    arr.sort((a, b) => a.date < b.date ? -1 : 1);
+    const at = arr.findIndex(x => x.date === r.date);
+    if (at >= 0) arr[at] = { date: r.date, days, pct };  /* 文件旧→新导入：同日修订以后导入者为准 */
+    else { arr.push({ date: r.date, days, pct }); n++; }
+    arr.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
     state.shortInt.set(tk, arr);
   }
   return n;

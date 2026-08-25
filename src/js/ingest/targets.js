@@ -22,15 +22,21 @@ function ingestTargetsSheet(sheetName, aoa, fileName) {
     const d = parseDMYY(r[cD]); const tgt = parseFloat(String(r[cT]).replace(/[$,]/g, ''));
     if (!d || !isFinite(tgt)) continue;
     const rt = /\(([\d.]+)\)/.exec(String(r[cR] || ''));
+    const buy = parseFloat(r[cB]), overweight = parseFloat(r[cO]);
     rows.push({
       date: d, tgt,
       rating: rt ? +rt[1] : NaN,
       n: parseFloat(r[cN]),
-      buyPct: (parseFloat(r[cB]) || 0) + (parseFloat(r[cO]) || 0),
+      /* 两列都缺时是“不知道”，不是 0% 买入；只有至少一列有效才允许求和。 */
+      buyPct: isFinite(buy) || isFinite(overweight) ? (isFinite(buy) ? buy : 0) + (isFinite(overweight) ? overweight : 0) : NaN,
     });
   }
   if (rows.length < 2) return null;
-  rows.sort((a, b) => a.date < b.date ? -1 : 1);
+  const byDate = new Map();
+  for (const r of rows) byDate.set(r.date, r);            /* 同日修订以后出现者覆盖 */
+  rows.length = 0;
+  rows.push(...[...byDate.values()].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  if (rows.length < 2) return null;
   const tk = ((/^([A-Z.]{1,6}-[A-Z]{2})/.exec(fileName || '') || [])[1] || String((aoa[0] || [])[0] || '')).toUpperCase();
   const ticker = state.companies.has(tk) ? tk : resolveTicker(fileName, tk, NaN);
   if (!ticker) return { ticker: null, text: t('tgtNoTicker') };

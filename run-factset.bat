@@ -1,5 +1,6 @@
 @echo off
 setlocal
+set "RC=1"
 chcp 65001 >nul 2>&1
 title Price Range Dashboard - FactSet fetch
 rem ===========================================================
@@ -19,12 +20,20 @@ if not exist "factset-fetch.mjs" goto nodir
 where node >nul 2>nul
 if errorlevel 1 goto nonode
 
-if exist "node_modules" goto run
-echo [setup] Installing dependencies (playwright, xlsx). This runs once.
+node preflight.mjs deps
+if not errorlevel 1 goto depsready
+echo [setup] Dependencies are missing or differ from package-lock.json; repairing.
 call npm.cmd install
-if errorlevel 1 goto noinstall
+set "RC=%ERRORLEVEL%"
+if not "%RC%"=="0" goto noinstall
+:depsready
+node preflight.mjs chrome
+if not errorlevel 1 goto browserready
 echo [setup] Registering local Chrome for playwright.
 call npx.cmd playwright install chrome
+set "RC=%ERRORLEVEL%"
+if not "%RC%"=="0" goto nobrowser
+:browserready
 echo.
 echo [note] If you have never logged in to FactSet here, run: run-factset.bat --login
 echo.
@@ -35,6 +44,8 @@ echo [run] Starting. A browser window will open by itself - please do not touch 
 echo       If it stops on the login page, log in once and the script continues.
 echo.
 node factset-fetch.mjs %*
+set "RC=%ERRORLEVEL%"
+if not "%RC%"=="0" goto fetchfailed
 goto done
 
 :nodir
@@ -52,10 +63,23 @@ goto done
 echo [ERROR] npm install failed - the reason is in the output above.
 goto done
 
+:nobrowser
+echo [ERROR] Playwright could not install or register Chrome.
+echo         Retry from fetcher with: npx playwright install chrome
+goto done
+
+:fetchfailed
+echo [ERROR] FactSet fetch failed (exit code %RC%).
+echo         See the error above and Assets\_logs\ for details.
+goto done
+
 :done
 echo.
+if not "%RC%"=="0" goto finish
 echo Data   -^> Assets\        (sorted into sub-folders by type)
 echo Logs   -^> Assets\_logs\  (sources.txt and fetch-YYYY-MM-DD.log)
 echo Next   -^> open index.html and click Rescan folder.
 echo.
+:finish
 pause
+endlocal & exit /b %RC%

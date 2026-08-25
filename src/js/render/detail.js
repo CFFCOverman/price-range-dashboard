@@ -24,6 +24,7 @@ function renderDetail() {
     $('peP50').value = isFinite(m.p50) ? m.p50 : '';
     $('peP75').value = isFinite(m.p75) ? m.p75 : '';
   }
+  renderPeManualStatus(co.ticker);
   $('pxInput').value = isFinite(co.price) ? co.price : '';
   renderHead(co);
   const r = calcRange(co, state.horizon);
@@ -71,7 +72,15 @@ function partialRefresh() {
   const rows = overviewRows(); renderOvTable(rows); renderOvChart(rows);
   const co = state.companies.get(state.selected); if (!co) return;
   const r = calcRange(co, state.horizon);
-  renderHead(co); renderKpis(co, r); renderMatrix(co, r); renderBullet(co, r); renderCompare(co, r); renderPressure(co, r); renderSim(co); renderDirection(co, r);
+  renderHead(co); renderKpis(co, r); renderMatrix(co, r); renderBullet(co, r); renderCompare(co, r); renderPressure(co, r); renderSim(co); scheduleDirection(co, r);
+}
+function renderPeManualStatus(ticker) {
+  const msg = $('peManualError'); if (!msg) return;
+  const m = state.peManual.get(ticker);
+  const complete = m && isFinite(m.p25) && isFinite(m.p50) && isFinite(m.p75);
+  msg.hidden = !complete || peManualValid(m);
+  msg.textContent = msg.hidden ? '' : t('peOrderError');
+  for (const id of ['peP25', 'peP50', 'peP75']) $(id).setAttribute('aria-invalid', msg.hidden ? 'false' : 'true');
 }
 function renderMatrix(co, r) {
   const wrap = $('mxWrap'); wrap.replaceChildren();

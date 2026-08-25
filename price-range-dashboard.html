@@ -107,6 +107,7 @@ a.dl { color: var(--series-1); text-decoration: none; border-bottom: 1px solid v
 .status { font-size: 12.5px; color: var(--text-secondary); }
 .status .ok { color: var(--delta-up); font-weight: 600; }
 .status .warn { color: var(--delta-down); font-weight: 600; }
+.status.warn { color: var(--delta-down); font-weight: 600; }
 details.help { margin-top: 12px; font-size: 12.5px; color: var(--text-secondary); }
 details.help summary { cursor: pointer; color: var(--text-primary); font-weight: 600; }
 details.help code {
@@ -192,6 +193,7 @@ select, input[type="number"] {
   border: 1px solid var(--axis); border-radius: 7px; padding: 5px 8px;
 }
 input[type="number"] { width: 86px; text-align: right; font-variant-numeric: tabular-nums; }
+input[aria-invalid="true"] { border-color: var(--delta-down); outline: 1px solid var(--delta-down); }
 .tabs { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .tabs button { border: 0; border-radius: 0; padding: 5px 14px; background: transparent; }
 .tabs button.on { background: var(--series-1); color: #fff; }
@@ -429,23 +431,25 @@ svg text { font-family: inherit; }
 <section class="card" id="detCard" hidden>
   <h2><span class="lz">公司详情</span><span class="le">Company detail</span></h2>
   <div class="formrow">
-    <div><label><span class="lz">公司</span><span class="le">Company</span></label><select id="coSel"></select></div>
-    <div><label><span class="lz">现价</span><span class="le">Price</span></label><input type="number" step="0.01" id="pxInput" placeholder="必填"></div>
+    <div><label for="coSel"><span class="lz">公司</span><span class="le">Company</span></label><select id="coSel"></select></div>
+    <div><label for="pxInput"><span class="lz">现价</span><span class="le">Price</span></label><input type="number" min="0.00000001" step="0.01" id="pxInput" aria-describedby="pxError" placeholder="必填"></div>
     <div><label><span class="lz">预测期</span><span class="le">Horizon</span></label>
       <span class="tabs" id="hzTabs">
         <button data-h="fy1" class="on">FY1</button><button data-h="fy2">FY2</button>
       </span>
     </div>
-    <div><label><span class="lz">EPS 悲观</span><span class="le">EPS low</span></label><input type="number" step="0.01" id="epsLow"></div>
-    <div><label><span class="lz">EPS 基准</span><span class="le">EPS base</span></label><input type="number" step="0.01" id="epsMean"></div>
-    <div><label><span class="lz">EPS 乐观</span><span class="le">EPS high</span></label><input type="number" step="0.01" id="epsHigh"></div>
+    <div><label for="epsLow"><span class="lz">EPS 悲观</span><span class="le">EPS low</span></label><input type="number" step="0.01" id="epsLow"></div>
+    <div><label for="epsMean"><span class="lz">EPS 基准</span><span class="le">EPS base</span></label><input type="number" step="0.01" id="epsMean"></div>
+    <div><label for="epsHigh"><span class="lz">EPS 乐观</span><span class="le">EPS high</span></label><input type="number" step="0.01" id="epsHigh"></div>
     <button id="epsReset"><span class="lz">重置 EPS</span><span class="le">Reset EPS</span></button>
+    <span class="status warn" id="pxError" role="status" aria-live="polite" hidden></span>
   </div>
   <div class="formrow" id="peManualRow" hidden>
     <span class="status warn-note" style="color:var(--delta-down)"><span class="lz">该公司无历史估值序列,请手动输入分位:</span><span class="le">No PE history for this company — enter percentiles manually:</span></span>
-    <div><label><span class="lz">PE 25分位</span><span class="le">PE P25</span></label><input type="number" step="0.1" id="peP25"></div>
-    <div><label><span class="lz">PE 中位数</span><span class="le">PE median</span></label><input type="number" step="0.1" id="peP50"></div>
-    <div><label><span class="lz">PE 75分位</span><span class="le">PE P75</span></label><input type="number" step="0.1" id="peP75"></div>
+    <div><label for="peP25"><span class="lz">PE 25分位</span><span class="le">PE P25</span></label><input type="number" step="0.1" id="peP25" aria-describedby="peManualError"></div>
+    <div><label for="peP50"><span class="lz">PE 中位数</span><span class="le">PE median</span></label><input type="number" step="0.1" id="peP50" aria-describedby="peManualError"></div>
+    <div><label for="peP75"><span class="lz">PE 75分位</span><span class="le">PE P75</span></label><input type="number" step="0.1" id="peP75" aria-describedby="peManualError"></div>
+    <span class="status warn" id="peManualError" role="alert" hidden></span>
   </div>
 
   <div class="dethead" id="detHead"></div>
@@ -672,6 +676,7 @@ const I18N = {
     tMid: '中枢(基准 EPS × PE 中位)', tCore: '核心区间 P25–P75', tExt: '极端区间 P10–P90', tPe: '当前 NTM PE', tTgt: '分析师目标价(参考)',
     vsPrice: ' vs 现价', histPct: n => '历史 ' + n + '% 分位',
     needPct: '请在上方输入该公司的估值分位(P25 / P50 / P75)。', needEps: '缺少 EPS 预测(或基准 EPS ≤ 0),无法测算。',
+    pricePositive: '现价必须大于 0。', priceRequired: '现价不能为空。', priceRestored: '无效输入已撤销，现价已恢复为 {0}。', peOrderError: '估值分位必须大于 0，且满足 P25 ≤ P50 ≤ P75。',
     mxCorner: 'EPS \\ 估值', mxMedian: 'PE 中位', mxOpt: '乐观 EPS ', mxBase: '基准 EPS ', mxPes: '悲观 EPS ',
     mxUnit: cur => '单位:' + cur + ' · 括注为相对现价空间。',
     mxBaseGap: (v, d) => '⚠ 估值分位与 EPS 可能不是同一个口径:分位库最新一点 × 基准 EPS = ' + fmtN(v)
@@ -879,6 +884,7 @@ const I18N = {
     tMid: 'Mid (base EPS × median PE)', tCore: 'Core range P25–P75', tExt: 'Extreme range P10–P90', tPe: 'Current NTM P/E', tTgt: 'Analyst target (ref)',
     vsPrice: ' vs price', histPct: n => n + '% of history',
     needPct: 'Enter PE percentiles (P25 / P50 / P75) above.', needEps: 'No EPS forecast (or base EPS ≤ 0) — cannot compute.',
+    pricePositive: 'Price must be greater than 0.', priceRequired: 'Price cannot be blank.', priceRestored: 'Invalid input was undone; price was restored to {0}.', peOrderError: 'PE percentiles must be positive and ordered P25 ≤ P50 ≤ P75.',
     mxCorner: 'EPS \\ multiple', mxMedian: 'Median PE', mxOpt: 'High EPS ', mxBase: 'Base EPS ', mxPes: 'Low EPS ',
     mxUnit: cur => 'Unit: ' + cur + ' · sub-notes are % vs current price.',
     mxBaseGap: (v, d) => '⚠ The P/E percentiles and the EPS may be on different bases: latest percentile point × base EPS = ' + fmtN(v)
@@ -1068,7 +1074,6 @@ const I18N = {
   },
 };
 const t = k => (I18N[LANG][k] !== undefined ? I18N[LANG][k] : I18N.zh[k]);
-
 function ingestCompanies(recs) {
   let n = 0;
   for (const r of recs) {
@@ -1121,11 +1126,11 @@ function ingestHistory(recs) {
     n++;
   }
   for (const [tk, arr] of buf) {
-    arr.sort((a, b) => a.date < b.date ? -1 : 1);
+    arr.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
     state.history.set(tk, arr);   // replace whole series for that ticker
   }
   for (const [tk, arr] of pbuf) {
-    arr.sort((a, b) => a.date < b.date ? -1 : 1);
+    arr.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
     setPriceHist(tk, arr);
   }
   return n;
@@ -1134,13 +1139,22 @@ function ingestHistory(recs) {
 /* 价格序列择优:长的赢,但带成交量的序列值 1.5 倍长度——
  * 因为筹码分布靠成交量加权,一条稍短但有量的日线比一条更长的纯收盘价序列有用得多。 */
 const hasVol = a => !!(a && a.length && a.some(d => isFinite(d.vol) && d.vol > 0));
+function normalizePriceHist(arr) {
+  const byDate = new Map();
+  for (const d of (arr || [])) if (d && d.date) byDate.set(d.date, d);
+  return [...byDate.values()].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+}
 function setPriceHist(ticker, arr) {
   if (!arr || !arr.length) return;
+  /* 同日重复行以本次输入中最后一行为准，再恢复严格升序。否则 as-of 截断
+   * 虽不一定报错，却会让“当天收盘”取决于排序实现如何摆放相等元素。 */
+  const next = normalizePriceHist(arr);
+  if (!next.length) return;
   const old = state.priceHist.get(ticker) || [];
   const score = a => a.length * (hasVol(a) ? 1.5 : 1);
-  if (score(arr) > score(old)) state.priceHist.set(ticker, arr);
+  /* 文件按旧→新导入；质量同分时必须让后导入者覆盖，才能刷新同长度日线。 */
+  if (score(next) >= score(old)) state.priceHist.set(ticker, next);
 }
-
 /* ================= PE stats & core calc ================= */
 function peStats(ticker) {
   const h = state.history.get(ticker);
@@ -1154,10 +1168,14 @@ function peStats(ticker) {
     };
   }
   const m = state.peManual.get(ticker);
-  if (m && isFinite(m.p25) && isFinite(m.p50) && isFinite(m.p75)) {
+  if (peManualValid(m)) {
     return { src: 'manual', p10: NaN, p25: m.p25, p50: m.p50, p75: m.p75, p90: NaN };
   }
   return null;
+}
+function peManualValid(m) {
+  return !!m && isFinite(m.p25) && isFinite(m.p50) && isFinite(m.p75)
+    && m.p25 > 0 && m.p25 <= m.p50 && m.p50 <= m.p75;
 }
 function epsFor(ticker, hz) {
   const ov = state.overrides.get(ticker + '|' + hz);
@@ -1212,7 +1230,6 @@ function calcRange(co, hz) {
   r.upPct = (r.coreHigh / co.price - 1) * 100;
   return r;
 }
-
 /* ================= demo data ================= */
 function loadDemo() {
   const cos = [
@@ -1404,16 +1421,27 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
     const row = aoa[i] || [];
     const date = parseEstDate(row[cDate]);
     if (!date) { if (recs.length) break; else continue; }
+    const mean = parseFloat(row[cMean]);
+    /* 日期存在但 Mean 为空的尾行常见于未完成导出。不能让它成为 latest：旧实现
+     * 会先把 state 中 EPS 写成 NaN，随后 toFixed 抛错，留下半提交状态。 */
+    if (!isFinite(mean)) continue;
     recs.push({
       date,
-      mean: parseFloat(row[cMean]),
+      mean,
       low: cLow >= 0 ? parseFloat(row[cLow]) : NaN,
       high: cHigh >= 0 ? parseFloat(row[cHigh]) : NaN,
       pe: cPE >= 0 ? parseFloat(row[cPE]) : NaN,
+      n: cN >= 0 ? parseFloat(row[cN]) : NaN,
+      up: cUp >= 0 ? parseFloat(row[cUp]) : NaN,
+      down: cDn >= 0 ? parseFloat(row[cDn]) : NaN,
     });
   }
   if (!recs.length) return null;
-  recs.sort((a, b) => a.date < b.date ? -1 : 1);
+  /* 同日重复版本以后出现者覆盖；latest 与 rev 从同一个记录对象读取。 */
+  const byDate = new Map();
+  for (const r of recs) byDate.set(r.date, r);
+  recs.length = 0;
+  recs.push(...[...byDate.values()].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const latest = recs[recs.length - 1];
   const fy = estimateFy((aoa[sec] || [])[1], latest.date, fileName);
   const isFY2 = fy === 2;
@@ -1429,11 +1457,10 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
   };
   if (!isFar) co.eps[isFY2 ? 'fy2' : 'fy1'] = { low: latest.low, mean: latest.mean, high: latest.high };
   if (fy === 1) {   /* 修正动量:最新一期上调/下调家数(方向信号) */
-    const lrow = aoa.map(r => r || []).find(r => parseEstDate(r[cDate]) === latest.date) || [];
     co.rev = {
-      n: cN >= 0 ? parseFloat(lrow[cN]) : NaN,
-      up: cUp >= 0 ? parseFloat(lrow[cUp]) : NaN,
-      down: cDn >= 0 ? parseFloat(lrow[cDn]) : NaN,
+      n: latest.n,
+      up: latest.up,
+      down: latest.down,
       date: latest.date,
     };
   }
@@ -1599,7 +1626,7 @@ function ingestChartingSheet(sheetName, aoa, fileName) {
   const ohlcIdx = w => hdr.findIndex(h => new RegExp('(^| - )' + w + '$', 'i').test(h));
   const oi = ohlcIdx('Open'), hi2 = ohlcIdx('High'), li2 = ohlcIdx('Low');
   const hasOHLCCols = oi >= 0 && hi2 >= 0 && li2 >= 0;
-  const px = []; let lastPE = NaN;
+  let px = []; let lastPE = NaN;
   for (let i = 1; i < aoa.length; i++) {
     const r = aoa[i] || [];
     const d = toISODate(r[di]); const p = parseFloat(r[ci]);
@@ -1617,8 +1644,9 @@ function ingestChartingSheet(sheetName, aoa, fileName) {
     px.push(rec);
     if (pi >= 0) { const v = parseFloat(r[pi]); if (isFinite(v) && v > 0) lastPE = v; }
   }
+  /* 公司与市场序列走同一套“同日末行覆盖 + 严格升序”，避免市场收益/MA 重复计日。 */
+  px = normalizePriceHist(px);
   if (px.length < INGEST_MIN_BARS) return null;
-  px.sort((a, b) => a.date < b.date ? -1 : 1);
   /* 市场级序列(fetcher 输出 "_MARKET-角色 SYMBOL Daily Charting.xlsx")→ 存入 market,不建公司 */
   const mm = /_MARKET-(BENCH|SECTOR|CREDIT|RATES)\s+([A-Z.]{1,6}-[A-Z]{2})/i.exec(fileName || '');
   if (mm) {
@@ -1667,15 +1695,21 @@ function ingestTargetsSheet(sheetName, aoa, fileName) {
     const d = parseDMYY(r[cD]); const tgt = parseFloat(String(r[cT]).replace(/[$,]/g, ''));
     if (!d || !isFinite(tgt)) continue;
     const rt = /\(([\d.]+)\)/.exec(String(r[cR] || ''));
+    const buy = parseFloat(r[cB]), overweight = parseFloat(r[cO]);
     rows.push({
       date: d, tgt,
       rating: rt ? +rt[1] : NaN,
       n: parseFloat(r[cN]),
-      buyPct: (parseFloat(r[cB]) || 0) + (parseFloat(r[cO]) || 0),
+      /* 两列都缺时是“不知道”，不是 0% 买入；只有至少一列有效才允许求和。 */
+      buyPct: isFinite(buy) || isFinite(overweight) ? (isFinite(buy) ? buy : 0) + (isFinite(overweight) ? overweight : 0) : NaN,
     });
   }
   if (rows.length < 2) return null;
-  rows.sort((a, b) => a.date < b.date ? -1 : 1);
+  const byDate = new Map();
+  for (const r of rows) byDate.set(r.date, r);            /* 同日修订以后出现者覆盖 */
+  rows.length = 0;
+  rows.push(...[...byDate.values()].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  if (rows.length < 2) return null;
   const tk = ((/^([A-Z.]{1,6}-[A-Z]{2})/.exec(fileName || '') || [])[1] || String((aoa[0] || [])[0] || '')).toUpperCase();
   const ticker = state.companies.has(tk) ? tk : resolveTicker(fileName, tk, NaN);
   if (!ticker) return { ticker: null, text: t('tgtNoTicker') };
@@ -1691,8 +1725,10 @@ function ingestShortInt(recs) {
     const days = parseFloat(r.days_to_cover), pct = parseFloat(r.pct_of_float);
     if (!tk || !r.date || !isFinite(pct)) continue;
     const arr = state.shortInt.get(tk) || [];
-    if (!arr.some(x => x.date === r.date)) { arr.push({ date: r.date, days, pct }); n++; }
-    arr.sort((a, b) => a.date < b.date ? -1 : 1);
+    const at = arr.findIndex(x => x.date === r.date);
+    if (at >= 0) arr[at] = { date: r.date, days, pct };  /* 文件旧→新导入：同日修订以后导入者为准 */
+    else { arr.push({ date: r.date, days, pct }); n++; }
+    arr.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
     state.shortInt.set(tk, arr);
   }
   return n;
@@ -2082,7 +2118,7 @@ function renderOvChart(rows) {
       tip.appendChild(el('div', 'k', t('tipMid') + fmtN(r.mid) + '(' + fmtPct(r.midPct) + ')· ' + t('tipPrice') + fmtN(co.price)));
       const bb = $('ovChartBox').getBoundingClientRect();
       tip.style.display = 'block';
-      tip.style.left = Math.min(ev.clientX - bb.left + 14, bb.width - 300) + 'px';
+      tip.style.left = Math.max(0, Math.min(ev.clientX - bb.left + 14, bb.width - 300)) + 'px';
       tip.style.top = (ev.clientY - bb.top + 14) + 'px';
     });
     hit.addEventListener('pointerleave', () => tip.style.display = 'none');
@@ -2091,7 +2127,6 @@ function renderOvChart(rows) {
   });
   box.appendChild(svg);
 }
-
 /* ================= render: detail ================= */
 function renderDetail() {
   const co = state.companies.get(state.selected);
@@ -2118,6 +2153,7 @@ function renderDetail() {
     $('peP50').value = isFinite(m.p50) ? m.p50 : '';
     $('peP75').value = isFinite(m.p75) ? m.p75 : '';
   }
+  renderPeManualStatus(co.ticker);
   $('pxInput').value = isFinite(co.price) ? co.price : '';
   renderHead(co);
   const r = calcRange(co, state.horizon);
@@ -2165,7 +2201,15 @@ function partialRefresh() {
   const rows = overviewRows(); renderOvTable(rows); renderOvChart(rows);
   const co = state.companies.get(state.selected); if (!co) return;
   const r = calcRange(co, state.horizon);
-  renderHead(co); renderKpis(co, r); renderMatrix(co, r); renderBullet(co, r); renderCompare(co, r); renderPressure(co, r); renderSim(co); renderDirection(co, r);
+  renderHead(co); renderKpis(co, r); renderMatrix(co, r); renderBullet(co, r); renderCompare(co, r); renderPressure(co, r); renderSim(co); scheduleDirection(co, r);
+}
+function renderPeManualStatus(ticker) {
+  const msg = $('peManualError'); if (!msg) return;
+  const m = state.peManual.get(ticker);
+  const complete = m && isFinite(m.p25) && isFinite(m.p50) && isFinite(m.p75);
+  msg.hidden = !complete || peManualValid(m);
+  msg.textContent = msg.hidden ? '' : t('peOrderError');
+  for (const id of ['peP25', 'peP50', 'peP75']) $(id).setAttribute('aria-invalid', msg.hidden ? 'false' : 'true');
 }
 function renderMatrix(co, r) {
   const wrap = $('mxWrap'); wrap.replaceChildren();
@@ -3553,18 +3597,21 @@ function simTrade(px, e, x, costBps) {
 /** 贪心不重叠去重后的独立事件数。
  *  持有 63 天的规则很容易连着 40 天天天触发,那 40 笔共享的是同一段行情,
  *  当成 40 个独立样本去算 z,分母虚高四十倍,任何噪声都会显著。effN 是给 z 用的真分母。 */
-function simEffN(trades) {
-  let n = 0, until = -1;
+function simEffSample(trades) {
+  let n = 0, win = 0, until = -1;
   for (const tr of trades) {
-    if (tr.entryI > until) { n++; until = tr.exitI; }
+    if (tr.entryI > until) { n++; if (tr.retPct > 0) win++; until = tr.exitI; }
   }
-  return n;
+  return { n, win };
 }
+function simEffN(trades) { return simEffSample(trades).n; }
 
 /** 一组交易 → 一组统计。maxDD 的定义在这里写死,别处不许再算一遍。 */
 function simStats(trades) {
   const n = trades.length;
-  const out = { n, win: 0, winPct: NaN, avgRet: NaN, medRet: NaN, maxDD: NaN, avgMAE: NaN, avgMFE: NaN, effN: simEffN(trades) };
+  const eff = simEffSample(trades);
+  const out = { n, win: 0, winPct: NaN, avgRet: NaN, medRet: NaN, maxDD: NaN, avgMAE: NaN, avgMFE: NaN,
+    effN: eff.n, effWin: eff.win };
   if (!n) return out;
   const rets = trades.map(t => t.retPct);
   out.win = rets.filter(v => v > 0).length;
@@ -3592,25 +3639,32 @@ function simStats(trades) {
 /** 同频随机入场对照:在同一段可入场区间里随机挑 nEvents 个入场日,持有期相同。
  *  种子固定 → 同样输入每次得到同一批日子(SPEC 3.2)。
  *  对照**不看任何规则**,这是它的全部意义:它回答"这段行情里随便买会怎样"。 */
-function simControl(ticker, hold, nEvents, seed) {
+function simControl(ticker, hold, nEvents, seed, opts) {
   const px = state.priceHist.get(ticker) || [];
-  const warm = SIM_WARM;
+  const o = opts || {};
+  const warm = isFinite(o.warm) && o.warm > 0 ? Math.floor(o.warm) : SIM_WARM;
+  const costBps = isFinite(o.costBps) ? o.costBps : SIM_COST_BPS;
   const lo = warm + 1, hi = px.length - 1 - hold;      /* 入场根的合法区间 [lo, hi] */
   const trades = [];
   if (!(nEvents > 0) || hi < lo) return Object.assign(simStats(trades), { trades, seed });
   const span = hi - lo + 1;
-  const want = Math.min(nEvents, span);
+  /* 策略组持仓期间不重复开仓；对照也必须从生成时就满足同一约束。
+   * 先在压缩坐标里无放回抽样，再按排序名次展开 hold 格，可保证相邻 entry > 前一 exit。 */
+  const maxN = Math.floor((span + hold) / (hold + 1));
+  const want = Math.min(nEvents, maxN);
+  if (!(want > 0)) return Object.assign(simStats(trades), { trades, seed });
+  const compactSpan = span - (want - 1) * hold;
   const rnd = simRng(seed);
   const picked = new Set();
   /* 不放回抽样;撞满 20×want 次还没抽够就停 —— 宁可对照少几笔,也不要一个死循环
    * 把浏览器挂住(want 接近 span 时碰撞率会很高)。 */
   let guard = 0;
   while (picked.size < want && guard++ < want * 20 + 200) {
-    picked.add(lo + Math.floor(rnd() * span));
+    picked.add(Math.min(compactSpan - 1, Math.floor(rnd() * compactSpan)));
   }
-  const idx = [...picked].sort((a, b) => a - b);
+  const idx = [...picked].sort((a, b) => a - b).map((q, i) => lo + q + i * hold);
   for (const e of idx) {
-    const tr = simTrade(px, e, e + hold, SIM_COST_BPS);
+    const tr = simTrade(px, e, e + hold, costBps);
     if (tr) trades.push(tr);
   }
   return Object.assign(simStats(trades), { trades, seed });
@@ -3620,7 +3674,9 @@ function simControl(ticker, hold, nEvents, seed) {
 function simZ(a, b) {
   const na = Math.min(a.n, a.effN), nb = Math.min(b.n, b.effN);
   if (!(na > 0) || !(nb > 0)) return NaN;
-  const ka = Math.round(a.winPct / 100 * na), kb = Math.round(b.winPct / 100 * nb);
+  /* 胜场必须来自同一组实际非重叠交易，不能用整体胜率乘 effN 伪造。 */
+  const ka = a.effWin, kb = b.effWin;
+  if (!isFinite(ka) || !isFinite(kb)) return NaN;
   const p = (ka + kb) / (na + nb);
   const se = Math.sqrt(p * (1 - p) * (1 / na + 1 / nb));
   if (!(se > 0)) return NaN;
@@ -3644,7 +3700,7 @@ function simRun(ticker, rule, hold, opts) {
 
   const empty = () => {
     const st = simStats(trades);
-    const ctrl = simControl(ticker, h, 0, seed);
+    const ctrl = simControl(ticker, h, 0, seed, { warm, costBps });
     return Object.assign(st, { trades, ctrl, z: NaN, warn, hold: h, horizon: hz, ruleText, seed, costBps,
       scanned: 0, from: px.length ? px[0].date : null, to: px.length ? px[px.length - 1].date : null });
   };
@@ -3691,7 +3747,7 @@ function simRun(ticker, rule, hold, opts) {
   }
 
   const st = simStats(trades);
-  const ctrl = simControl(ticker, h, st.n, seed);
+  const ctrl = simControl(ticker, h, st.n, seed, { warm, costBps });
   if (!st.n) warn.push('noTrigger');
   else {
     if (st.n < SIM_MIN_TRIG) warn.push('thin');
@@ -4020,8 +4076,11 @@ function sentScores(co) {
     const tgtSc = !isFinite(chg) ? 0 : chg >= 8 ? 1 : chg >= 3 ? 0.5 : chg > -3 ? 0 : chg > -8 ? -0.5 : -1;
     parts.push([tgtSc, 0.35]);
     const bChg = isFinite(last.buyPct) && isFinite(prev.buyPct) ? last.buyPct - prev.buyPct : NaN;
-    const rSc = !isFinite(bChg) ? 0 : bChg >= 3 ? 1 : bChg >= 1 ? 0.5 : bChg > -1 ? 0 : bChg > -3 ? -0.5 : -1;
-    parts.push([rSc, 0.15]);
+    /* 缺失评级列意味着该腿不存在；塞一个中性 0 仍会占住 15% 权重，稀释其余信号。 */
+    if (isFinite(bChg)) {
+      const rSc = bChg >= 3 ? 1 : bChg >= 1 ? 0.5 : bChg > -1 ? 0 : bChg > -3 ? -0.5 : -1;
+      parts.push([rSc, 0.15]);
+    }
     why.push(t('dirWhyTgt')(chg, last.buyPct));
   }
   const si = state.shortInt.get(co.ticker);
@@ -4059,10 +4118,25 @@ function peerRevs(co) {
   if (!items.length) return null;
   return { avg: clamp1(items.reduce((a, b) => a + b.sc, 0) / items.length), items };
 }
+function directionRng(key) {
+  let s = 2166136261;
+  for (let i = 0; i < key.length; i++) { s ^= key.charCodeAt(i); s = Math.imul(s, 16777619); }
+  return () => { s += 0x6D2B79F5; let z = s; z = Math.imul(z ^ z >>> 15, z | 1); z ^= z + Math.imul(z ^ z >>> 7, z | 61); return ((z ^ z >>> 14) >>> 0) / 4294967296; };
+}
+let directionTimer = null;
+function scheduleDirection(co, r) {
+  if (directionTimer !== null) clearTimeout(directionTimer);
+  const ticker = co && co.ticker;
+  directionTimer = setTimeout(() => {
+    directionTimer = null;
+    if (ticker && state.selected === ticker) renderDirection(co, r);
+  }, 120);
+}
 function renderDirection(co, r) {
+  if (directionTimer !== null) { clearTimeout(directionTimer); directionTimer = null; }
   const sec = $('dirSec'), chips = $('dirChips'), out = $('dirOut');
   const ph = state.priceHist.get(co.ticker);
-  if (!isFinite(co.price) || !ph || ph.length < 30) { sec.hidden = true; return; }
+  if (!isFinite(co.price) || co.price <= 0 || !ph || ph.length < 30) { sec.hidden = true; return; }
   sec.hidden = false;
   /* 打分器:有市场数据时默认"自动",可手动覆盖 */
   const auto = marketScores();
@@ -4136,13 +4210,15 @@ function renderDirection(co, r) {
   const H = Math.max(6, Math.round(126 / perStep));
   const rz = use.map(x => x - mur);
   const NP = 6000, anchors = [[bear, wBear], [mid, wMid], [bull, wBull]];
+  const rndNext = directionRng([co.ticker, co.price, bear, mid, bull, wBear, wMid, wBull, H,
+    ...use].map(v => String(v)).join('|'));
   let up = 0, up10 = 0, dn10 = 0; const ends = new Array(NP);
   for (let k = 0; k < NP; k++) {
-    const rnd = Math.random(); let acc = 0, tgt = mid;
+    const rnd = rndNext(); let acc = 0, tgt = mid;
     for (const [a, w] of anchors) { acc += w; if (rnd <= acc) { tgt = a; break; } }
     const drift = Math.log(tgt / co.price) / H;
     let p = co.price;
-    for (let d = 0; d < H; d++) p *= Math.exp(rz[(Math.random() * rz.length) | 0] + drift);
+    for (let d = 0; d < H; d++) p *= Math.exp(rz[(rndNext() * rz.length) | 0] + drift);
     ends[k] = p;
     if (p > co.price) up++;
     if (p > co.price * 1.10) up10++;
@@ -4238,7 +4314,6 @@ function renderPEBand(co, pe) {
     + ' · ' + t('peCur') + fmtX(pe.current) + t('pctOf')(rankPct(pe.sorted, pe.current))
     + (h.length < 36 ? t('peShortWin') : '');
 }
-
 /* ================= 价格走势面板(有 OHLC 画蜡烛,没有就降级成收盘折线) =================
  *
  * 这块面板的规矩,写在最前面,因为它比画法重要得多:
@@ -4476,6 +4551,7 @@ function bindPe(id, key) {
     const m = state.peManual.get(t) || {};
     m[key] = parseFloat(ev.target.value);
     state.peManual.set(t, m);
+    renderPeManualStatus(t);
     partialRefresh();
   });
 }
@@ -4498,9 +4574,33 @@ $('dirPeers').addEventListener('change', ev => {
 });
 $('pxInput').addEventListener('input', ev => {
   const co = state.companies.get(state.selected); if (!co) return;
-  co.price = parseFloat(ev.target.value);
+  const raw = ev.target.value.trim();
+  const price = parseFloat(raw);
+  if (!raw || !isFinite(price) || price <= 0) {
+    const key = raw ? 'pricePositive' : 'priceRequired';
+    ev.target.setCustomValidity(t(key));
+    ev.target.setAttribute('aria-invalid', 'true');
+    const msg = $('pxError'); msg.hidden = false; msg.dataset.kind = key; msg.textContent = t(key);
+    return;
+  }
+  ev.target.setCustomValidity('');
+  ev.target.setAttribute('aria-invalid', 'false');
+  const msg = $('pxError'); msg.hidden = true; msg.textContent = ''; delete msg.dataset.kind;
+  co.price = price;
   co.priceSrc = 'user'; co.priceDate = '@manual';
   partialRefresh();
+});
+$('pxInput').addEventListener('blur', ev => {
+  const co = state.companies.get(state.selected); if (!co) return;
+  if (!ev.target.value.trim() || !isFinite(parseFloat(ev.target.value)) || parseFloat(ev.target.value) <= 0) {
+    ev.target.value = isFinite(co.price) && co.price > 0 ? co.price : '';
+    ev.target.setCustomValidity('');
+    ev.target.setAttribute('aria-invalid', 'false');
+    const msg = $('pxError');
+    if (isFinite(co.price) && co.price > 0) {
+      msg.hidden = false; msg.dataset.kind = 'priceRestored'; msg.textContent = t('priceRestored').replace('{0}', fmtN(co.price));
+    }
+  }
 });
 
 /* ---- 买入模拟面板(SPEC 3.5)----
@@ -4552,7 +4652,6 @@ const T_CO = 'ticker,name,currency,price,price_date,eps_fy1_low,eps_fy1_mean,eps
 const T_HI = 'ticker,date,pe_ntm\nAAPL-US,2021-01-31,33.2\nAAPL-US,2021-02-28,31.8\n';
 $('dlCompanies').href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(T_CO);
 $('dlHistory').href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(T_HI);
-
 </script>
 </body>
 </html>

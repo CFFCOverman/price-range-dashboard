@@ -9,6 +9,7 @@ select, input[type="number"] {
   border: 1px solid var(--axis); border-radius: 7px; padding: 5px 8px;
 }
 input[type="number"] { width: 86px; text-align: right; font-variant-numeric: tabular-nums; }
+input[aria-invalid="true"] { border-color: var(--delta-down); outline: 1px solid var(--delta-down); }
 .tabs { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .tabs button { border: 0; border-radius: 0; padding: 5px 14px; background: transparent; }
 .tabs button.on { background: var(--series-1); color: #fff; }

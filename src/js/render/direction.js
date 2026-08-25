@@ -1,7 +1,22 @@
+function directionRng(key) {
+  let s = 2166136261;
+  for (let i = 0; i < key.length; i++) { s ^= key.charCodeAt(i); s = Math.imul(s, 16777619); }
+  return () => { s += 0x6D2B79F5; let z = s; z = Math.imul(z ^ z >>> 15, z | 1); z ^= z + Math.imul(z ^ z >>> 7, z | 61); return ((z ^ z >>> 14) >>> 0) / 4294967296; };
+}
+let directionTimer = null;
+function scheduleDirection(co, r) {
+  if (directionTimer !== null) clearTimeout(directionTimer);
+  const ticker = co && co.ticker;
+  directionTimer = setTimeout(() => {
+    directionTimer = null;
+    if (ticker && state.selected === ticker) renderDirection(co, r);
+  }, 120);
+}
 function renderDirection(co, r) {
+  if (directionTimer !== null) { clearTimeout(directionTimer); directionTimer = null; }
   const sec = $('dirSec'), chips = $('dirChips'), out = $('dirOut');
   const ph = state.priceHist.get(co.ticker);
-  if (!isFinite(co.price) || !ph || ph.length < 30) { sec.hidden = true; return; }
+  if (!isFinite(co.price) || co.price <= 0 || !ph || ph.length < 30) { sec.hidden = true; return; }
   sec.hidden = false;
   /* 打分器:有市场数据时默认"自动",可手动覆盖 */
   const auto = marketScores();
@@ -75,13 +90,15 @@ function renderDirection(co, r) {
   const H = Math.max(6, Math.round(126 / perStep));
   const rz = use.map(x => x - mur);
   const NP = 6000, anchors = [[bear, wBear], [mid, wMid], [bull, wBull]];
+  const rndNext = directionRng([co.ticker, co.price, bear, mid, bull, wBear, wMid, wBull, H,
+    ...use].map(v => String(v)).join('|'));
   let up = 0, up10 = 0, dn10 = 0; const ends = new Array(NP);
   for (let k = 0; k < NP; k++) {
-    const rnd = Math.random(); let acc = 0, tgt = mid;
+    const rnd = rndNext(); let acc = 0, tgt = mid;
     for (const [a, w] of anchors) { acc += w; if (rnd <= acc) { tgt = a; break; } }
     const drift = Math.log(tgt / co.price) / H;
     let p = co.price;
-    for (let d = 0; d < H; d++) p *= Math.exp(rz[(Math.random() * rz.length) | 0] + drift);
+    for (let d = 0; d < H; d++) p *= Math.exp(rz[(rndNext() * rz.length) | 0] + drift);
     ends[k] = p;
     if (p > co.price) up++;
     if (p > co.price * 1.10) up10++;
@@ -177,4 +194,3 @@ function renderPEBand(co, pe) {
     + ' · ' + t('peCur') + fmtX(pe.current) + t('pctOf')(rankPct(pe.sorted, pe.current))
     + (h.length < 36 ? t('peShortWin') : '');
 }
-

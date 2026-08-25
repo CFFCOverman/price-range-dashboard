@@ -57,16 +57,27 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
     const row = aoa[i] || [];
     const date = parseEstDate(row[cDate]);
     if (!date) { if (recs.length) break; else continue; }
+    const mean = parseFloat(row[cMean]);
+    /* 日期存在但 Mean 为空的尾行常见于未完成导出。不能让它成为 latest：旧实现
+     * 会先把 state 中 EPS 写成 NaN，随后 toFixed 抛错，留下半提交状态。 */
+    if (!isFinite(mean)) continue;
     recs.push({
       date,
-      mean: parseFloat(row[cMean]),
+      mean,
       low: cLow >= 0 ? parseFloat(row[cLow]) : NaN,
       high: cHigh >= 0 ? parseFloat(row[cHigh]) : NaN,
       pe: cPE >= 0 ? parseFloat(row[cPE]) : NaN,
+      n: cN >= 0 ? parseFloat(row[cN]) : NaN,
+      up: cUp >= 0 ? parseFloat(row[cUp]) : NaN,
+      down: cDn >= 0 ? parseFloat(row[cDn]) : NaN,
     });
   }
   if (!recs.length) return null;
-  recs.sort((a, b) => a.date < b.date ? -1 : 1);
+  /* 同日重复版本以后出现者覆盖；latest 与 rev 从同一个记录对象读取。 */
+  const byDate = new Map();
+  for (const r of recs) byDate.set(r.date, r);
+  recs.length = 0;
+  recs.push(...[...byDate.values()].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const latest = recs[recs.length - 1];
   const fy = estimateFy((aoa[sec] || [])[1], latest.date, fileName);
   const isFY2 = fy === 2;
@@ -82,11 +93,10 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
   };
   if (!isFar) co.eps[isFY2 ? 'fy2' : 'fy1'] = { low: latest.low, mean: latest.mean, high: latest.high };
   if (fy === 1) {   /* 修正动量:最新一期上调/下调家数(方向信号) */
-    const lrow = aoa.map(r => r || []).find(r => parseEstDate(r[cDate]) === latest.date) || [];
     co.rev = {
-      n: cN >= 0 ? parseFloat(lrow[cN]) : NaN,
-      up: cUp >= 0 ? parseFloat(lrow[cUp]) : NaN,
-      down: cDn >= 0 ? parseFloat(lrow[cDn]) : NaN,
+      n: latest.n,
+      up: latest.up,
+      down: latest.down,
       date: latest.date,
     };
   }

@@ -30,6 +30,7 @@ function bindPe(id, key) {
     const m = state.peManual.get(t) || {};
     m[key] = parseFloat(ev.target.value);
     state.peManual.set(t, m);
+    renderPeManualStatus(t);
     partialRefresh();
   });
 }
@@ -52,9 +53,33 @@ $('dirPeers').addEventListener('change', ev => {
 });
 $('pxInput').addEventListener('input', ev => {
   const co = state.companies.get(state.selected); if (!co) return;
-  co.price = parseFloat(ev.target.value);
+  const raw = ev.target.value.trim();
+  const price = parseFloat(raw);
+  if (!raw || !isFinite(price) || price <= 0) {
+    const key = raw ? 'pricePositive' : 'priceRequired';
+    ev.target.setCustomValidity(t(key));
+    ev.target.setAttribute('aria-invalid', 'true');
+    const msg = $('pxError'); msg.hidden = false; msg.dataset.kind = key; msg.textContent = t(key);
+    return;
+  }
+  ev.target.setCustomValidity('');
+  ev.target.setAttribute('aria-invalid', 'false');
+  const msg = $('pxError'); msg.hidden = true; msg.textContent = ''; delete msg.dataset.kind;
+  co.price = price;
   co.priceSrc = 'user'; co.priceDate = '@manual';
   partialRefresh();
+});
+$('pxInput').addEventListener('blur', ev => {
+  const co = state.companies.get(state.selected); if (!co) return;
+  if (!ev.target.value.trim() || !isFinite(parseFloat(ev.target.value)) || parseFloat(ev.target.value) <= 0) {
+    ev.target.value = isFinite(co.price) && co.price > 0 ? co.price : '';
+    ev.target.setCustomValidity('');
+    ev.target.setAttribute('aria-invalid', 'false');
+    const msg = $('pxError');
+    if (isFinite(co.price) && co.price > 0) {
+      msg.hidden = false; msg.dataset.kind = 'priceRestored'; msg.textContent = t('priceRestored').replace('{0}', fmtN(co.price));
+    }
+  }
 });
 
 /* ---- 买入模拟面板(SPEC 3.5)----
@@ -106,4 +131,3 @@ const T_CO = 'ticker,name,currency,price,price_date,eps_fy1_low,eps_fy1_mean,eps
 const T_HI = 'ticker,date,pe_ntm\nAAPL-US,2021-01-31,33.2\nAAPL-US,2021-02-28,31.8\n';
 $('dlCompanies').href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(T_CO);
 $('dlHistory').href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(T_HI);
-

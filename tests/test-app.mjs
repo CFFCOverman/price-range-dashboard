@@ -296,6 +296,38 @@ await section('[5] 情绪面四腿权重归一', async () =>
     return { s: s && s.s, n: n && n.s };
   });
   ok('仅新闻一腿时 合成分 = 新闻分(wsum 归一生效)', norm.s !== null && near(norm.s, norm.n, 1e-9), JSON.stringify(norm));
+  const missingRatings = await page.evaluate(() => {
+    state.companies.set('RAT-US', { ticker: 'RAT-US', name: 'RAT', currency: 'USD', price: 10,
+      priceSrc: 'user', eps: { fy1: null, fy2: null }, extra: null });
+    const aoa = [
+      ['Date', 'Mean Rating', '# of Ratings', 'Buy', 'Overweight', 'Mean Tgt Price'],
+      ["28 Apr '26", '', '20', '', '', '100'],
+      ["28 May '26", '', '20', '', '', '102'],
+      ["28 Jun '26", '', '20', '', '', '105'],
+      ["28 Jul '26", '', '20', '', '', '110'],
+      ["28 Jul '26", '', '20', '', '', '120'],
+    ];
+    ingestTargetsSheet('RAT-US', aoa, 'RAT-US Targets Ratings.xlsx');
+    const co = state.companies.get('RAT-US'), s = sentScores(co);
+    const out = { missing: co.targets.every(x => !isFinite(x.buyPct)), score: s && s.s,
+      n: co.targets.length, latest: co.targets[co.targets.length - 1].tgt };
+    state.companies.delete('RAT-US');
+    return out;
+  });
+  ok('Buy/Overweight 两列都缺失时保留为未知,不伪造 0% 评级动量',
+    missingRatings.missing && near(missingRatings.score, 1, 1e-9), JSON.stringify(missingRatings));
+  ok('Targets 同日修订以后出现者覆盖,不会把重复月当成额外月份',
+    missingRatings.n === 4 && missingRatings.latest === 120, JSON.stringify(missingRatings));
+  const signalRevisions = await page.evaluate(() => {
+    state.shortInt.delete('REV-US');
+    ingestShortInt([{ ticker: 'REV-US', date: '2026-07-01', days_to_cover: '2', pct_of_float: '5' }]);
+    ingestShortInt([{ ticker: 'REV-US', date: '2026-07-01', days_to_cover: '3', pct_of_float: '2' }]);
+    const si = state.shortInt.get('REV-US');
+    state.shortInt.delete('REV-US');
+    return { n: si.length, days: si[0].days, pct: si[0].pct };
+  });
+  ok('同日 short-interest 修订以后导入值覆盖,不重复也不保留旧值',
+    signalRevisions.n === 1 && signalRevisions.days === 3 && signalRevisions.pct === 2, JSON.stringify(signalRevisions));
 });
 
 await section('[6] 页面无 localStorage 依赖 / 基本健全', async () =>
@@ -683,11 +715,38 @@ await section('[7] 压力位 / 支撑位(技术轨 × 估值轨)', async () =>
     setPriceHist('S-US', null);
     out.c = state.priceHist.get('S-US')[0].tag;          // 空输入不得覆盖已有序列
     state.priceHist.delete('S-US');
+    setPriceHist('S-US', mk(20, false, 'old'));
+    setPriceHist('S-US', mk(20, false, 'new'));
+    out.d = state.priceHist.get('S-US')[0].tag;          // 同质量同长度:后导入的新文件覆盖
+    const dup = mk(20, false, 'base');
+    dup.push({ ...dup[5], price: 999, tag: 'last-duplicate' });
+    state.priceHist.delete('S-US'); setPriceHist('S-US', dup);
+    const got = state.priceHist.get('S-US');
+    out.e = { n: got.length, p: got.find(x => x.date === dup[5].date).price,
+      sorted: got.every((x, i) => !i || got[i - 1].date < x.date) };
+    state.priceHist.delete('S-US');
     return out;
   });
   ok('带量序列按 1.5 倍长度计分 → 稍短但有量的胜出', pick.a === 'short-vol', pick.a);
   ok('但长度差距足够大时仍保留更长的序列', pick.b === 'longer-novol', pick.b);
   ok('空序列/null 不覆盖已有数据', pick.c === 'vol', pick.c);
+  ok('同长度同质量的新价格文件覆盖旧文件', pick.d === 'new', pick.d);
+  ok('价格序列同日重复行按输入末行覆盖,并保持严格升序',
+    pick.e.n === 20 && pick.e.p === 999 && pick.e.sorted, JSON.stringify(pick.e));
+  const marketDup = await page.evaluate(() => {
+    const rows = [['Date', 'Bench - Close']];
+    for (let i = 0; i < 13; i++) rows.push([new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10), 100 + i]);
+    rows.push(['2026-01-06', 999]);
+    state.market.delete('BENCH');
+    ingestChartingSheet('Sheet1', rows, '_MARKET-BENCH SPY-US Daily Charting.xlsx');
+    const px = state.market.get('BENCH').px;
+    const out = { n: px.length, p: px.find(x => x.date === '2026-01-06').price,
+      sorted: px.every((x, i) => !i || px[i - 1].date < x.date) };
+    state.market.delete('BENCH');
+    return out;
+  });
+  ok('市场级 Charting 同日末行覆盖且严格升序,收益与均线不会重复计日',
+    marketDup.n === 13 && marketDup.p === 999 && marketDup.sorted, JSON.stringify(marketDup));
 
   /* 摆动高低点:局部极值判定 */
   const sw = await page.evaluate(() => {
@@ -1192,6 +1251,22 @@ await section('[12] 财年判定与口径护栏', async () =>
     ingestEstimateSheet('NVDA-US', sheet('(无标签)', months(24, 15.23, 12.9)), "NVDA-US FY3 Estimate History.xlsx");
     const fallback = (state.history.get('NVDA-US') || []).length;
 
+    /* 尾部有日期但 Mean 为空:跳过坏行，不得覆盖上一条有效 EPS，也不得半提交后抛错。 */
+    reset();
+    const malformedRows = months(24, 9, 21);
+    malformedRows.unshift(["29 Jul '26", '', '-', '47', '35', '1', '', '', '', '', '', '22', '']);
+    let malformedThrow = null;
+    try { ingestEstimateSheet('NVDA-US', sheet("Jan '27E", malformedRows), 'bad-tail.xlsx'); }
+    catch (e) { malformedThrow = e.message; }
+    const malformed = { threw: malformedThrow, eps: state.companies.get('NVDA-US').eps.fy1.mean,
+      current: newestPe('NVDA-US') };
+    reset();
+    const duplicateRows = months(24, 9, 21);
+    duplicateRows.unshift(["28 Jul '26", '10', '-', '50', '2', '9', '9', '11', '', '', '', '22', '']);
+    ingestEstimateSheet('NVDA-US', sheet("Jan '27E", duplicateRows), 'duplicate.xlsx');
+    const duplicate = { histN: state.history.get('NVDA-US').length,
+      eps: state.companies.get('NVDA-US').eps.fy1.mean, rev: state.companies.get('NVDA-US').rev };
+
     /* 口径护栏:分位库最新点 × 基准 EPS 与现价差 >25% 就报警 */
     reset();
     const co = { ticker: 'NVDA-US', name: 'NVDA-US', currency: 'USD', price: 195.04,
@@ -1209,7 +1284,7 @@ await section('[12] 财年判定与口径护栏', async () =>
     const warnedBad = /不是同一个口径|different bases/.test(($('mxWrap') || {}).textContent || '');
     reset(); state.selected = null; renderAll();
 
-    return { labelWins, far, mixA, mixB, fy2, fallback, bad, good, warned, warnedBad };
+    return { labelWins, far, mixA, mixB, fy2, fallback, malformed, duplicate, bad, good, warned, warnedBad };
   });
   ok('认表里的财年标签,不认文件名(文件名写 FY3、表里是 Jan \'27E → 当 FY1)',
     R.labelWins.eps === 9 && R.labelWins.pe === 24, JSON.stringify(R.labelWins));
@@ -1224,6 +1299,11 @@ await section('[12] 财年判定与口径护栏', async () =>
   ok('FY2 进第二财年槽,且不污染 P/E 分位库',
     !isFinite(R.fy2.fy1) && R.fy2.fy2 === 12.75 && R.fy2.pe === 0, JSON.stringify(R.fy2));
   ok('读不到财年标签才回头信文件名(FY3 → 仍然不收分位)', R.fallback === 0, String(R.fallback));
+  ok('Estimate History 的空 Mean 尾行被原子跳过,不会污染 EPS 或抛错',
+    R.malformed.threw === null && R.malformed.eps === 9 && R.malformed.current === 21, JSON.stringify(R.malformed));
+  ok('Estimate 同日修订整条覆盖,EPS/PE/rev 来自同一个末版本',
+    R.duplicate.histN === 24 && R.duplicate.eps === 9 && R.duplicate.rev.n === 47
+      && R.duplicate.rev.up === 35 && R.duplicate.rev.down === 1, JSON.stringify(R.duplicate));
   ok('口径护栏:12.9x × 9.00 = 116 与现价 195 差 40% → 报警',
     R.bad && Math.abs(R.bad.dev + 40.5) < 1, JSON.stringify(R.bad));
   ok('口径护栏:21.1x × 9.00 = 190 与现价 195 差 2.6% → 不报警', R.good === null, JSON.stringify(R.good));
@@ -1326,6 +1406,22 @@ await section('[13] 买入模拟(规则解析 / 回放 / 面板)', async () =>
     const Z = simRun('SIM-US', rule, HOLD, { costBps: 0 });
     const T = simRun('SIM-US', rule, HOLD, { costBps: 10 });
     const cost = { n: Z.n, d: Z.avgRet - T.avgRet, perTrade: Z.trades.length && (Z.trades[0].retPct - T.trades[0].retPct) };
+    const custom = simRun('SIM-US', rule, HOLD, { costBps: 37, warm: 180 });
+    const ctrlOpts = { cost: custom.ctrl.trades.length ? ((px[custom.ctrl.trades[0].exitI].price / px[custom.ctrl.trades[0].entryI].price - 1) * 100
+      - custom.ctrl.trades[0].retPct) : NaN,
+      earliest: custom.ctrl.trades.length ? Math.min(...custom.ctrl.trades.map(x => x.entryI)) : NaN,
+      n: custom.ctrl.n, effN: custom.ctrl.effN, targetN: custom.n,
+      nonOverlap: custom.ctrl.trades.every((x, i, a) => !i || x.entryI > a[i - 1].exitI) };
+    const za = simStats([
+      { retPct: 10, maePct: 0, mfePct: 10, entryI: 1, exitI: 10 },
+      { retPct: -10, maePct: -10, mfePct: 0, entryI: 2, exitI: 3 },
+      { retPct: -10, maePct: -10, mfePct: 0, entryI: 11, exitI: 12 },
+    ]);
+    const zb = simStats([
+      { retPct: -10, maePct: -10, mfePct: 0, entryI: 1, exitI: 2 },
+      { retPct: 10, maePct: 0, mfePct: 10, entryI: 3, exitI: 4 },
+    ]);
+    const effZ = { effN: za.effN, effWin: za.effWin, z: simZ(za, zb) };
 
     /* ---- (5)(8) 面板:先跑一次真实的,数表格行数;再喂一组 3 笔的薄样本看胜率有没有藏住 ---- */
     state.simPref.hold = 'short'; state.simPref.presetId = 'custom'; state.simPref.custom = 'nearSupport(0.8)';
@@ -1363,7 +1459,7 @@ await section('[13] 买入模拟(规则解析 / 回放 / 面板)', async () =>
       minTrig: SIM_MIN_TRIG };
 
     return { rejected: rejected.length, evil: evil.length, legit, noEval, threw, allShaped, errs,
-      lookahead, det, ddLiteral, ddTwoLegs, ddOne, cost, full, thin };
+      lookahead, det, ddLiteral, ddTwoLegs, ddOne, cost, ctrlOpts, effZ, full, thin };
   });
 
   ok('规则解析器拒绝任何含括号函数调用以外的内容(不许 eval)',
@@ -1390,6 +1486,12 @@ await section('[13] 买入模拟(规则解析 / 回放 / 面板)', async () =>
     JSON.stringify({ literal: F.ddLiteral, twoLegs: F.ddTwoLegs, single: F.ddOne }));
   ok('成本被真的扣掉:零成本与 10bp 的平均收益差约 0.1%',
     F.cost.n > 0 && near(F.cost.d, 0.1, 1e-9) && near(F.cost.perTrade, 0.1, 1e-9), JSON.stringify(F.cost));
+  ok('自定义成本与热身窗口同样传给随机对照',
+    near(F.ctrlOpts.cost, 0.37, 1e-9) && F.ctrlOpts.earliest >= 181, JSON.stringify(F.ctrlOpts));
+  ok('随机对照从生成时即不重叠,并与策略组保持 n/effN 同频',
+    F.ctrlOpts.nonOverlap && F.ctrlOpts.n === F.ctrlOpts.effN && F.ctrlOpts.n === F.ctrlOpts.targetN, JSON.stringify(F.ctrlOpts));
+  ok('z 的胜场来自实际非重叠子样本,不是整体胜率乘 effN',
+    F.effZ.effN === 2 && F.effZ.effWin === 1 && isFinite(F.effZ.z), JSON.stringify(F.effZ));
   ok('每一次触发都在触发时点表里,一条不漏(不分页不截断)',
     F.full.n > 0 && F.full.rows === F.full.n && F.full.noPager, JSON.stringify(F.full));
   /* 这条以前写成 `F.full.n >= 8 ? (六格 …) : (一格)` —— 一个**按被测数据分叉的三元式**。
@@ -2844,6 +2946,67 @@ await section('[22] setup.mjs 的准备决策与 Windows 口径(纯函数,不 sp
      'errorlevel 还可能是 0 —— 只看 errorlevel 会带着错的 cwd 一路走到"仓库不完整"这种指错方向的结论)',
     batTxt.includes('if not exist "%CD%\\setup.bat" goto badcwd'),
     '要求 cd 之后本文件确实在当前目录里看得见');
+});
+
+await section('[23] 输入护栏与方向模拟可复现性', async () => {
+  const got = await page.evaluate(async () => {
+    const co = { ticker: 'GUARD-US', name: 'Guard', currency: 'USD', price: 100, priceSrc: 'file', priceDate: '2026-01-01',
+      eps: { fy1: { low: 4, mean: 5, high: 6 }, fy2: { low: 5, mean: 6, high: 7 } }, extra: {} };
+    state.companies.set(co.ticker, co); state.selected = co.ticker;
+    const px = document.getElementById('pxInput');
+    px.value = ''; px.dispatchEvent(new Event('input', { bubbles: true }));
+    const afterBlank = { price: co.price, src: co.priceSrc, date: co.priceDate,
+      visible: !document.getElementById('pxError').hidden, invalid: px.getAttribute('aria-invalid') };
+    px.dispatchEvent(new Event('blur'));
+    const afterBlur = { value: px.value, visible: !document.getElementById('pxError').hidden,
+      text: document.getElementById('pxError').textContent, invalid: px.getAttribute('aria-invalid') };
+    px.value = '0'; px.dispatchEvent(new Event('input', { bubbles: true }));
+    const afterZero = { price: co.price, src: co.priceSrc, invalid: px.getAttribute('aria-invalid') };
+
+    const setPe = (id, value) => { const e = document.getElementById(id); e.value = value; e.dispatchEvent(new Event('input', { bubbles: true })); };
+    setPe('peP25', '30'); setPe('peP50', '20'); setPe('peP75', '10');
+    const peBad = { calc: peStats(co.ticker), visible: !document.getElementById('peManualError').hidden,
+      invalid: document.getElementById('peP50').getAttribute('aria-invalid') };
+    setPe('peP25', '10'); setPe('peP50', '20'); setPe('peP75', '30');
+    const peGood = { calc: peStats(co.ticker), hidden: document.getElementById('peManualError').hidden };
+
+    state.priceHist.set(co.ticker, Array.from({ length: 40 }, (_, i) => ({ date: '2026-01-' + String(i + 1).padStart(2, '0'), price: 90 + i * .5 })));
+    renderDirection(co, calcRange(co, 'fy1')); const dirA = document.getElementById('dirOut').textContent;
+    renderDirection(co, calcRange(co, 'fy1')); const dirB = document.getElementById('dirOut').textContent;
+
+    let calls = 0; const realDirection = renderDirection;
+    renderDirection = (...args) => { calls++; return realDirection(...args); };
+    scheduleDirection(co, calcRange(co, 'fy1')); scheduleDirection(co, calcRange(co, 'fy1')); scheduleDirection(co, calcRange(co, 'fy1'));
+    await new Promise(resolve => setTimeout(resolve, 180));
+    renderDirection = realDirection;
+
+    return { afterBlank, afterBlur, afterZero, peBad, peGood, dirA, dirB, calls,
+      labels: ['pxInput', 'epsLow', 'epsMean', 'epsHigh', 'peP25', 'peP50', 'peP75'].every(id => document.getElementById(id).labels.length === 1),
+      described: ['peP25', 'peP50', 'peP75'].every(id => document.getElementById(id).getAttribute('aria-describedby') === 'peManualError') };
+  });
+  ok('清空或输入 0 不覆盖现价及其来源', got.afterBlank.price === 100 && got.afterBlank.src === 'file'
+    && got.afterBlank.date === '2026-01-01' && got.afterBlank.visible && got.afterBlank.invalid === 'true'
+    && got.afterZero.price === 100 && got.afterZero.src === 'file'
+    && got.afterZero.invalid === 'true', JSON.stringify(got));
+  ok('无效现价失焦后恢复原值，并留下可见的恢复说明', got.afterBlur.value === '100'
+    && got.afterBlur.visible && got.afterBlur.text.includes('100') && got.afterBlur.invalid === 'false', JSON.stringify(got.afterBlur));
+  ok('手工 PE 通过真实 input 事件校验：无序时拒绝计算并显示反馈，有序时恢复',
+    got.peBad.calc === null && got.peBad.visible && got.peBad.invalid === 'true'
+      && got.peGood.calc && got.peGood.hidden, JSON.stringify(got));
+  ok('方向面板真实连续渲染结果完全稳定', got.dirA && got.dirA === got.dirB, JSON.stringify(got));
+  ok('连续三次调度只执行一次方向计算', got.calls === 1, JSON.stringify(got));
+  ok('现价/EPS/PE 标签都关联到控件，PE 错误与三个输入关联', got.labels && got.described, JSON.stringify(got));
+
+  await page.setViewportSize({ width: 280, height: 700 });
+  const tip = await page.evaluate(() => {
+    const co = state.companies.get('GUARD-US');
+    renderOvChart([{ co, r: { coreLow: 80, coreHigh: 120, mid: 100, downPct: -20, upPct: 20, midPct: 0 } }]);
+    const hit = document.querySelector('#ovChart svg rect[fill="transparent"]');
+    hit.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 0, clientY: 100 }));
+    const e = document.getElementById('ovTip'); return { left: parseFloat(e.style.left), shown: e.style.display };
+  });
+  ok('窄屏真实 pointermove 后 tooltip 不越过左边界', tip.shown === 'block' && tip.left >= 0, JSON.stringify(tip));
+  await page.setViewportSize({ width: 1280, height: 900 });
 });
 
 await browser.close();

@@ -78,8 +78,11 @@ function sentScores(co) {
     const tgtSc = !isFinite(chg) ? 0 : chg >= 8 ? 1 : chg >= 3 ? 0.5 : chg > -3 ? 0 : chg > -8 ? -0.5 : -1;
     parts.push([tgtSc, 0.35]);
     const bChg = isFinite(last.buyPct) && isFinite(prev.buyPct) ? last.buyPct - prev.buyPct : NaN;
-    const rSc = !isFinite(bChg) ? 0 : bChg >= 3 ? 1 : bChg >= 1 ? 0.5 : bChg > -1 ? 0 : bChg > -3 ? -0.5 : -1;
-    parts.push([rSc, 0.15]);
+    /* 缺失评级列意味着该腿不存在；塞一个中性 0 仍会占住 15% 权重，稀释其余信号。 */
+    if (isFinite(bChg)) {
+      const rSc = bChg >= 3 ? 1 : bChg >= 1 ? 0.5 : bChg > -1 ? 0 : bChg > -3 ? -0.5 : -1;
+      parts.push([rSc, 0.15]);
+    }
     why.push(t('dirWhyTgt')(chg, last.buyPct));
   }
   const si = state.shortInt.get(co.ticker);

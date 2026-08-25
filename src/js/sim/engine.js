@@ -72,18 +72,21 @@ function simTrade(px, e, x, costBps) {
 /** 贪心不重叠去重后的独立事件数。
  *  持有 63 天的规则很容易连着 40 天天天触发,那 40 笔共享的是同一段行情,
  *  当成 40 个独立样本去算 z,分母虚高四十倍,任何噪声都会显著。effN 是给 z 用的真分母。 */
-function simEffN(trades) {
-  let n = 0, until = -1;
+function simEffSample(trades) {
+  let n = 0, win = 0, until = -1;
   for (const tr of trades) {
-    if (tr.entryI > until) { n++; until = tr.exitI; }
+    if (tr.entryI > until) { n++; if (tr.retPct > 0) win++; until = tr.exitI; }
   }
-  return n;
+  return { n, win };
 }
+function simEffN(trades) { return simEffSample(trades).n; }
 
 /** 一组交易 → 一组统计。maxDD 的定义在这里写死,别处不许再算一遍。 */
 function simStats(trades) {
   const n = trades.length;
-  const out = { n, win: 0, winPct: NaN, avgRet: NaN, medRet: NaN, maxDD: NaN, avgMAE: NaN, avgMFE: NaN, effN: simEffN(trades) };
+  const eff = simEffSample(trades);
+  const out = { n, win: 0, winPct: NaN, avgRet: NaN, medRet: NaN, maxDD: NaN, avgMAE: NaN, avgMFE: NaN,
+    effN: eff.n, effWin: eff.win };
   if (!n) return out;
   const rets = trades.map(t => t.retPct);
   out.win = rets.filter(v => v > 0).length;
@@ -111,25 +114,32 @@ function simStats(trades) {
 /** 同频随机入场对照:在同一段可入场区间里随机挑 nEvents 个入场日,持有期相同。
  *  种子固定 → 同样输入每次得到同一批日子(SPEC 3.2)。
  *  对照**不看任何规则**,这是它的全部意义:它回答"这段行情里随便买会怎样"。 */
-function simControl(ticker, hold, nEvents, seed) {
+function simControl(ticker, hold, nEvents, seed, opts) {
   const px = state.priceHist.get(ticker) || [];
-  const warm = SIM_WARM;
+  const o = opts || {};
+  const warm = isFinite(o.warm) && o.warm > 0 ? Math.floor(o.warm) : SIM_WARM;
+  const costBps = isFinite(o.costBps) ? o.costBps : SIM_COST_BPS;
   const lo = warm + 1, hi = px.length - 1 - hold;      /* 入场根的合法区间 [lo, hi] */
   const trades = [];
   if (!(nEvents > 0) || hi < lo) return Object.assign(simStats(trades), { trades, seed });
   const span = hi - lo + 1;
-  const want = Math.min(nEvents, span);
+  /* 策略组持仓期间不重复开仓；对照也必须从生成时就满足同一约束。
+   * 先在压缩坐标里无放回抽样，再按排序名次展开 hold 格，可保证相邻 entry > 前一 exit。 */
+  const maxN = Math.floor((span + hold) / (hold + 1));
+  const want = Math.min(nEvents, maxN);
+  if (!(want > 0)) return Object.assign(simStats(trades), { trades, seed });
+  const compactSpan = span - (want - 1) * hold;
   const rnd = simRng(seed);
   const picked = new Set();
   /* 不放回抽样;撞满 20×want 次还没抽够就停 —— 宁可对照少几笔,也不要一个死循环
    * 把浏览器挂住(want 接近 span 时碰撞率会很高)。 */
   let guard = 0;
   while (picked.size < want && guard++ < want * 20 + 200) {
-    picked.add(lo + Math.floor(rnd() * span));
+    picked.add(Math.min(compactSpan - 1, Math.floor(rnd() * compactSpan)));
   }
-  const idx = [...picked].sort((a, b) => a - b);
+  const idx = [...picked].sort((a, b) => a - b).map((q, i) => lo + q + i * hold);
   for (const e of idx) {
-    const tr = simTrade(px, e, e + hold, SIM_COST_BPS);
+    const tr = simTrade(px, e, e + hold, costBps);
     if (tr) trades.push(tr);
   }
   return Object.assign(simStats(trades), { trades, seed });
@@ -139,7 +149,9 @@ function simControl(ticker, hold, nEvents, seed) {
 function simZ(a, b) {
   const na = Math.min(a.n, a.effN), nb = Math.min(b.n, b.effN);
   if (!(na > 0) || !(nb > 0)) return NaN;
-  const ka = Math.round(a.winPct / 100 * na), kb = Math.round(b.winPct / 100 * nb);
+  /* 胜场必须来自同一组实际非重叠交易，不能用整体胜率乘 effN 伪造。 */
+  const ka = a.effWin, kb = b.effWin;
+  if (!isFinite(ka) || !isFinite(kb)) return NaN;
   const p = (ka + kb) / (na + nb);
   const se = Math.sqrt(p * (1 - p) * (1 / na + 1 / nb));
   if (!(se > 0)) return NaN;
@@ -163,7 +175,7 @@ function simRun(ticker, rule, hold, opts) {
 
   const empty = () => {
     const st = simStats(trades);
-    const ctrl = simControl(ticker, h, 0, seed);
+    const ctrl = simControl(ticker, h, 0, seed, { warm, costBps });
     return Object.assign(st, { trades, ctrl, z: NaN, warn, hold: h, horizon: hz, ruleText, seed, costBps,
       scanned: 0, from: px.length ? px[0].date : null, to: px.length ? px[px.length - 1].date : null });
   };
@@ -210,7 +222,7 @@ function simRun(ticker, rule, hold, opts) {
   }
 
   const st = simStats(trades);
-  const ctrl = simControl(ticker, h, st.n, seed);
+  const ctrl = simControl(ticker, h, st.n, seed, { warm, costBps });
   if (!st.n) warn.push('noTrigger');
   else {
     if (st.n < SIM_MIN_TRIG) warn.push('thin');

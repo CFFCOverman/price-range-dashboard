@@ -91,23 +91,25 @@
 <section class="card" id="detCard" hidden>
   <h2><span class="lz">公司详情</span><span class="le">Company detail</span></h2>
   <div class="formrow">
-    <div><label><span class="lz">公司</span><span class="le">Company</span></label><select id="coSel"></select></div>
-    <div><label><span class="lz">现价</span><span class="le">Price</span></label><input type="number" step="0.01" id="pxInput" placeholder="必填"></div>
+    <div><label for="coSel"><span class="lz">公司</span><span class="le">Company</span></label><select id="coSel"></select></div>
+    <div><label for="pxInput"><span class="lz">现价</span><span class="le">Price</span></label><input type="number" min="0.00000001" step="0.01" id="pxInput" aria-describedby="pxError" placeholder="必填"></div>
     <div><label><span class="lz">预测期</span><span class="le">Horizon</span></label>
       <span class="tabs" id="hzTabs">
         <button data-h="fy1" class="on">FY1</button><button data-h="fy2">FY2</button>
       </span>
     </div>
-    <div><label><span class="lz">EPS 悲观</span><span class="le">EPS low</span></label><input type="number" step="0.01" id="epsLow"></div>
-    <div><label><span class="lz">EPS 基准</span><span class="le">EPS base</span></label><input type="number" step="0.01" id="epsMean"></div>
-    <div><label><span class="lz">EPS 乐观</span><span class="le">EPS high</span></label><input type="number" step="0.01" id="epsHigh"></div>
+    <div><label for="epsLow"><span class="lz">EPS 悲观</span><span class="le">EPS low</span></label><input type="number" step="0.01" id="epsLow"></div>
+    <div><label for="epsMean"><span class="lz">EPS 基准</span><span class="le">EPS base</span></label><input type="number" step="0.01" id="epsMean"></div>
+    <div><label for="epsHigh"><span class="lz">EPS 乐观</span><span class="le">EPS high</span></label><input type="number" step="0.01" id="epsHigh"></div>
     <button id="epsReset"><span class="lz">重置 EPS</span><span class="le">Reset EPS</span></button>
+    <span class="status warn" id="pxError" role="status" aria-live="polite" hidden></span>
   </div>
   <div class="formrow" id="peManualRow" hidden>
     <span class="status warn-note" style="color:var(--delta-down)"><span class="lz">该公司无历史估值序列,请手动输入分位:</span><span class="le">No PE history for this company — enter percentiles manually:</span></span>
-    <div><label><span class="lz">PE 25分位</span><span class="le">PE P25</span></label><input type="number" step="0.1" id="peP25"></div>
-    <div><label><span class="lz">PE 中位数</span><span class="le">PE median</span></label><input type="number" step="0.1" id="peP50"></div>
-    <div><label><span class="lz">PE 75分位</span><span class="le">PE P75</span></label><input type="number" step="0.1" id="peP75"></div>
+    <div><label for="peP25"><span class="lz">PE 25分位</span><span class="le">PE P25</span></label><input type="number" step="0.1" id="peP25" aria-describedby="peManualError"></div>
+    <div><label for="peP50"><span class="lz">PE 中位数</span><span class="le">PE median</span></label><input type="number" step="0.1" id="peP50" aria-describedby="peManualError"></div>
+    <div><label for="peP75"><span class="lz">PE 75分位</span><span class="le">PE P75</span></label><input type="number" step="0.1" id="peP75" aria-describedby="peManualError"></div>
+    <span class="status warn" id="peManualError" role="alert" hidden></span>
   </div>
 
   <div class="dethead" id="detHead"></div>

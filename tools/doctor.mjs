@@ -95,9 +95,12 @@ export function nodeCheck(version = process.version) {
  * 不会把跑不了的报成 ok —— 这个方向的偏差是可以接受的,反过来不行。 */
 export function browsersCacheDir({ env = process.env, home = os.homedir(), platform = process.platform } = {}) {
   if (env.PLAYWRIGHT_BROWSERS_PATH) return env.PLAYWRIGHT_BROWSERS_PATH;
-  if (platform === 'win32') return path.join(env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'ms-playwright');
-  if (platform === 'darwin') return path.join(home, 'Library', 'Caches', 'ms-playwright');
-  return path.join(home, '.cache', 'ms-playwright');
+  /* 这是一个可传 platform 的纯函数（自检会在 Windows 上模拟 POSIX，反之亦然）。
+   * 所以不能用宿主平台绑定的 path.join，否则目标是 linux 时在 Windows 上仍会产出反斜杠。 */
+  const p = platform === 'win32' ? path.win32 : path.posix;
+  if (platform === 'win32') return p.join(env.LOCALAPPDATA || p.join(home, 'AppData', 'Local'), 'ms-playwright');
+  if (platform === 'darwin') return p.join(home, 'Library', 'Caches', 'ms-playwright');
+  return p.join(home, '.cache', 'ms-playwright');
 }
 
 /* 浏览器探测:三条路,顺序必须和 tests/test-app.mjs 里的 BROWSER_EXE 一致。

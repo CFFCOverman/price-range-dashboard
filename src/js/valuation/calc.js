@@ -11,10 +11,14 @@ function peStats(ticker) {
     };
   }
   const m = state.peManual.get(ticker);
-  if (m && isFinite(m.p25) && isFinite(m.p50) && isFinite(m.p75)) {
+  if (peManualValid(m)) {
     return { src: 'manual', p10: NaN, p25: m.p25, p50: m.p50, p75: m.p75, p90: NaN };
   }
   return null;
+}
+function peManualValid(m) {
+  return !!m && isFinite(m.p25) && isFinite(m.p50) && isFinite(m.p75)
+    && m.p25 > 0 && m.p25 <= m.p50 && m.p50 <= m.p75;
 }
 function epsFor(ticker, hz) {
   const ov = state.overrides.get(ticker + '|' + hz);
@@ -69,4 +73,3 @@ function calcRange(co, hz) {
   r.upPct = (r.coreHigh / co.price - 1) * 100;
   return r;
 }
-

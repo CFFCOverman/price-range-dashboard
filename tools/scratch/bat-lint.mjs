@@ -204,6 +204,20 @@ function lintFile(file) {
   lintLabels(lines, add);
   lintDelayed(lines, add);
 
+  /* 这几条是 run-factset.bat 的行为契约，普通语法 lint 看不出来：失败必须
+   * 原样传给调用者，依赖与浏览器准备也不能失败后继续跑并打印成功引导。 */
+  if (path.basename(file).toLowerCase() === 'run-factset.bat') {
+    const src = lines.join('\n');
+    if (!/node factset-fetch\.mjs %\*\s*\nset "RC=%ERRORLEVEL%"/i.test(src))
+      add('ERROR', 1, '抓取命令后必须立即保存 ERRORLEVEL，不能让后续 echo/pause 覆盖');
+    if (!/node preflight\.mjs chrome\s*\nif not errorlevel 1 goto browserready[\s\S]*?npx\.cmd playwright install chrome\s*\nset "RC=%ERRORLEVEL%"\s*\nif not "%RC%"=="0" goto nobrowser/i.test(src))
+      add('ERROR', 1, 'Playwright 浏览器安装失败必须立即停止');
+    if (!/node preflight\.mjs deps\s*\nif not errorlevel 1 goto depsready[\s\S]*?npm\.cmd install\s*\nset "RC=%ERRORLEVEL%"\s*\nif not "%RC%"=="0" goto noinstall/i.test(src))
+      add('ERROR', 1, 'npm install 必须校验 package-lock/依赖并在失败时停止');
+    if (!/endlocal & exit \/b %RC%/i.test(src))
+      add('ERROR', 1, '脚本结尾必须把保存的 RC 返回给调用者');
+  }
+
   found.sort((a, b) => (a.line - b.line) || a.level.localeCompare(b.level));
   const nErr = found.filter(f => f.level === 'ERROR').length;
   const nWarn = found.filter(f => f.level === 'WARN').length;
