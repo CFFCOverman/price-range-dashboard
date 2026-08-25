@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import { exec } from 'node:child_process';
 import { ensureBrowser } from './browser.mjs';
 import { COMPANIES_CSV, CSV_HEADER, FRESH_HOURS, isFresh, priceMap } from './companies.mjs';
-import { APP_HTML } from './config.mjs';
+import { APP_HTML, OPEN_DASHBOARD } from './config.mjs';
 import { SOURCES_FILE, ledger, noteArtifact, stampUTC, step, writeSources } from './ledger.mjs';
 import { bar, barEnd, log } from './log.mjs';
 import { MARKETS, marketFile } from './markets.mjs';
@@ -21,7 +21,7 @@ export async function runRound() {
   const results = {}, mktResults = {};
   const STEPS = 8;   /* 每家 8 步:两财年 / 价格 / 目标价 / 空头 / 新闻 / 期权链 / 日线;市场序列各 1 步 */
   const TOTAL = TICKERS.length * STEPS + MARKETS.length;
-  log(`⏳ 开始拉取 ${TICKERS.length} 家公司(每家最多 ${STEPS} 项)` + (MARKETS.length ? ` + ${MARKETS.length} 个市场序列` : '') + `,请稍等……本地 ${FRESH_HOURS} 小时内的最新数据会自动跳过。`);
+  log(`⏳ 开始拉取 ${TICKERS.length} 家公司(每家最多 ${STEPS} 项)` + (MARKETS.length ? ` + ${MARKETS.length} 个市场序列` : '') + `,请稍等……各类数据会按自己的新鲜周期自动跳过。`);
   let done = 0;
   const adv = (n, label) => { done = Math.min(done + n, TOTAL); bar(done, TOTAL, label); };
   for (const ticker of TICKERS) {
@@ -34,9 +34,9 @@ export async function runRound() {
   /* 市场级序列:只拉日线(走向概率的宏观/行业/流动性自动信号) */
   for (const [sym, role] of MARKETS) {
     const fn = marketFile(sym, role);
-    const mm = { ...metaCharting(sym, fn), step: `${sym} · 市场日线(${role})` };
+    const mm = { ...metaCharting(sym, fn, 'market'), step: `${sym} · 市场日线(${role})` };
     noteArtifact(mm);
-    if (isFresh(fn)) { mktResults[sym] = { ok: true, fresh: true, role }; adv(1, `${sym} · 已最新`); continue; }
+    if (isFresh(mm)) { mktResults[sym] = { ok: true, fresh: true, role }; adv(1, `${sym} · 已最新`); continue; }
     adv(0, `${sym} · 市场序列(${role})…`);
     mktResults[sym] = { ok: await step(mm, () => fetchCharting(sym, fn)), role };
     adv(1, `${sym} · 完成`);
@@ -75,7 +75,7 @@ export async function runRound() {
     + Object.values(mktResults).filter(m => !m.ok).length;
   console.log(misses === 0 ? '全部完成 ✔' : `有 ${misses} 项未完成(✖),可重跑或按提示手动补。`);
   console.log('==========================================');
-  if (!appOpened && process.platform === 'win32' && fs.existsSync(APP_HTML)) {
+  if (OPEN_DASHBOARD && !appOpened && process.platform === 'win32' && fs.existsSync(APP_HTML)) {
     appOpened = true;
     log('正在打开 Price Range Dashboard……点「重连上次文件夹」→「允许」载入数据(之后再拉取只需在页面里点「重新扫描」)。');
     exec(`start "" "${APP_HTML}"`);

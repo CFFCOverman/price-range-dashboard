@@ -3,7 +3,7 @@
  */
 
 import { page, scrapeTable } from '../lib/browser.mjs';
-import { FRESH_HOURS, isFresh, priceMap, today } from '../lib/companies.mjs';
+import { hasPriceToday, isFresh, priceMap, today } from '../lib/companies.mjs';
 import { noteArtifact, phase, stampUTC, step } from '../lib/ledger.mjs';
 import { log } from '../lib/log.mjs';
 import { metaCharting, metaEst, metaNews, metaOptions, metaShortInt, metaTargets } from '../lib/registry.mjs';
@@ -16,27 +16,41 @@ import { fetchShortInterest, hasShortIntToday } from './short-interest.mjs';
 import { fetchTargets } from './targets.mjs';
 
 export async function fetchTicker(ticker, R, adv) {
-  const freshFy1 = isFresh(`${ticker} FY1 Estimate History.xlsx`);
-  const freshFy2 = isFresh(`${ticker} FY2 Estimate History.xlsx`);
-  const freshCh  = isFresh(`${ticker} Daily Charting.xlsx`);
-  const freshTg = isFresh(`${ticker} Targets Ratings.xlsx`);
-  const freshNw = isFresh(`${ticker} News.csv`);
-  const freshOp = isFresh(`${ticker} Options.csv`);
+  const freshFy1 = isFresh(metaEst(ticker, 'FY1'));
+  const freshFy2 = isFresh(metaEst(ticker, 'FY2'));
+  const freshCh  = isFresh(metaCharting(ticker));
+  const freshTg = isFresh(metaTargets(ticker));
+  const freshNw = isFresh(metaNews(ticker));
+  const freshOp = isFresh(metaOptions(ticker));
   const freshSi = hasShortIntToday(ticker);
+  const freshPx = hasPriceToday(ticker);
   /* 跳过时也把元信息登记进台账,体检才认得出"这个产出应该存在" */
   for (const m of [metaEst(ticker, 'FY1'), metaEst(ticker, 'FY2'), metaTargets(ticker), metaCharting(ticker), metaNews(ticker), metaOptions(ticker), metaShortInt()]) noteArtifact(m);
-  if (freshFy1 && freshFy2 && freshCh && freshTg && freshNw && freshOp && freshSi && priceMap.has(ticker)) {
+  if (freshFy1 && freshFy2 && freshCh && freshTg && freshNw && freshOp && freshSi && freshPx) {
     R.FY1 = R.FY2 = R.价格 = R.日线 = R.目标价 = R.空头 = R.新闻 = R.期权 = true; R.fresh = true;
-    log(`==== ${ticker} ==== 本地数据未过期(<${FRESH_HOURS}h),整体跳过`);
+    log(`==== ${ticker} ==== 各项本地数据仍在各自新鲜周期内,整体跳过`);
     adv(8, `${ticker} · 已最新`);
     return;
   }
   log(`==== ${ticker} ====`);
   if (freshFy1 && freshFy2) {
     R.FY1 = R.FY2 = true;
-    if (priceMap.has(ticker)) R.价格 = true;
     log(`  估值数据未过期,跳过 Estimate History 页`);
-    adv(3, `${ticker} · 估值已最新`);
+    adv(2, `${ticker} · 估值已最新`);
+    if (freshPx) R.价格 = true;
+    else {
+      /* 估值周更，但现价必须日更：只打开同一页读页头报价，不重写两份 Estimate 文件。 */
+      adv(0, `${ticker} · 更新现价…`);
+      try {
+        await openEstimateHistory(ticker);
+        const price = await scrapePrice();
+        if (isFinite(price)) {
+          priceMap.set(ticker, [ticker, ticker, 'USD', price, today, '', '', '', '', '', ''].join(','));
+          R.价格 = true;
+        }
+      } catch (e) { log(`  ⚠ ${ticker} 现价更新失败: ${e.message.split('\n')[0]}`); }
+    }
+    adv(1, `${ticker} · 价格记录`);
   } else {
     adv(0, `${ticker} · 打开 Estimate History…`);
     let price = NaN, tag0 = 'FY1', p0 = null, nav = null, tbl = null;

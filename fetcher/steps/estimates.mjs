@@ -14,7 +14,6 @@ export async function openEstimateHistory(ticker) {
   const nav = page.frameLocator('iframe[src*="company-security"]');
   const tbl = nav.frameLocator('iframe[src*="estimate-reports"]');
   await tbl.locator('tr').nth(5).waitFor({ timeout: 45000 });   // 等表格渲染
-  await page.waitForTimeout(1500);
   return { nav, tbl };
 }
 
@@ -50,8 +49,12 @@ export async function switchPeriod(label) {
   if (!(await clickTextInFrames(cur, false))) return false;   // 打开财年下拉
   await page.waitForTimeout(1200);
   if (!(await clickTextInFrames(label, true))) { await page.keyboard.press('Escape').catch(() => {}); return false; }
-  await page.waitForTimeout(4500);
-  return (await currentPeriod()) === label;
+  const end = Date.now() + 10000;
+  do {
+    if ((await currentPeriod(1)) === label) return true;
+    await page.waitForTimeout(400);
+  } while (Date.now() < end);
+  return false;
 }
 
 /** 表格数组 → 仪表盘可识别的 Estimate History xlsx(B2 写入数据源出处,app 解析不受影响) */

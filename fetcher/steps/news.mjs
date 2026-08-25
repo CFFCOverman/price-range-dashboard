@@ -74,6 +74,15 @@ export async function scrapeNewsRows() {
   }
   return best;
 }
+async function waitForNewsRows(timeout = 13000) {
+  const end = Date.now() + timeout;
+  do {
+    const rows = await scrapeNewsRows();
+    if (rows) return rows;
+    await page.waitForTimeout(500);
+  } while (Date.now() < end);
+  return null;
+}
 /** 抓到的行 → {date, ids, headline}[] */
 export function parseNewsRows(rows, ref) {
   const out = [];
@@ -113,14 +122,11 @@ export async function fetchNews(ticker) {
   phase('导航');
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   phase('等待页面');
-  await page.waitForTimeout(9000);
   /* 虚拟列表不吃 scrollTop:把视口拉高,让它一次性渲染完整页 */
   const vp = page.viewportSize() || { width: 1600, height: 900 };
   await page.setViewportSize({ width: vp.width, height: 2400 }).catch(() => {});
-  await page.waitForTimeout(4000);
   phase('定位表格');
-  let rows = await scrapeNewsRows();
-  if (!rows) { await page.waitForTimeout(6000); rows = await scrapeNewsRows(); }
+  const rows = await waitForNewsRows(15000);
   phase('解析行');
   const bag = new Map();
   const add = rs => { for (const r of parseNewsRows(rs)) bag.set(r.date + '|' + r.headline, r); };

@@ -3,35 +3,58 @@
  */
 
 import { chromium } from 'playwright';
-import { BASE, HEADLESS, LOGIN_ONLY, PROFILE } from './config.mjs';
+import { BASE, HEADLESS_MODE, LOGIN_ONLY, PROFILE } from './config.mjs';
+import { factsetSessionValid, initialHeadless, loginFallback } from './browser-policy.mjs';
 import { log } from './log.mjs';
 
 /* ============ 浏览器按需启动:菜单先出现,按回车开始拉取时才弹 Chrome 窗口 ============ */
 export let ctx = null, page = null;
-export async function ensureBrowser() {
-  if (ctx) return;
-  log('⏳ 正在启动浏览器……会弹出一个 Chrome 窗口用于访问 FactSet(那不是仪表盘),拉取期间请不要关闭或操作它。');
+async function closeBrowser() {
+  const old = ctx; ctx = null; page = null;
+  if (old) await old.close().catch(() => {});
+}
+async function launchBrowser(headless) {
   ctx = await chromium.launchPersistentContext(PROFILE, {
-    channel: 'chrome', headless: HEADLESS, viewport: { width: 1600, height: 900 },
+    channel: 'chrome', headless, viewport: { width: 1600, height: 900 },
     acceptDownloads: true,
   });
   page = ctx.pages()[0] || await ctx.newPage();
+}
+async function openAndCheck() {
+  await page.goto(BASE + '/workstation/', { waitUntil: 'domcontentloaded' }).catch(() => {});
+  await page.waitForTimeout(5000);
+  return factsetSessionValid(page.url());
+}
+export async function ensureBrowser() {
+  if (ctx) return;
+  const firstHeadless = initialHeadless(HEADLESS_MODE);
+  log(firstHeadless ? '⏳ 正在后台启动 Chrome 并检查 FactSet 登录……'
+    : '⏳ 正在启动可见 Chrome……拉取期间请不要关闭或操作它。');
+  await launchBrowser(firstHeadless);
 
   if (LOGIN_ONLY) {
     await page.goto(BASE);
     log('请在打开的浏览器里完成 FactSet 登录,然后关闭浏览器窗口。登录态会被记住。');
     await page.waitForEvent('close', { timeout: 0 }).catch(() => {});
-    await ctx.close();
+    await closeBrowser();
     process.exit(0);
   }
 
-  /* 自动登录检测:未登录时在同一窗口等你登完,自动继续(无需单独 login 命令) */
   log('⏳ 正在检查 FactSet 登录状态,请稍等……');
-  await page.goto(BASE + '/workstation/', { waitUntil: 'domcontentloaded' }).catch(() => {});
-  await page.waitForTimeout(5000);
-  if (!/my\.apps\.factset\.com/.test(page.url()) || /login|auth|id\.factset/i.test(page.url())) {
+  if (!await openAndCheck()) {
+    const fallback = loginFallback(HEADLESS_MODE);
+    if (fallback === 'error') {
+      await closeBrowser();
+      throw new Error('FactSet 登录已失效，但 FS_HEADLESS=1 禁止打开登录窗口。请先运行 npm run fetch:login，或改用 FS_HEADLESS=auto / 0。');
+    }
+    if (fallback === 'relaunch-visible') {
+      log('检测到登录失效 —— 正在关闭后台 Chrome，并以可见窗口重开……');
+      await closeBrowser();                 // persistent profile 不允许两个 context 并发占用
+      await launchBrowser(false);
+      await page.goto(BASE + '/workstation/', { waitUntil: 'domcontentloaded' }).catch(() => {});
+    }
     log('检测到未登录 —— 请在打开的窗口里登录 FactSet,登录完成后脚本会自动继续……');
-    await page.waitForURL(u => /my\.apps\.factset\.com/.test(u.href) && !/login|auth/i.test(u.href), { timeout: 0 });
+    await page.waitForURL(u => factsetSessionValid(u.href), { timeout: 0 });
     await page.waitForTimeout(6000);
   }
   log('✔ 已登录 FactSet。');

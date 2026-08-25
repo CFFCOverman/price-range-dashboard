@@ -288,6 +288,21 @@ export const CHART_PROBES = [
   ['成交量 · 菜单入口', VOL_MENUS],
 ];
 
+/** 等页面某个 frame 出现文字。超时只返回 false：Charting 的自绘控件偶尔不给
+ * 可观察状态，调用方仍保留一次短 fallback，而不是因等待信号缺失把整步打断。 */
+export async function waitForFrameText(re, timeout = 6000) {
+  const until = Date.now() + timeout;
+  do {
+    for (const f of page.frames()) {
+      try {
+        if (await f.evaluate(src => new RegExp(src, 'i').test((document.body && document.body.innerText) || ''), re.source || String(re))) return true;
+      } catch {}
+    }
+    await page.waitForTimeout(250);
+  } while (Date.now() < until);
+  return false;
+}
+
 export async function fetchCharting(ticker, outName) {
   phase('导航');
   await page.goto(`${BASE}/workstation/charting/`, { waitUntil: 'domcontentloaded' });
@@ -295,10 +310,12 @@ export async function fetchCharting(ticker, outName) {
   const ch = page.frameLocator('iframe[src*="/charting/"]');
   const box = ch.locator('input').first();
   await box.waitFor({ timeout: 30000 });
-  await page.waitForTimeout(3000);
+  await waitForFrameText(/chart|download|series/i, 3000);
   phase('定位表格');   // 此处"表格"= 图表搜索框 + 下载菜单
   await box.click(); await box.fill(ticker); await box.press('Enter');
-  await page.waitForTimeout(6000);
+  if (!(await waitForFrameText(new RegExp(String(ticker).split('-')[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), 6000))) {
+    await page.waitForTimeout(500); // 自绘图可能不把代码写进可见文字；保留短兜底
+  }
   /* 三个布局动作的顺序是有讲究的:先区间、再图表类型、最后才加成交量。
    * 换图表类型往往会把序列整个重建一遍,顺手把刚挂上去的 Volume 研究一起带走;
    * 反过来则不会 —— 所以"最容易被别人抹掉的那个"放在最后做。
@@ -339,7 +356,7 @@ export async function fetchCharting(ticker, outName) {
     } catch {}
   }
   if (!opened) throw new Error('未找到下载按钮(Charting 工具栏改版)');
-  await page.waitForTimeout(1000);
+  await waitForFrameText(/Download data to Excel/i, 1500);
   phase('写文件');
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 30000 }),

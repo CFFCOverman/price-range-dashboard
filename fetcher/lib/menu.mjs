@@ -6,39 +6,56 @@ import fs from 'node:fs';
 import readline from 'node:readline/promises';
 import { exec } from 'node:child_process';
 import { lastBacktestDate, runBacktest } from './backtest.mjs';
-import { LOGIN_ONLY, MARKETS_FILE, TICKERS_FILE } from './config.mjs';
+import { APP_HTML, LOGIN_ONLY, MARKETS_FILE, TICKERS_FILE } from './config.mjs';
 import { healthReport } from './health.mjs';
 import { SOURCES_FILE, writeSources } from './ledger.mjs';
 import { MARKETS, loadMarkets, saveMarkets, setMarkets } from './markets.mjs';
 import { reconcileReport } from './reconcile.mjs';
 import { IGNORED, TICKERS, VALID, loadIgnored, loadTickers, printList, saveTickers, setIgnored, setTickers } from './tickers.mjs';
+import { menuCommand, openDashboardAction } from './menu-actions.mjs';
 
 export const RL = (!LOGIN_ONLY && process.stdin.isTTY)
   ? readline.createInterface({ input: process.stdin, output: process.stdout })
   : null;   /* 无终端(如定时任务):跳过所有交互 */
-export const ask = q => RL
-  ? Promise.race([RL.question(q), new Promise(res => RL.once('close', () => res('')))])
-  : Promise.resolve('');
-/** 清单菜单。round=0 首轮(回车=开始);round>0 完成后(回车=退出,有改动才继续拉)。返回是否继续拉取 */
-export async function manageMenu(round) {
-  if (!RL) return round === 0;
-  let changed = false;
+/* 空行与 EOF 必须是两种结果：空行留在菜单，终端关闭则安全退出。
+ * 旧的 Promise.race 每问一次都会遗留一个 close listener，菜单多操作几次还会触发
+ * MaxListenersExceededWarning；直接接住 question 的关闭异常即可同时解决两件事。 */
+export async function askLine(q) {
+  if (!RL || RL.closed) return { eof: true, value: '' };
+  try { return { eof: false, value: await RL.question(q) }; }
+  catch { return { eof: true, value: '' }; }
+}
+/** 启动和每轮结束都是这一个一级菜单；只有明确 run / exit 才离开。 */
+export async function manageMenu() {
+  if (!RL) return 'run';
   printList(TICKERS);
   if (MARKETS.length) console.log('市场级序列(' + MARKETS.length + ' 个,只拉日线): ' + MARKETS.map(([s, r]) => s + '(' + r + ')').join('  '));
-  console.log(round === 0
-    ? '操作:输代码添加(可多个,逗号/空格分隔)| -代码 删除 | edit 编辑清单 | mkt 市场清单 | sync 清单对齐 | chk 数据体检 | bt 回测 | sources 源出台账 | 回车 开始拉取'
-    : '本轮完成。想继续:输代码添加/删除后回车(未过期的公司不会重复拉)| edit / mkt / sync / chk / bt / sources 可用 | 直接回车 = 退出');
+  console.log('操作:输代码添加(可多个)| -代码 删除 | edit | mkt | sync | chk | bt | sources');
+  console.log('      open / dashboard 打开仪表盘 | run 开始拉取 | exit 退出  (空回车留在菜单)');
   while (true) {
-    const ans = (await ask('> ')).trim();
-    if (!ans) break;
+    const input = await askLine('> ');
+    const ans = input.value.trim();
+    const cmd = menuCommand(ans, input.eof);
+    if (cmd === 'empty') { console.log('请输入 run 开始拉取，或 exit 退出。'); continue; }
+    if (cmd === 'exit') return 'exit';
+    if (cmd === 'run') {
+      saveTickers(TICKERS);
+      if (!TICKERS.length) { console.log('清单为空，请先添加代码。'); continue; }
+      return 'run';
+    }
+    if (cmd === 'dashboard') {
+      const r = openDashboardAction({ platform: process.platform, appHtml: APP_HTML, exists: fs.existsSync, launch: command => exec(command) });
+      console.log(r.why);
+      if (r.ok) await askLine('确认看到仪表盘后按回车返回同一菜单 ');
+      continue;
+    }
     if (/^edit$/i.test(ans)) {
       saveTickers(TICKERS);
       const before = TICKERS.join(',');
       exec(`start notepad "${TICKERS_FILE}"`);
-      await ask('已打开记事本(tickers.txt)—— 编辑保存后回到这里按回车刷新清单 ');
+      await askLine('已打开记事本(tickers.txt)—— 编辑保存后回到这里按回车刷新清单 ');
       setTickers(loadTickers());
       setIgnored(loadIgnored());   /* 忽略名单就写在同一个文件的注释行里,一起刷新 */
-      if (TICKERS.join(',') !== before) changed = true;
       printList(TICKERS);
       continue;
     }
@@ -46,9 +63,8 @@ export async function manageMenu(round) {
       saveMarkets(MARKETS);
       const before = JSON.stringify(MARKETS);
       exec(`start notepad "${MARKETS_FILE}"`);
-      await ask('已打开记事本(markets.txt)—— 编辑保存后回到这里按回车刷新 ');
+      await askLine('已打开记事本(markets.txt)—— 编辑保存后回到这里按回车刷新 ');
       setMarkets(loadMarkets());
-      if (JSON.stringify(MARKETS) !== before) changed = true;
       console.log('市场级序列: ' + (MARKETS.length ? MARKETS.map(([s, r]) => s + '(' + r + ')').join('  ') : '(空,不拉取)'));
       continue;
     }
@@ -64,7 +80,7 @@ export async function manageMenu(round) {
     }
     if (/^(sync|align|对齐)$/i.test(ans)) {
       const rep = reconcileReport({ apply: true });
-      if (rep.added.length) { changed = true; printList(TICKERS); }
+      if (rep.added.length) printList(TICKERS);
       continue;
     }
     if (/^(sources|src)$/i.test(ans)) {
@@ -80,7 +96,6 @@ export async function manageMenu(round) {
         if (TICKERS.includes(t)) {
           setTickers(TICKERS.filter(x => x !== t));
           setIgnored([...IGNORED, t]);   /* 记下来,否则下次启动对齐检查会照着盘上的旧数据把它补回来 */
-          changed = true;
           console.log('  已删除', t, '(历史数据保留在 Assets/ 里,不会自动补回清单)');
         } else console.log('  ⚠ 清单里没有', t);
       } else if (!VALID.test(tok)) {
@@ -88,15 +103,11 @@ export async function manageMenu(round) {
       } else if (!TICKERS.includes(tok)) {
         TICKERS.push(tok);
         setIgnored(IGNORED.filter(x => x !== tok));   /* 手动加回来 = 撤销之前的删除 */
-        changed = true;
         console.log('  已添加', tok);
       } else console.log('  已在清单中:', tok);
     }
     saveTickers(TICKERS);
     printList(TICKERS);
-    console.log(round === 0 ? '继续增删,或回车开始拉取' : '继续增删,或回车开始拉取新增(回车前无改动则退出)');
+    console.log('可继续增删；完成后输入 run 拉取，或 exit 退出。');
   }
-  saveTickers(TICKERS);
-  if (!TICKERS.length) { console.log('清单为空,退出。'); return false; }
-  return round === 0 ? true : changed;
 }

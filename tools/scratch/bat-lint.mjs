@@ -212,8 +212,8 @@ function lintFile(file) {
       add('ERROR', 1, '抓取命令后必须立即保存 ERRORLEVEL，不能让后续 echo/pause 覆盖');
     if (!/node preflight\.mjs chrome\s*\nif not errorlevel 1 goto browserready[\s\S]*?npx\.cmd playwright install chrome\s*\nset "RC=%ERRORLEVEL%"\s*\nif not "%RC%"=="0" goto nobrowser/i.test(src))
       add('ERROR', 1, 'Playwright 浏览器安装失败必须立即停止');
-    if (!/node preflight\.mjs deps\s*\nif not errorlevel 1 goto depsready[\s\S]*?npm\.cmd install\s*\nset "RC=%ERRORLEVEL%"\s*\nif not "%RC%"=="0" goto noinstall/i.test(src))
-      add('ERROR', 1, 'npm install 必须校验 package-lock/依赖并在失败时停止');
+    if (!/node preflight\.mjs deps\s*\nif not errorlevel 1 goto depsready[\s\S]*?npm\.cmd ci\s*\nset "RC=%ERRORLEVEL%"\s*\nif not "%RC%"=="0" goto noinstall/i.test(src))
+      add('ERROR', 1, 'npm ci 必须严格按 package-lock 修复依赖并在失败时停止');
     if (!/endlocal & exit \/b %RC%/i.test(src))
       add('ERROR', 1, '脚本结尾必须把保存的 RC 返回给调用者');
   }

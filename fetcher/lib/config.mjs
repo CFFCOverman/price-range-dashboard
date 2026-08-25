@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { headlessMode } from './browser-policy.mjs';
 
 // ================= 配置 =================
 export const TICKERS_DEFAULT = ['NVDA-US', 'GOOGL-US'];  // 首次默认;之后以 tickers.txt 为准
@@ -80,5 +81,8 @@ export const WANT_YEARS = 5;         // 期望跨度(年);判定时留半年余�
 export const PROFILE = path.join(os.homedir(), '.factset-bot-profile');   // 独立浏览器 profile(保存登录态)
 export const BASE = 'https://my.apps.factset.com';
 export const LOGIN_ONLY = process.argv.includes('--login');
-export const HEADLESS = false;                            // FactSet 登录/SSO 建议始终有头运行
+/* 默认 auto：先后台检查已有登录；失效时才重开可见 Chrome。--login 永远可见。 */
+export const HEADLESS_MODE = headlessMode(process.env.FS_HEADLESS, LOGIN_ONLY);
+export const envFlag = (env, name) => env?.[name] === '1';
+export const OPEN_DASHBOARD = envFlag(process.env, 'FS_OPEN_DASHBOARD'); // 默认不弹仪表盘；显式 opt-in
 // ========================================

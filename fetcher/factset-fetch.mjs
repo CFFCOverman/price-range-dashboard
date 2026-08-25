@@ -57,15 +57,16 @@ const { log } = await import('./lib/log.mjs');
 const { RL, manageMenu } = await import('./lib/menu.mjs');
 const { runRound } = await import('./lib/round.mjs');
 const { maybeMonthlyBacktest } = await import('./lib/backtest.mjs');
+const { runFetcherLoop } = await import('./lib/menu-actions.mjs');
 
 if (LOGIN_ONLY) await browser.ensureBrowser();   /* --login 模式无需菜单,直接开窗 */
 
-/* ============ 轮次循环:拉取 → 回菜单(可加新公司)→ 只拉新增/过期 → 回车退出 ============ */
+/* ============ 一级菜单循环：启动与每轮结束回到同一处 ============ */
 console.log('============ FactSet 数据拉取 · Price Range Dashboard ============');
 console.log('  输出目录: ' + OUT_DIR + '  (按类型分子目录,日志与台账在 _logs/)');
 console.log('  配置目录: ' + FETCHER_DIR + '  (tickers.txt / markets.txt / .options-url)');
 if (migrateNote) console.log(migrateNote);
-console.log('  流程: 确认清单 → 回车开始 → 自动弹出 Chrome 拉取(请勿操作该窗口)→ 打开仪表盘');
+console.log('  流程: 一级菜单输入 run → Chrome 默认后台拉取 → 回到同一菜单');
 console.log('==================================================================');
 
 /* 对齐检查放在菜单之前:Assets/ 里有数据、清单里却没登记的标的,每一轮都在被静默跳过,
@@ -78,21 +79,13 @@ reconcileReport({ apply: true });
  * 同时清理落榜满一年的数据(挪进 _to_delete/,不删)。见 lib/roster.mjs 顶部。 */
 const { rosterReport } = await import('./lib/roster.mjs');
 rosterReport({ apply: true });
-let round = 0;
-let btDone = false;   /* 每次启动最多自动跑一轮回测,见循环体末尾 */
-while (true) {
-  if (round > 0 || RL) {
-    const proceed = await manageMenu(round);
-    if (!proceed) break;
-  }
-  await runRound();
-  round++;
-  /* 每月一次自动回测,一次启动只触发一回(加了两只票再拉一轮,不该再跑一遍同样的回测)。
-   * 放在抓取之后:回测读的就是刚落盘的这批数据,顺序反了测的是上个月的盘。
-   * 它只出报告 —— 权重要不要动,是看完报告的人决定的,不是这段代码决定的。 */
-  if (!btDone) { btDone = true; maybeMonthlyBacktest(new Date().toISOString().slice(0, 10)); }
-  if (!RL) break;   /* 无终端(定时任务):单轮结束 */
-}
+let btDone = false;
+await runFetcherLoop({
+  interactive: !!RL, menu: manageMenu, runRound,
+  afterRound: async () => {
+    if (!btDone) { btDone = true; maybeMonthlyBacktest(new Date().toISOString().slice(0, 10)); }
+  },
+});
 if (RL) RL.close();
 if (browser.ctx) await browser.ctx.close();
 log('已退出。');

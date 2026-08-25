@@ -301,7 +301,6 @@ export async function ensureFactsetOrigin() {
   } catch {}
   try {
     await page.goto(`${BASE}/workstation/`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(3000);
     return /^https:\/\/my\.apps\.factset\.com\//.test(page.url() || '');
   } catch { return false; }
 }
@@ -433,6 +432,26 @@ export async function scrapeOptionChain() {
   }
   return best;
 }
+
+/** 轮询真实表格状态，避免每个候选地址无条件睡 5–8 秒。 */
+export async function waitForOptionChain(timeout = 7000) {
+  const until = Date.now() + timeout;
+  do {
+    const rows = await scrapeOptionChain();
+    if (rows) return rows;
+    await page.waitForTimeout(300);
+  } while (Date.now() < until);
+  return null;
+}
+
+async function clickFirstTextWhenReady(labels, timeout = 6000) {
+  const until = Date.now() + timeout;
+  do {
+    for (const label of labels) if (await clickTextInFrames(label, false)) return label;
+    await page.waitForTimeout(250);
+  } while (Date.now() < until);
+  return null;
+}
 /** 把代码打进页面自己的搜索框(顶层 Options 页签不带公司上下文,和 Charting 一样要自己输)。
  *  找不到输入框不算错——有些布局是地址栏直接带 ticker 的。 */
 export async function typeTickerOnOptionsPage(ticker) {
@@ -443,7 +462,7 @@ export async function typeTickerOnOptionsPage(ticker) {
       await box.click({ timeout: 3000 });
       await box.fill(ticker, { timeout: 3000 });
       await box.press('Enter');
-      await page.waitForTimeout(6000);
+      await waitForOptionChain(6000); // 这里只等状态；调用方仍会重新读取并校验 ticker
       return true;
     } catch {}
   }
@@ -468,11 +487,12 @@ export async function pageMentionsTicker(ticker) {
 export async function discoverOptionsTab() {
   try {
     await page.goto(`${BASE}/workstation/`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(6000);
   } catch { return null; }
-  for (const label of ['Options', 'Option Chain', 'Derivatives']) {
-    if (!(await clickTextInFrames(label, false))) continue;
-    await page.waitForTimeout(8000);
+  const labels = ['Options', 'Option Chain', 'Derivatives'];
+  for (let attempt = 0; attempt < labels.length; attempt++) {
+    const label = await clickFirstTextWhenReady(labels, attempt ? 1000 : 6000);
+    if (!label) break;
+    await page.waitForURL(u => !/\/workstation\/?$/.test(u.pathname), { timeout: 8000 }).catch(() => {});
     const u = page.url();
     if (u && !/\/workstation\/?$/.test(u)) { log(`  · 顶层页签「${label}」落地:${u}`); return u; }
   }
@@ -550,16 +570,15 @@ export async function fetchOptions(ticker) {
     if (url === null) { url = await discoverOptionsTab(); if (!url) break; }
     else { try { await page.goto(url, { waitUntil: 'domcontentloaded' }); } catch { continue; } }
     phase('等待页面');
-    await page.waitForTimeout(7000);
     phase('定位表格');
     /* 地址里没有代码 = 顶层页签不带公司上下文 → **先输代码再读表**。
      * 不能先读:同一个浏览器会话里,页面很可能还停在上一只股票的链上,
      * 那样读到的是一张完整、合理、但属于别人的表 —— 最难发现的一类错。 */
     const urlHasTicker = String(url).includes(ticker);
     if (!urlHasTicker) await typeTickerOnOptionsPage(ticker);
-    let r = await scrapeOptionChain();
+    let r = await waitForOptionChain(7000);
     if (!r && urlHasTicker) { await typeTickerOnOptionsPage(ticker); r = await scrapeOptionChain(); }
-    if (!r) { await page.waitForTimeout(5000); r = await scrapeOptionChain(); }
+    if (!r) r = await waitForOptionChain(5000);
     if (r && !urlHasTicker && !(await pageMentionsTicker(ticker))) {
       log(`  ⚠ 页面上没找到 ${ticker} 字样,代码可能没打进去 —— 本轮期权数据存疑,请打开 Options 页签核对一眼`);
     }

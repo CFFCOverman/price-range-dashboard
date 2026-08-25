@@ -8,8 +8,24 @@ import { assetPath } from './config.mjs';
 // ================= 主流程 =================
 export const today = new Date().toISOString().slice(0, 10);
 export const FRESH_HOURS = 20;   /* 文件在此小时数内视为最新,跳过重复拉取 */
-export function isFresh(file) {
-  try { return (Date.now() - fs.statSync(assetPath(file)).mtimeMs) < FRESH_HOURS * 3600e3; } catch { return false; }
+export const FRESH_HOURS_BY_KIND = Object.freeze({
+  price: 0, estimates: 96, targets: 144,
+  charting: FRESH_HOURS, market: FRESH_HOURS, news: FRESH_HOURS, options: FRESH_HOURS, short: FRESH_HOURS,
+});
+/** 旧调用 `isFresh('x')` 仍保持 20h；registry meta 可携带 kind/freshHours 选择周期。 */
+export function freshHoursFor(fileOrMeta, override) {
+  if (isFinite(override) && override >= 0) return Number(override);
+  if (fileOrMeta && typeof fileOrMeta === 'object') {
+    if (isFinite(fileOrMeta.freshHours) && fileOrMeta.freshHours >= 0) return Number(fileOrMeta.freshHours);
+    if (fileOrMeta.kind in FRESH_HOURS_BY_KIND) return FRESH_HOURS_BY_KIND[fileOrMeta.kind];
+  }
+  return FRESH_HOURS;
+}
+export function isFresh(fileOrMeta, override) {
+  const file = typeof fileOrMeta === 'string' ? fileOrMeta : fileOrMeta && fileOrMeta.file;
+  const hours = freshHoursFor(fileOrMeta, override);
+  if (!file || hours <= 0) return false;
+  try { return (Date.now() - fs.statSync(assetPath(file)).mtimeMs) < hours * 3600e3; } catch { return false; }
 }
 /* companies.csv 增量维护:先载入已有行,拉到新价格才覆盖对应公司 */
 export const CSV_HEADER = 'ticker,name,currency,price,price_date,eps_fy1_low,eps_fy1_mean,eps_fy1_high,eps_fy2_low,eps_fy2_mean,eps_fy2_high';
@@ -23,3 +39,7 @@ try {
     }
   }
 } catch {}
+export function hasPriceToday(ticker, ref = today) {
+  const row = priceMap.get(String(ticker || '').toUpperCase());
+  return !!row && String(row).split(',')[4] === ref;
+}

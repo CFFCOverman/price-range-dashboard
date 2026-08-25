@@ -22,8 +22,8 @@ if errorlevel 1 goto nonode
 
 node preflight.mjs deps
 if not errorlevel 1 goto depsready
-echo [setup] Dependencies are missing or differ from package-lock.json; repairing.
-call npm.cmd install
+echo [setup] Dependencies are missing or differ from package-lock.json; repairing from lock.
+call npm.cmd ci
 set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" goto noinstall
 :depsready
@@ -60,7 +60,7 @@ echo         Install the LTS build from https://nodejs.org and run this again.
 goto done
 
 :noinstall
-echo [ERROR] npm install failed - the reason is in the output above.
+echo [ERROR] npm ci failed - the reason is in the output above.
 goto done
 
 :nobrowser

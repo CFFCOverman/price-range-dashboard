@@ -10,7 +10,7 @@ import { KINDS, classifyAssetFile, reconcileTickers, scanAssets } from './reconc
 import { IGNORE_LINE } from './tickers.mjs';
 import { RETAIN_DAYS, ROSTER_FILE, ROSTER_HEADER, pickOrphans, rosterCsv } from './roster.mjs';
 import { SELFTEST_SANDBOX } from './selftest-env.mjs';
-import { FETCHER_DIR, LIB_DIR, LOG_DIR, OUT_DIR, ROOT_DIR, assetPath, assetSubdir } from './config.mjs';
+import { FETCHER_DIR, LIB_DIR, LOG_DIR, OUT_DIR, ROOT_DIR, assetPath, assetSubdir, envFlag } from './config.mjs';
 import { LED_COLS, SOURCES_FILE, clean } from './ledger.mjs';
 import { LOG_FILE } from './log.mjs';
 import { CHART_DIAG_FILE, dumpChartDiag, formatChartDiag, scrubSecrets } from './chart-diag.mjs';
@@ -26,6 +26,10 @@ import { assembleOptionRows, bareSym, chunk, daysBetween, ocDate, optApiVerdict,
 import { mergeOptionSnapshots } from './opt-store.mjs';
 import { BT_SCRIPT, backtestDue, btExitNote, pickLastRunDate } from './backtest.mjs';
 import { parseShortInt, shortIntDiagnosis, shortIntSanity, siBlockTooWide } from '../steps/short-interest.mjs';
+import { FRESH_HOURS, freshHoursFor, hasPriceToday, priceMap } from './companies.mjs';
+import { metaCharting, metaCompanies, metaEst, metaNews, metaOptions, metaShortInt, metaTargets } from './registry.mjs';
+import { factsetSessionValid, headlessMode, initialHeadless, loginFallback } from './browser-policy.mjs';
+import { menuCommand, openDashboardAction, runFetcherLoop } from './menu-actions.mjs';
 
 /* --selftest:不开浏览器,验证核心逻辑(财年判定/标签位移/xlsx 写读回)
  * async 是为了 dumpChartDiag 那一组:它本身是 async(要 await 页面采集),
@@ -37,6 +41,70 @@ export async function runSelftest() {
     if (got === want) console.log('  PASS', name, '=', got);
     else { console.log('  FAIL', name, 'got', got, 'want', want); fail++; }
   };
+  eq(menuCommand(''), 'empty', '菜单空回车只留在菜单');
+  eq(menuCommand('', true), 'exit', '菜单 EOF/终端关闭安全退出,不当成空回车');
+  eq(menuCommand('run'), 'run', '菜单 run 明确开始拉取');
+  eq(menuCommand('拉取'), 'run', '菜单中文拉取别名');
+  eq(menuCommand('exit'), 'exit', '菜单 exit 明确退出');
+  eq(menuCommand('dashboard'), 'dashboard', '菜单 dashboard 打开仪表盘');
+  eq(menuCommand('仪表盘'), 'dashboard', '菜单中文仪表盘别名');
+  eq(menuCommand('NVDA-US'), 'other', '代码仍交给清单增删逻辑');
+  const opened = [];
+  const od = openDashboardAction({ platform: 'win32', appHtml: 'C:\\x\\dash.html', exists: () => true, launch: s => opened.push(s) });
+  eq(od.ok && opened.length, 1, 'Dashboard 动作可注入,自检不真开窗');
+  eq(opened[0], 'start "" "C:\\x\\dash.html"', 'Windows Dashboard 命令带完整引号');
+  eq(openDashboardAction({ platform: 'linux', appHtml: '/x/dash.html', exists: () => true, launch: () => {} }).ok, false,
+    '非 Windows 不冒充打开成功');
+  eq(openDashboardAction({ platform: 'win32', appHtml: 'missing', exists: () => false, launch: () => {} }).ok, false,
+    'Dashboard 文件缺失明确失败');
+  const actions = ['run', 'run', 'exit']; let menuN = 0, roundN = 0, afterN = 0;
+  await runFetcherLoop({ interactive: true, menu: async () => actions[menuN++],
+    runRound: async () => { roundN++; }, afterRound: async () => { afterN++; } });
+  eq(`${menuN}/${roundN}/${afterN}`, '3/2/2', '交互循环:启动进菜单,每轮后回同一菜单,exit 才停');
+  let cronMenu = 0, cronRound = 0, cronAfter = 0;
+  await runFetcherLoop({ interactive: false, menu: async () => { cronMenu++; return 'exit'; },
+    runRound: async () => { cronRound++; }, afterRound: async () => { cronAfter++; } });
+  eq(`${cronMenu}/${cronRound}/${cronAfter}`, '0/1/1', '无 TTY:不进菜单,自动单轮后退出');
+  eq(freshHoursFor('legacy.csv'), FRESH_HOURS, 'fresh legacy string keeps 20h');
+  eq(freshHoursFor(metaCompanies()), 0, 'fresh price every round');
+  eq(freshHoursFor(metaEst('T-US', 'FY1')), 96, 'fresh estimates 4d');
+  eq(freshHoursFor(metaTargets('T-US')), 144, 'fresh targets 6d');
+  eq(freshHoursFor(metaCharting('T-US')), 20, 'fresh charting daily');
+  eq(freshHoursFor(metaCharting('SPY-US', '_MARKET-BENCH SPY-US Daily Charting.xlsx', 'market')), 20, 'fresh market daily');
+  eq(freshHoursFor(metaNews('T-US')), 20, 'fresh news daily');
+  eq(freshHoursFor(metaOptions('T-US')), 20, 'fresh options daily');
+  eq(freshHoursFor(metaShortInt()), 20, 'fresh short daily');
+  eq(freshHoursFor({ file: 'x', kind: 'targets' }, 7), 7, 'fresh explicit override wins');
+  const oldPriceRow = priceMap.get('FRESH-TEST');
+  priceMap.set('FRESH-TEST', 'FRESH-TEST,FRESH-TEST,USD,10,2026-08-25,,,,,,');
+  eq(hasPriceToday('FRESH-TEST', '2026-08-25'), true, 'price same date fresh');
+  eq(hasPriceToday('FRESH-TEST', '2026-08-26'), false, 'price next date stale');
+  if (oldPriceRow === undefined) priceMap.delete('FRESH-TEST'); else priceMap.set('FRESH-TEST', oldPriceRow);
+  eq(headlessMode(undefined), 'auto', 'browser 默认 auto');
+  eq(headlessMode('0'), 'visible', 'FS_HEADLESS=0 强制可见');
+  eq(headlessMode('1'), 'headless', 'FS_HEADLESS=1 强制后台');
+  eq(headlessMode('1', true), 'visible', '--login 始终可见,压过 FS_HEADLESS=1');
+  eq(initialHeadless('auto'), true, 'auto 首次后台启动');
+  eq(initialHeadless('visible'), false, 'visible 首次有窗口');
+  eq(loginFallback('auto'), 'relaunch-visible', 'auto 登录失效时重开可见窗口');
+  eq(loginFallback('visible'), 'wait-visible', '强制可见在原窗口等登录');
+  eq(loginFallback('headless'), 'error', '强制后台登录失效时报错');
+  eq(factsetSessionValid('https://my.apps.factset.com/workstation/'), true, 'workstation URL 认作已登录');
+  eq(factsetSessionValid('https://id.factset.com/auth/login'), false, 'SSO URL 认作未登录');
+  let badHeadless = false; try { headlessMode('yes'); } catch { badHeadless = true; }
+  eq(badHeadless, true, 'FS_HEADLESS 非法值明确拒绝');
+  const browserSrc = fs.readFileSync(path.join(LIB_DIR, 'browser.mjs'), 'utf8');
+  const iFallback = browserSrc.indexOf("fallback === 'relaunch-visible'");
+  const iClose = browserSrc.indexOf('await closeBrowser()', iFallback);
+  const iVisible = browserSrc.indexOf('await launchBrowser(false)', iFallback);
+  eq(iFallback >= 0 && iClose > iFallback && iVisible > iClose, true,
+    'auto 重开顺序:先 close persistent context,再 launch visible(不并发占 profile)');
+  const forcedBlock = browserSrc.slice(browserSrc.indexOf("fallback === 'error'"), iFallback);
+  eq(/await closeBrowser\(\)/.test(forcedBlock) && /FS_HEADLESS=1/.test(forcedBlock) && /fetch:login/.test(forcedBlock), true,
+    '强制后台登录失效:关闭 context 并给出可执行指引');
+  const loginBlock = browserSrc.slice(browserSrc.indexOf('if (LOGIN_ONLY)'), browserSrc.indexOf('log(\'⏳ 正在检查'));
+  eq(/await page\.goto\(BASE\)/.test(loginBlock) && /waitForEvent\('close'/.test(loginBlock), true,
+    '--login 行为:打开首页并等用户关窗');
   eq(fyTag("Jan '27E"), 'FY1', "fyTag Jan'27E");
   eq(fyTag("Jan '28E"), 'FY2', "fyTag Jan'28E");
   eq(fyTag("Dec '26E"), 'FY1', "fyTag Dec'26E");
@@ -660,6 +728,9 @@ export async function runSelftest() {
     '传进来带路径也只认文件名,不会在 Assets 里套出一层怪目录');
   /* 路径锚点:拆模块最容易踩的就是这里 —— config 从 fetcher/ 掉到了 fetcher/lib/ */
   eq(path.basename(LIB_DIR), 'lib', 'LIB_DIR 指向 fetcher/lib');
+  eq(envFlag({}, 'FS_OPEN_DASHBOARD'), false, '仪表盘默认不自动打开');
+  eq(envFlag({ FS_OPEN_DASHBOARD: '1' }, 'FS_OPEN_DASHBOARD'), true, 'FS_OPEN_DASHBOARD=1 才允许自动打开');
+  eq(envFlag({ FS_OPEN_DASHBOARD: 'true' }, 'FS_OPEN_DASHBOARD'), false, '仪表盘开关只认明确的 1,不把任意字符串当开启');
   eq(path.basename(FETCHER_DIR), 'fetcher', 'FETCHER_DIR 指向 fetcher/');
   eq(path.resolve(FETCHER_DIR, '..') === ROOT_DIR, true, 'ROOT_DIR 是 fetcher 的上一级(仓库根)');
   eq(process.env.FS_OUT ? true : OUT_DIR === path.join(ROOT_DIR, 'Assets'), true,
