@@ -29,7 +29,7 @@ import { parseShortInt, shortIntDiagnosis, shortIntSanity, siBlockTooWide } from
 import { FRESH_HOURS, freshHoursFor, hasPriceToday, priceMap } from './companies.mjs';
 import { metaCharting, metaCompanies, metaEst, metaNews, metaOptions, metaShortInt, metaTargets } from './registry.mjs';
 import { factsetSessionValid, headlessMode, initialHeadless, loginFallback } from './browser-policy.mjs';
-import { menuCommand, openDashboardAction, runFetcherLoop } from './menu-actions.mjs';
+import { menuCommand, menuScreen, openDashboardAction, runFetcherLoop } from './menu-actions.mjs';
 
 /* --selftest:不开浏览器,验证核心逻辑(财年判定/标签位移/xlsx 写读回)
  * async 是为了 dumpChartDiag 那一组:它本身是 async(要 await 页面采集),
@@ -48,7 +48,19 @@ export async function runSelftest() {
   eq(menuCommand('exit'), 'exit', '菜单 exit 明确退出');
   eq(menuCommand('dashboard'), 'dashboard', '菜单 dashboard 打开仪表盘');
   eq(menuCommand('仪表盘'), 'dashboard', '菜单中文仪表盘别名');
+  eq(menuCommand('1'), 'run', '菜单数字 1 = 开始拉取');
+  eq(menuCommand('2'), 'dashboard', '菜单数字 2 = 打开仪表盘');
+  eq(menuCommand('3'), 'health', '菜单数字 3 = 数据体检');
+  eq(menuCommand('4'), 'edit', '菜单数字 4 = 编辑公司清单');
+  eq(menuCommand('5'), 'markets', '菜单数字 5 = 编辑市场清单');
+  eq(menuCommand('6'), 'sync', '菜单数字 6 = 数据对齐');
+  eq(menuCommand('7'), 'sources', '菜单数字 7 = 来源台账');
+  eq(menuCommand('8'), 'backtest', '菜单数字 8 = 回测');
+  eq(menuCommand('0'), 'exit', '菜单数字 0 = 退出');
   eq(menuCommand('NVDA-US'), 'other', '代码仍交给清单增删逻辑');
+  const ms = menuScreen(['META-US', 'NVDA-US'], [['SPY-US', 'BENCH']]);
+  eq(ms.includes('公司  2 家') && ms.includes('META-US') && ms.includes('[1] 开始拉取'), true,
+    '菜单首页同时显示清单摘要和编号操作,不用记命令');
   const opened = [];
   const od = openDashboardAction({ platform: 'win32', appHtml: 'C:\\x\\dash.html', exists: () => true, launch: s => opened.push(s) });
   eq(od.ok && opened.length, 1, 'Dashboard 动作可注入,自检不真开窗');

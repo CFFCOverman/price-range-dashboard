@@ -11,8 +11,8 @@ import { healthReport } from './health.mjs';
 import { SOURCES_FILE, writeSources } from './ledger.mjs';
 import { MARKETS, loadMarkets, saveMarkets, setMarkets } from './markets.mjs';
 import { reconcileReport } from './reconcile.mjs';
-import { IGNORED, TICKERS, VALID, loadIgnored, loadTickers, printList, saveTickers, setIgnored, setTickers } from './tickers.mjs';
-import { menuCommand, openDashboardAction } from './menu-actions.mjs';
+import { IGNORED, TICKERS, VALID, loadIgnored, loadTickers, saveTickers, setIgnored, setTickers } from './tickers.mjs';
+import { menuCommand, menuScreen, openDashboardAction } from './menu-actions.mjs';
 
 export const RL = (!LOGIN_ONLY && process.stdin.isTTY)
   ? readline.createInterface({ input: process.stdin, output: process.stdout })
@@ -36,11 +36,8 @@ export async function askLine(q) {
 export async function manageMenu() {
   if (!RL) return 'run';
   while (true) {
-    printList(TICKERS);
-    if (MARKETS.length) console.log('市场级序列(' + MARKETS.length + ' 个,只拉日线): ' + MARKETS.map(([s, r]) => s + '(' + r + ')').join('  '));
-    console.log('操作:输代码添加(可多个)| -代码 删除 | edit | mkt | sync | chk | bt | sources');
-    console.log('      open / dashboard 打开仪表盘 | run 开始拉取 | exit 退出  (空回车重画菜单)');
-    const input = await askLine('> ');
+    console.log(menuScreen(TICKERS, MARKETS));
+    const input = await askLine('请选择操作 > ');
     const ans = input.value.trim();
     const cmd = menuCommand(ans, input.eof);
     if (cmd === 'empty') { console.log('请输入 run 开始拉取，或 exit 退出。'); continue; }
@@ -55,26 +52,24 @@ export async function manageMenu() {
       console.log(r.why);
       continue;
     }
-    if (/^edit$/i.test(ans)) {
+    if (cmd === 'edit') {
       saveTickers(TICKERS);
-      const before = TICKERS.join(',');
       exec(`start notepad "${TICKERS_FILE}"`);
       carryInput(await askLine('已打开记事本(tickers.txt)—— 保存后按回车刷新；也可直接输入下一条命令 '));
       setTickers(loadTickers());
       setIgnored(loadIgnored());   /* 忽略名单就写在同一个文件的注释行里,一起刷新 */
       continue;
     }
-    if (/^(mkt|markets?)$/i.test(ans)) {
+    if (cmd === 'markets') {
       saveMarkets(MARKETS);
-      const before = JSON.stringify(MARKETS);
       exec(`start notepad "${MARKETS_FILE}"`);
       carryInput(await askLine('已打开记事本(markets.txt)—— 保存后按回车刷新；也可直接输入下一条命令 '));
       setMarkets(loadMarkets());
       console.log('市场级序列: ' + (MARKETS.length ? MARKETS.map(([s, r]) => s + '(' + r + ')').join('  ') : '(空,不拉取)'));
       continue;
     }
-    if (/^(chk|check|health|体检)$/i.test(ans)) { healthReport(); continue; }
-    if (/^(bt|backtest|回测)$/i.test(ans)) {
+    if (cmd === 'health') { healthReport(); continue; }
+    if (cmd === 'backtest') {
       /* 手动跑也照样记账。想"看一眼不留痕"的念头要压住:
        * 只在结果好看时才记的账,过几个月就是一份专门骗自己的历史。 */
       const last = lastBacktestDate();
@@ -83,12 +78,12 @@ export async function manageMenu() {
       if (!r.ok) console.log(`\x1b[33m回测没跑成:${r.skipped || 'exit ' + r.code}\x1b[0m`);
       continue;
     }
-    if (/^(sync|align|对齐)$/i.test(ans)) {
+    if (cmd === 'sync') {
       const rep = reconcileReport({ apply: true });
       if (rep.added.length) console.log('已补回清单:', rep.added.join(', '));
       continue;
     }
-    if (/^(sources|src)$/i.test(ans)) {
+    if (cmd === 'sources') {
       if (!fs.existsSync(SOURCES_FILE)) writeSources();
       exec(`start notepad "${SOURCES_FILE}"`);
       console.log('已打开源出台账(sources.txt,只读性质——每次拉取自动更新,手改会被覆盖)');
