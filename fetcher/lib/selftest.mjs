@@ -57,10 +57,13 @@ export async function runSelftest() {
     '非 Windows 不冒充打开成功');
   eq(openDashboardAction({ platform: 'win32', appHtml: 'missing', exists: () => false, launch: () => {} }).ok, false,
     'Dashboard 文件缺失明确失败');
-  const actions = ['run', 'run', 'exit']; let menuN = 0, roundN = 0, afterN = 0;
+  const actions = ['run', 'run', 'exit']; let menuN = 0, roundN = 0, afterN = 0; const ioTrace = [];
   await runFetcherLoop({ interactive: true, menu: async () => actions[menuN++],
-    runRound: async () => { roundN++; }, afterRound: async () => { afterN++; } });
+    runRound: async () => { ioTrace.push('round'); roundN++; }, afterRound: async () => { ioTrace.push('after'); afterN++; },
+    pauseInput: () => ioTrace.push('pause'), resumeInput: () => ioTrace.push('resume') });
   eq(`${menuN}/${roundN}/${afterN}`, '3/2/2', '交互循环:启动进菜单,每轮后回同一菜单,exit 才停');
+  eq(ioTrace.join(','), 'resume,pause,round,after,resume,resume,pause,round,after,resume,resume',
+    '交互输入只在菜单启用:抓取期间暂停,每轮结束即恢复(提前输入的下一条命令不能被静默吞掉)');
   let cronMenu = 0, cronRound = 0, cronAfter = 0;
   await runFetcherLoop({ interactive: false, menu: async () => { cronMenu++; return 'exit'; },
     runRound: async () => { cronRound++; }, afterRound: async () => { cronAfter++; } });

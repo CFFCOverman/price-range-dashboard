@@ -54,7 +54,7 @@ const migrateNote = migrateLegacyLayout();
 
 const browser = await import('./lib/browser.mjs');   /* ctx 是会被重新赋值的活绑定,必须整体持有 */
 const { log } = await import('./lib/log.mjs');
-const { RL, manageMenu } = await import('./lib/menu.mjs');
+const { RL, manageMenu, pauseMenuInput, resumeMenuInput } = await import('./lib/menu.mjs');
 const { runRound } = await import('./lib/round.mjs');
 const { maybeMonthlyBacktest } = await import('./lib/backtest.mjs');
 const { runFetcherLoop } = await import('./lib/menu-actions.mjs');
@@ -82,7 +82,7 @@ rosterReport({ apply: true });
 let btDone = false;
 try {
   await runFetcherLoop({
-    interactive: !!RL, menu: manageMenu, runRound,
+    interactive: !!RL, menu: manageMenu, runRound, pauseInput: pauseMenuInput, resumeInput: resumeMenuInput,
     afterRound: async () => {
       if (!btDone) { btDone = true; maybeMonthlyBacktest(new Date().toISOString().slice(0, 10)); }
     },

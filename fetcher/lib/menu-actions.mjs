@@ -16,11 +16,17 @@ export function openDashboardAction({ platform, appHtml, exists, launch }) {
   return { ok: true, why: `已打开 Price Range Dashboard: ${appHtml}` };
 }
 
-export async function runFetcherLoop({ interactive, menu, runRound, afterRound }) {
+export async function runFetcherLoop({ interactive, menu, runRound, afterRound, pauseInput = () => {}, resumeInput = () => {} }) {
   if (!interactive) { await runRound(); await afterRound(); return; }
   while (true) {
+    resumeInput();
     if (await menu() === 'exit') return;
-    await runRound();
-    await afterRound();
+    pauseInput();
+    try {
+      await runRound();
+      await afterRound();
+    } finally {
+      resumeInput();
+    }
   }
 }

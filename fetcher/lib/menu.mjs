@@ -17,10 +17,17 @@ import { menuCommand, openDashboardAction } from './menu-actions.mjs';
 export const RL = (!LOGIN_ONLY && process.stdin.isTTY)
   ? readline.createInterface({ input: process.stdin, output: process.stdout })
   : null;   /* 无终端(如定时任务):跳过所有交互 */
+let pendingInput = null;
+export function pauseMenuInput() { if (RL && !RL.closed) RL.pause(); }
+export function resumeMenuInput() { if (RL && !RL.closed) RL.resume(); }
+function carryInput(input) {
+  if (input && !input.eof && String(input.value || '').trim()) pendingInput = input;
+}
 /* 空行与 EOF 必须是两种结果：空行留在菜单，终端关闭则安全退出。
  * 旧的 Promise.race 每问一次都会遗留一个 close listener，菜单多操作几次还会触发
  * MaxListenersExceededWarning；直接接住 question 的关闭异常即可同时解决两件事。 */
 export async function askLine(q) {
+  if (pendingInput) { const input = pendingInput; pendingInput = null; return input; }
   if (!RL || RL.closed) return { eof: true, value: '' };
   try { return { eof: false, value: await RL.question(q) }; }
   catch { return { eof: true, value: '' }; }
@@ -28,11 +35,11 @@ export async function askLine(q) {
 /** 启动和每轮结束都是这一个一级菜单；只有明确 run / exit 才离开。 */
 export async function manageMenu() {
   if (!RL) return 'run';
-  printList(TICKERS);
-  if (MARKETS.length) console.log('市场级序列(' + MARKETS.length + ' 个,只拉日线): ' + MARKETS.map(([s, r]) => s + '(' + r + ')').join('  '));
-  console.log('操作:输代码添加(可多个)| -代码 删除 | edit | mkt | sync | chk | bt | sources');
-  console.log('      open / dashboard 打开仪表盘 | run 开始拉取 | exit 退出  (空回车留在菜单)');
   while (true) {
+    printList(TICKERS);
+    if (MARKETS.length) console.log('市场级序列(' + MARKETS.length + ' 个,只拉日线): ' + MARKETS.map(([s, r]) => s + '(' + r + ')').join('  '));
+    console.log('操作:输代码添加(可多个)| -代码 删除 | edit | mkt | sync | chk | bt | sources');
+    console.log('      open / dashboard 打开仪表盘 | run 开始拉取 | exit 退出  (空回车重画菜单)');
     const input = await askLine('> ');
     const ans = input.value.trim();
     const cmd = menuCommand(ans, input.eof);
@@ -46,24 +53,22 @@ export async function manageMenu() {
     if (cmd === 'dashboard') {
       const r = openDashboardAction({ platform: process.platform, appHtml: APP_HTML, exists: fs.existsSync, launch: command => exec(command) });
       console.log(r.why);
-      if (r.ok) await askLine('确认看到仪表盘后按回车返回同一菜单 ');
       continue;
     }
     if (/^edit$/i.test(ans)) {
       saveTickers(TICKERS);
       const before = TICKERS.join(',');
       exec(`start notepad "${TICKERS_FILE}"`);
-      await askLine('已打开记事本(tickers.txt)—— 编辑保存后回到这里按回车刷新清单 ');
+      carryInput(await askLine('已打开记事本(tickers.txt)—— 保存后按回车刷新；也可直接输入下一条命令 '));
       setTickers(loadTickers());
       setIgnored(loadIgnored());   /* 忽略名单就写在同一个文件的注释行里,一起刷新 */
-      printList(TICKERS);
       continue;
     }
     if (/^(mkt|markets?)$/i.test(ans)) {
       saveMarkets(MARKETS);
       const before = JSON.stringify(MARKETS);
       exec(`start notepad "${MARKETS_FILE}"`);
-      await askLine('已打开记事本(markets.txt)—— 编辑保存后回到这里按回车刷新 ');
+      carryInput(await askLine('已打开记事本(markets.txt)—— 保存后按回车刷新；也可直接输入下一条命令 '));
       setMarkets(loadMarkets());
       console.log('市场级序列: ' + (MARKETS.length ? MARKETS.map(([s, r]) => s + '(' + r + ')').join('  ') : '(空,不拉取)'));
       continue;
@@ -80,7 +85,7 @@ export async function manageMenu() {
     }
     if (/^(sync|align|对齐)$/i.test(ans)) {
       const rep = reconcileReport({ apply: true });
-      if (rep.added.length) printList(TICKERS);
+      if (rep.added.length) console.log('已补回清单:', rep.added.join(', '));
       continue;
     }
     if (/^(sources|src)$/i.test(ans)) {
@@ -107,7 +112,6 @@ export async function manageMenu() {
       } else console.log('  已在清单中:', tok);
     }
     saveTickers(TICKERS);
-    printList(TICKERS);
-    console.log('可继续增删；完成后输入 run 拉取，或 exit 退出。');
+    console.log('清单已保存。');
   }
 }
