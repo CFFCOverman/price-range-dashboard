@@ -1,10 +1,16 @@
-# FactSet exports are licensed market data — never publish them
+# FactSet exports are licensed market data. This repository is private and
+# intentionally versions curated snapshots for multi-device use.
 Assets/
 *.xlsx
 *.xls
 *.csv
 !companies_template.csv
 !history_template.csv
+
+# Track reusable datasets, but keep local fetch diagnostics out of Git.
+!Assets/
+!Assets/**
+Assets/_logs/
 
 # 依赖
 node_modules/
