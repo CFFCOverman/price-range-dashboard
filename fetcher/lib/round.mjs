@@ -11,12 +11,16 @@ import { SOURCES_FILE, ledger, noteArtifact, stampUTC, step, writeSources } from
 import { bar, barEnd, log } from './log.mjs';
 import { MARKETS, marketFile } from './markets.mjs';
 import { metaCharting, metaCompanies } from './registry.mjs';
+import { writeRoster } from './roster.mjs';
 import { TICKERS } from './tickers.mjs';
 import { fetchCharting } from '../steps/charting.mjs';
 import { fetchTicker } from '../steps/ticker.mjs';
 
 export let appOpened = false;
 export async function runRound() {
+  /* 菜单允许在进程启动后增删 ticker / market。启动时写过的 roster 此时已经过期，
+   * 必须在每轮真正拉取前用当前活绑定重写；否则新数据会下载成功，却被仪表盘当作清单外数据隐藏。 */
+  if (!writeRoster(TICKERS, MARKETS)) log('  ⚠ roster.csv 刷新失败；仪表盘可能暂时隐藏新加入的标的。');
   await ensureBrowser();
   const results = {}, mktResults = {};
   const STEPS = 8;   /* 每家 8 步:两财年 / 价格 / 目标价 / 空头 / 新闻 / 期权链 / 日线;市场序列各 1 步 */

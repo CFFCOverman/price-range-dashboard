@@ -803,6 +803,9 @@ export async function runSelftest() {
   eq(rc[1] + '|' + rc[2], 'AMD-US,company,1|NVDA-US,company,1', 'roster 公司排序去重后逐行写');
   eq(rc[3], 'SPY-US,bench,1', '市场序列带上自己的角色 —— 它不是公司,仪表盘据此不把它画进表格');
   eq(rc[4].charAt(0), '#', 'roster 末行说明必须以 # 开头(仪表盘靠这个字符把它滤掉,改了就凭空多一家公司)');
+  const roundSrc = fs.readFileSync(path.join(LIB_DIR, 'round.mjs'), 'utf8');
+  eq(/writeRoster\(TICKERS,\s*MARKETS\)/.test(roundSrc), true,
+    '每轮拉取前按菜单里的当前清单刷新 roster(运行中新增 META-US 不能下载后仍被仪表盘隐藏)');
 
   const D = 86400000, NOW = Date.UTC(2026, 6, 30);
   const ent = (ticker, ageDays) => ({ ticker, file: `/x/${ticker}-${ageDays}.csv`, mtimeMs: NOW - ageDays * D });
