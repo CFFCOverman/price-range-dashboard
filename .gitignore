@@ -1,17 +1,11 @@
 # PRIVATE-LICENSED-DATA: FactSet exports may be governed by the account's
-# data license. This private repository intentionally versions curated
-# snapshots for the licensed user's multi-device use. See PRIVATE_DATA.md.
+# data license. Keep all exported snapshots local and out of Git.
 Assets/
 *.xlsx
 *.xls
 *.csv
 !companies_template.csv
 !history_template.csv
-
-# Track reusable datasets, but keep local fetch diagnostics out of Git.
-!Assets/
-!Assets/**
-Assets/_logs/
 
 # 依赖
 node_modules/
