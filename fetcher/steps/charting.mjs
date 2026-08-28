@@ -179,7 +179,7 @@ async function clickByLabel(re) {
  *   3. 起始日期输入框 —— 唯一会**改写文本**的入口,猜错了会把图表留在一个奇怪的区间里,
  *      再点一下也回不去,所以只能垫底。
  *  注意返回值只说明"点着了什么",不说明"生效了没有" —— 生效与否一律以下载回来的文件为准。 */
-export const RANGE_LABELS = ['5Y', '5 Years', '5 Year', '5Yr', '5yr'];
+export const RANGE_LABELS = ['5y', '5Y', '5 Years', '5 Year', '5Yr', '5yr'];
 export async function trySetRange5Y() {
   // 入口 1:区间快捷条上的 5Y 按钮(文字节点)
   for (const lab of RANGE_LABELS) {

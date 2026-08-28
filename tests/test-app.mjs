@@ -172,7 +172,7 @@ const setup = async (eps, peSeries, price = 100) => page.evaluate(([eps, peSerie
   state.companies.clear(); state.history.clear(); state.overrides.clear(); state.peManual.clear();
   state.companies.set('TST-US', { ticker: 'TST-US', name: 'Test Co', currency: 'USD', price, priceSrc: 'user', eps: { fy1: eps, fy2: null }, extra: null });
   state.history.set('TST-US', peSeries.map((pe, i) => ({ date: '20' + String(10 + i).padStart(2, '0') + '-01', pe })));
-  state.selected = 'TST-US'; state.horizon = 'fy1';
+  state.selected = 'TST-US'; state.horizon = 'fy1'; state.mxPick = { eps: 'base', pe: 'p50' };
   const r = calcRange(state.companies.get('TST-US'), 'fy1');
   renderMatrix(state.companies.get('TST-US'), r);
   const pe = peStats('TST-US');
@@ -219,6 +219,23 @@ await section('[2] 情景矩阵 —— 两个角必须与表头核心区间是�
   ok('base 格唯一且 = mid', cells.base.length === 1 && Math.abs(cells.base[0].val - r.mid) < 0.05);
   ok('图例两个色块都渲染出来了',
     await page.evaluate(() => document.querySelectorAll('#mxWrap .mxKey').length === 2));
+  const picker = await page.evaluate(() => {
+    const sels = document.querySelectorAll('#mxWrap .mxControls select');
+    const before = document.querySelector('#mxWrap .mxResult strong').textContent;
+    sels[0].value = 'opt'; sels[0].dispatchEvent(new Event('change'));
+    const afterEps = document.querySelector('#mxWrap .mxResult strong').textContent;
+    const sels2 = document.querySelectorAll('#mxWrap .mxControls select');
+    sels2[1].value = 'p75'; sels2[1].dispatchEvent(new Event('change'));
+    return {
+      before, afterEps,
+      afterBoth: document.querySelector('#mxWrap .mxResult strong').textContent,
+      picked: document.querySelectorAll('#mxWrap table.mx td.picked').length,
+      state: { ...state.mxPick },
+    };
+  });
+  ok('盈利情景下拉会单独改变隐含价', picker.before !== picker.afterEps, JSON.stringify(picker));
+  ok('估值情景下拉会继续改变隐含价', picker.afterEps !== picker.afterBoth, JSON.stringify(picker));
+  ok('下拉选择与矩阵高亮格保持同源', picker.picked === 1 && picker.state.eps === 'opt' && picker.state.pe === 'p75', JSON.stringify(picker));
 });
 
 await section('[3] EPS 情景清洗护栏', async () =>
@@ -827,12 +844,14 @@ await section('[8] 期权轨:未平仓量(OI)墙', async () =>
     }
     state.options.delete('O-US');
     const msg = ingestOptions(rows, 'O-US Options.csv');
-    /* 同一个 (到期日, 行权价) 用更新的 asof 覆盖:OI 是存量,旧快照没有意义 */
+    /* 不同 asof 必须同时保留，行为面板需要相邻快照；压力位会自行选参照日前最新一份。 */
     const upd = ingestOptions([{ asof: '2026-07-30', expiry: '2026-08-21', strike: 120, call_oi: 1, put_oi: 1 },
       { asof: '2026-07-01', expiry: '2026-08-21', strike: 115, call_oi: 999999, put_oi: 0 },
       { asof: '2026-07-29', expiry: 'garbage', strike: 100, call_oi: 5, put_oi: 5 }], 'O-US Options.csv');
     const chain = state.options.get('O-US');
-    const at = (e, s) => chain.find(r => r.expiry === e && r.strike === s);
+    const at = (e, s, a) => chain.find(r => r.expiry === e && r.strike === s && (!a || r.asof === a));
+    const latestAt = (e, s) => chain.filter(r => r.expiry === e && r.strike === s)
+      .sort((a, b) => a.asof < b.asof ? 1 : -1)[0];
     state.selected = 'O-US'; state.horizon = 'fy1'; state.plHold = 'mid';
     const co = state.companies.get('O-US'), r = calcRange(co, 'fy1');
     const W = optionWalls(co, '2026-07-29', 21);
@@ -859,11 +878,16 @@ await section('[8] 期权轨:未平仓量(OI)墙', async () =>
     const mpPays = MPROWS.map(s => MPROWS.reduce((a, r) =>
       a + r.callOI * Math.max(0, s.strike - r.strike) + r.putOI * Math.max(0, r.strike - s.strike), 0));
     renderPressure(co, r);
+    const OB = optionBehavior('O-US'); renderOptionsBehavior(co);
     const lv = L => ({ lo: L.lo, hi: L.hi, mid: L.mid, tracks: L.tracks, ev: L.evidence,
       strikes: L.src.opts.map(w => w.strike), hasStrength: 'strength' in L });
     return {
       price: PXL, msg: msg.text, upd: upd.text, updRows: chain.length,
-      newer: at('2026-08-21', 120).callOI, older: at('2026-08-21', 115).callOI,
+      newer: latestAt('2026-08-21', 120).callOI, older: latestAt('2026-08-21', 115).callOI,
+      oldSnapshotKept: at('2026-08-21', 115, '2026-07-01').callOI,
+      snapshots: OB.snaps, behaviorVisible: !$('optBehaviorSec').hidden,
+      behaviorCards: document.querySelectorAll('#optBehaviorGrid .optHorizon').length,
+      behaviorText: $('optBehaviorSec').textContent,
       badExpiry: !!at('garbage', 100),
       expiries: W.expiries.map(e => ({ expiry: e.expiry, dte: e.dte, w: e.w, maxPain: e.maxPain,
         nStrike: e.nStrike, callOI: e.callOI, putOI: e.putOI })),
@@ -904,8 +928,11 @@ await section('[8] 期权轨:未平仓量(OI)墙', async () =>
 
   /* ---------- 上一版 [8] 里仍然成立的覆盖(按新 API 改名后逐条保留) ---------- */
   ok('Options.csv 归属到 ticker 并按行权价入库', /O-US/.test(O.msg) && O.updRows > 10, O.msg);
-  ok('同键更新:asof 较新的覆盖旧值', O.newer === 1, String(O.newer));
-  ok('同键更新:asof 较旧的不覆盖已有值', O.older !== 999999, String(O.older));
+  ok('同一合约的最新 asof 仍用于当前压力位', O.newer === 1 && O.older !== 999999, JSON.stringify([O.newer, O.older]));
+  ok('旧 asof 快照保留下来供行为时间轴比较', O.oldSnapshotKept === 999999 && O.snapshots === 3, JSON.stringify([O.oldSnapshotKept, O.snapshots]));
+  ok('期权行为时间轴渲染短中长期三层且明说 OI 不能证明方向', O.behaviorVisible && O.behaviorCards === 3
+    && /短期|Short/.test(O.behaviorText) && /中期|Medium/.test(O.behaviorText) && /长期|Long/.test(O.behaviorText)
+    && /不能单独证明|cannot prove/.test(O.behaviorText), O.behaviorText);
   ok('非法到期日被丢弃', O.badExpiry === false);
   ok('已过期的链被排除(2026-06-19 不出现)', O.expiries.every(e => e.expiry !== '2026-06-19'));
   ok('远月被排除(2026-12-18 超出 PX_OPT_MAX_DTE=60)',

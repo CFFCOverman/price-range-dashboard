@@ -33,4 +33,12 @@ table.mx td.core { outline: 2px dashed var(--series-2); outline-offset: -2px; bo
 .mxKey { display: inline-block; width: 11px; height: 11px; vertical-align: -1px; margin-right: 4px; border-radius: 2px; }
 .mxKey.base { border: 2px solid var(--series-1); }
 .mxKey.core { border: 2px dashed var(--series-2); }
+.mxControls { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin:8px 0 10px; padding:10px; background:var(--surface-2); border:1px solid var(--grid); border-radius:6px; }
+.mxControl { min-width:150px; }
+.mxControl .lb, .mxResult .lb { display:block; color:var(--text-muted); font-size:11px; margin-bottom:4px; }
+.mxControl select { width:100%; }
+.mxResult { min-width:150px; padding:2px 8px; }
+.mxResult strong { font-size:20px; margin-right:8px; color:var(--text-primary); }
+.mxResult .sub { font-size:12px; }
+table.mx td.picked { box-shadow:inset 0 0 0 2px var(--series-1); background:var(--wash-strong); font-weight:700; }
 .hint.warn { color: var(--delta-down); margin: 6px 0 0; }

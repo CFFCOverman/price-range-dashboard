@@ -132,6 +132,15 @@
     </div>
   </div>
 
+  <div id="optBehaviorSec" hidden>
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">期权行为时间轴 · 过去 / 现在 / 未来</span><span class="le">Options behavior timeline · past / present / future</span></h2>
+    <p class="hint"><span class="lz">事实层只描述 OI 存量及相邻快照变化；Call/Put OI 本身不能证明买方方向。短期 1–7 DTE，中期 8–45 DTE，长期 46–180 DTE。</span><span class="le">Facts only: OI stock and changes between comparable snapshots. Call/put OI alone does not reveal buyer direction. Short 1–7 DTE, medium 8–45 DTE, long 46–180 DTE.</span></p>
+    <div id="optBehaviorMeta"></div>
+    <div class="optTimeline" id="optBehaviorGrid"></div>
+    <div id="optMacro"></div>
+    <p class="hint" id="optBehaviorNote"></p>
+  </div>
+
   <div id="cmpSec" hidden>
     <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">方法对比(同一把价格尺)</span><span class="le">Method comparison (one shared price axis)</span></h2>
     <div class="chartbox"><div id="cmpChart"></div></div>
@@ -211,6 +220,20 @@
         <button type="button" data-klw="w60"><span class="lz">近 60 根</span><span class="le">Last 60</span></button><button type="button" data-klw="w120" class="on"><span class="lz">近 120 根</span><span class="le">Last 120</span></button><button type="button" data-klw="all"><span class="lz">全部</span><span class="le">All</span></button>
       </span>
     </div>
+    <div class="plholdrow">
+      <label><span class="lz">技术密集带尺度</span><span class="le">Technical-zone horizon</span></label>
+      <span class="tabs" id="klLevelTabs">
+        <button type="button" data-klh="short"><span class="lz">短期 5 日</span><span class="le">Short 5d</span></button><button type="button" data-klh="mid" class="on"><span class="lz">中期 21 日</span><span class="le">Medium 21d</span></button><button type="button" data-klh="long"><span class="lz">长期 63 日</span><span class="le">Long 63d</span></button>
+      </span>
+    </div>
+    <div class="kllevels" id="klLevels"></div>
+    <div class="plholdrow">
+      <label><span class="lz">图层</span><span class="le">Layers</span></label>
+      <span class="tabs klLayerTabs" id="klLayerTabs">
+        <button type="button" data-kll="tech" class="on"><span class="lz">技术结构</span><span class="le">Technical</span></button><button type="button" data-kll="matrix" class="on">Matrix</button><button type="button" data-kll="option" class="on"><span class="lz">期权 OI</span><span class="le">Options OI</span></button>
+      </span>
+    </div>
+    <div class="klrefs" id="klRefs"></div>
     <div class="chartbox" id="klBox">
       <div id="klChart"></div>
       <div class="tip" id="klTip"></div>

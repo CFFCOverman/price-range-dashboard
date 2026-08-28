@@ -41,7 +41,8 @@ function klStep(span) {
 
 function renderCandles(co) {
   const sec = $('klSec'), box = $('klChart'), note = $('klNote'), leg = $('klLegend'), tabs = $('klWinTabs');
-  box.replaceChildren(); note.replaceChildren(); leg.replaceChildren();
+  const levelTabs = $('klLevelTabs'), layerTabs = $('klLayerTabs'), levels = $('klLevels'), refsBox = $('klRefs');
+  box.replaceChildren(); note.replaceChildren(); leg.replaceChildren(); levels.replaceChildren(); refsBox.replaceChildren();
   const all = (co && state.priceHist.get(co.ticker)) || [];
   /* 两根以下画不出任何东西(连一段线都连不起来),整块收起而不是留一个空框 */
   if (all.length < 2) { sec.hidden = true; return; }
@@ -60,12 +61,63 @@ function renderCandles(co) {
     };
   }
 
+  const levelHold = PX_HORIZONS[state.klLevelHold] ? state.klLevelHold : 'mid';
+  if (levelTabs) {
+    for (const b of levelTabs.querySelectorAll('button')) b.classList.toggle('on', b.dataset.klh === levelHold);
+    levelTabs.onclick = ev => {
+      const b = ev.target.closest('button');
+      if (!b || !PX_HORIZONS[b.dataset.klh] || b.dataset.klh === levelHold) return;
+      state.klLevelHold = b.dataset.klh;
+      renderCandles(co);
+    };
+  }
+  const layers = state.klLayers || (state.klLayers = { tech: true, matrix: true, option: true });
+  if (layerTabs) {
+    for (const b of layerTabs.querySelectorAll('button')) b.classList.toggle('on', layers[b.dataset.kll] !== false);
+    layerTabs.onclick = ev => {
+      const b = ev.target.closest('button');
+      if (!b || !b.dataset.kll) return;
+      layers[b.dataset.kll] = layers[b.dataset.kll] === false;
+      renderCandles(co);
+    };
+  }
+
   const h = win.n > 0 ? all.slice(-win.n) : all;
   const ohlc = klHasOHLC(h);
   const n = h.length;
-  const W = 1100, H = 320, L = 52, R = 66, T = 14, B = 28;
+  const lastPx = all[all.length - 1].price;
+  const dens = priceDensity(co.ticker, null, PX_HORIZONS[levelHold]);
+  const structure = structuralLevels(co.ticker, null, PX_HORIZONS[levelHold]);
+  const range = calcRange(co, state.horizon);
+  const epsKey = state.mxPick.eps === 'opt' ? 'high' : state.mxPick.eps === 'pes' ? 'low' : 'mean';
+  const pickedMatrix = range && pePos(range.pe, state.mxPick.pe) && isFinite(range.eps[epsKey])
+    ? range.eps[epsKey] * range.pe[state.mxPick.pe] : NaN;
+  const matrixRefs = range ? [
+    isFinite(pickedMatrix) && { price: pickedMatrix, label: t('klMxPicked'), role: 'picked' },
+    isFinite(range.coreLow) && { price: range.coreLow, label: t('klMxLow'), role: 'core' },
+    isFinite(range.coreHigh) && { price: range.coreHigh, label: t('klMxHigh'), role: 'core' },
+  ].filter(Boolean).filter((x, i, a) => a.findIndex(y => Math.abs(y.price - x.price) < .005) === i) : [];
+  const opt = optionWalls(co, null, PX_HORIZONS[levelHold]);
+  const optWalls = opt ? opt.walls.slice().sort((a, b) => (b.oi * b.w * b.align) - (a.oi * a.w * a.align)) : [];
+  const optRefs = [
+    optWalls.find(w => w.strike > lastPx),
+    optWalls.find(w => w.strike < lastPx),
+  ].filter(Boolean).filter((x, i, a) => a.findIndex(y => y.strike === x.strike) === i);
+  const bands = dens ? dens.bands : [];
+  const inside = bands.filter(b => lastPx >= b.lo && lastPx <= b.h).sort((a, b) => b.share - a.share)[0] || null;
+  let upper = structure && structure.upper ? { ...structure.upper, structural: true } : null;
+  let lower = structure && structure.lower ? { ...structure.lower, structural: true } : null;
+  const zones = [{ kind: 'down', band: lower }, { kind: 'now', band: inside }, { kind: 'up', band: upper }].filter(z => z.band);
+  const W = 1100, H = 320, L = 52, R = 176, T = 14, B = 28;
   let mn = Math.min(...h.map(d => ohlc ? d.l : d.price));
   let mx = Math.max(...h.map(d => ohlc ? d.h : d.price));
+  /* 最近上下带属于本图的核心读数，纳入纵轴，避免它恰好在窗口外时被悄悄裁掉。 */
+  if (layers.tech) for (const z of zones) { mn = Math.min(mn, z.band.lo); mx = Math.max(mx, z.band.hi); }
+  /* 只把仍在现价合理视野内的外部参考纳入纵轴，极端估值情景留在卡片中，不能压扁价格线。 */
+  const plottedMx = layers.matrix ? matrixRefs.filter(v => v.price >= lastPx * .65 && v.price <= lastPx * 1.45) : [];
+  const plottedOpt = layers.option ? optRefs.filter(v => v.strike >= lastPx * .65 && v.strike <= lastPx * 1.45) : [];
+  for (const v of plottedMx) { mn = Math.min(mn, v.price); mx = Math.max(mx, v.price); }
+  for (const v of plottedOpt) { mn = Math.min(mn, v.strike); mx = Math.max(mx, v.strike); }
   const pad = (mx - mn) * .06 || Math.max(1, mx * .02);
   mn -= pad; mx += pad;
   const step = (W - L - R) / n;
@@ -75,6 +127,41 @@ function renderCandles(co) {
     viewBox: `0 0 ${W} ${H}`, role: 'img',
     'aria-label': ohlc ? '每日开高低收蜡烛图(颜色仅描述当日涨跌事实)' : '每日收盘价折线(导出无 OHLC 列)',
   });
+
+  /* 密集带是历史价格/成交量分布，不是技术指标线，也不是“必守”的预测位。 */
+  for (const z of layers.tech ? zones : []) {
+    const col = z.kind === 'up' ? 'var(--series-2)' : z.kind === 'down' ? 'var(--series-1)' : 'var(--axis)';
+    svg.appendChild(svgEl('rect', {
+      class: 'klzone klzone-' + z.kind, x: L, y: y(z.band.hi), width: W - L - R,
+      height: Math.max(2, y(z.band.lo) - y(z.band.hi)), fill: col,
+      opacity: z.band.structural ? (.045 + (z.band.strength || 1) * .025) : .11,
+    }));
+    svg.appendChild(svgEl('line', {
+      x1: L, x2: W - R, y1: y(z.band.peak), y2: y(z.band.peak), stroke: col,
+      'stroke-width': 1, 'stroke-dasharray': '2 4', opacity: .75,
+    }));
+    const zt = svgEl('text', { x: W - R + 8, y: y(z.band.peak) + 4, 'font-size': 10.5,
+      fill: 'var(--text-secondary)', 'font-weight': 650 });
+    const zn = z.kind === 'up' ? t('klStructUp') : z.kind === 'down' ? t('klStructDown') : t('klZoneNow');
+    zt.textContent = zn + ' ' + fmtN(z.band.lo) + '–' + fmtN(z.band.hi)
+      + (z.band.structural ? ' ' + z.band.strength + '/5' : '');
+    svg.appendChild(zt);
+  }
+  /* Matrix 是估值参考，期权墙是 OI 存量：使用不同线型，不与技术结构带混色。 */
+  for (const v of plottedMx) {
+    svg.appendChild(svgEl('line', { class: 'klref klref-matrix', x1: L, x2: W - R, y1: y(v.price), y2: y(v.price),
+      stroke: 'var(--axis)', 'stroke-width': v.role === 'picked' ? 1.8 : 1, 'stroke-dasharray': v.role === 'picked' ? '7 4' : '3 5', opacity: .85 }));
+    svg.appendChild(svgEl('text', { x: L + 8, y: y(v.price) - 4, 'font-size': 10.5, fill: 'var(--text-muted)' },
+      'Matrix · ' + v.label + ' ' + fmtN(v.price)));
+  }
+  const maxOptOI = Math.max(1, ...plottedOpt.map(v => v.oi));
+  for (const v of plottedOpt) {
+    const len = (W - L - R) * (.12 + .18 * v.oi / maxOptOI);
+    svg.appendChild(svgEl('line', { class: 'klref klref-opt', x1: W - R - len, x2: W - R,
+      y1: y(v.strike), y2: y(v.strike), stroke: 'var(--series-2)', 'stroke-width': 3, opacity: .78 }));
+    svg.appendChild(svgEl('text', { x: W - R - len - 7, y: y(v.strike) + 4, 'text-anchor': 'end',
+      'font-size': 10.5, fill: 'var(--text-secondary)' }, t('klOptWall') + ' ' + fmtN(v.strike)));
+  }
 
   /* y 网格 + 右侧价格刻度 */
   const gs = klStep(mx - mn);
@@ -155,6 +242,46 @@ function renderCandles(co) {
   svg.appendChild(hit);
   box.appendChild(svg);
 
+  if (zones.length) {
+    for (const z of zones) {
+      const b = z.band, distU = dens && dens.u > 0
+        ? (z.kind === 'up' ? Math.max(0, b.lo - lastPx) : z.kind === 'down' ? Math.max(0, lastPx - b.hi) : 0) / dens.u
+        : 0;
+      const card = el('div', 'kllevel ' + z.kind);
+      const titleKey = z.band.structural
+        ? (z.kind === 'up' ? 'klStructUp' : 'klStructDown')
+        : z.band.fallback
+          ? (z.kind === 'up' ? 'klSwingUp' : 'klSwingDown')
+        : (z.kind === 'up' ? 'klZoneUp' : z.kind === 'down' ? 'klZoneDown' : 'klZoneNow');
+      card.appendChild(el('div', 'k', t(titleKey)));
+      card.appendChild(el('div', 'v', fmtN(b.lo) + ' – ' + fmtN(b.hi)));
+      if (b.structural) {
+        const level = b.strength >= 4 ? 'strong' : b.strength >= 3 ? 'medium' : 'weak';
+        card.appendChild(el('div', 'klstrength ' + level,
+          t(z.kind === 'up' ? 'klPressureStrength' : 'klSupportStrength')(b.strength, t('klStrengthNames')[level])));
+        card.appendChild(el('div', 'k', t('klStrengthParts')(b.strengthParts.repeat, b.strengthParts.reaction, b.strengthParts.recent)));
+      }
+      card.appendChild(el('div', 'k', t('klZoneMeta')(b.touch || 0, b.last || '—', fmtN(distU) + 'u')));
+      levels.appendChild(card);
+    }
+    if (!upper) levels.appendChild(el('div', 'kllevel up', t('klNoStructUp')));
+    if (!lower) levels.appendChild(el('div', 'kllevel down', t('klNoStructDown')));
+  } else levels.appendChild(el('div', 'hint', t('klZoneNone')));
+
+  let resonanceShown = false;
+  for (const z of zones.filter(x => x.band.structural)) {
+    const nearMx = matrixRefs.some(v => v.price >= z.band.lo - (structure ? structure.tol : 0) && v.price <= z.band.hi + (structure ? structure.tol : 0));
+    const nearOpt = optRefs.some(v => v.strike >= z.band.lo - (structure ? structure.tol : 0) && v.strike <= z.band.hi + (structure ? structure.tol : 0));
+    const nTrack = 1 + (nearMx ? 1 : 0) + (nearOpt ? 1 : 0);
+    if (nTrack > 1) {
+      const badge = el('div', 'klresonance', t('klResonance')(nTrack));
+      badge.appendChild(document.createTextNode(' · ' + [t('klTechTrack'), nearMx && 'Matrix', nearOpt && t('klOptTrack')].filter(Boolean).join(' + ')));
+      refsBox.appendChild(badge);
+      resonanceShown = true;
+    }
+  }
+  if (!resonanceShown) refsBox.appendChild(el('div', 'klresonance quiet', t('klNoResonance')));
+
   /* 图例:蜡烛模式下两块色片 + 一句"颜色只描述当日方向";折线模式下只有一条线,没有颜色可解释 */
   const swatch = (bg, txt) => {
     const s = el('span');
@@ -173,5 +300,8 @@ function renderCandles(co) {
 
   plRich(note.appendChild(el('span', 'plnl')), t('klRange')(n, h[0].date, last.date, all.length));
   plRich(note.appendChild(el('span', 'plnl')), t(ohlc ? 'klModeCandle' : 'klModeLine'));
+  if (structure) plRich(note.appendChild(el('span', 'plnl')), t('klStructBasis')(structure.n, structure.from, structure.to));
+  if (matrixRefs.length || optRefs.length) plRich(note.appendChild(el('span', 'plnl')), t('klExternalNote'));
+  if (dens) plRich(note.appendChild(el('span', 'plnl')), t('klZoneBasis')(dens.basis, dens.n, dens.from, dens.to));
   plRich(note.appendChild(el('span', 'plnl')), t('klNoInd'));
 }

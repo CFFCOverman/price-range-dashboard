@@ -31,13 +31,13 @@ function ingestNews(recs, fileName) {
   return { ticker, text: t('mNewsRows')(ticker, arr.length) };
 }
 /* "{ticker} Options.csv"(fetcher 从期权链累积)—— 列 asof,expiry,strike,call_oi,put_oi
- * 同一个 (到期日, 行权价) 只保留 asof 最新的一条:OI 是存量数字,昨天的快照没有意义。 */
+ * 保留每个 asof 快照：压力位读取参照日前最新快照，行为面板用相邻快照计算 OI 变化。 */
 function ingestOptions(recs, fileName) {
   const tk = ((/^([A-Z.]{1,6}-[A-Z]{2})/.exec(fileName || '') || [])[1] || '').toUpperCase();
   const ticker = tk && state.companies.has(tk) ? tk : (tk ? resolveTicker(fileName, tk, NaN) : null);
   if (!ticker || !state.companies.has(ticker)) return { ticker: null, text: t('mOptNoTicker') };
   const seen = new Map();
-  for (const r of (state.options.get(ticker) || [])) seen.set(r.expiry + '|' + r.strike, r);
+  for (const r of (state.options.get(ticker) || [])) seen.set(r.asof + '|' + r.expiry + '|' + r.strike, r);
   for (const r of recs) {
     const expiry = String(r.expiry || '').trim();
     const strike = parseFloat(r.strike);
@@ -46,13 +46,16 @@ function ingestOptions(recs, fileName) {
     if (!isFinite(callOI) && !isFinite(putOI)) continue;
     const rec = { asof: String(r.asof || '').trim(), expiry, strike,
       callOI: isFinite(callOI) ? callOI : 0, putOI: isFinite(putOI) ? putOI : 0 };
-    const key = expiry + '|' + strike, old = seen.get(key);
-    if (!old || (rec.asof || '') >= (old.asof || '')) seen.set(key, rec);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(rec.asof)) continue;
+    const key = rec.asof + '|' + expiry + '|' + strike;
+    seen.set(key, rec); /* 同一快照同一合约的后导入修订覆盖旧值 */
   }
-  const arr = [...seen.values()].sort((a, b) => a.expiry < b.expiry ? -1 : a.expiry > b.expiry ? 1 : a.strike - b.strike);
+  const arr = [...seen.values()].sort((a, b) => a.asof < b.asof ? -1 : a.asof > b.asof ? 1
+    : a.expiry < b.expiry ? -1 : a.expiry > b.expiry ? 1 : a.strike - b.strike);
   state.options.set(ticker, arr);
   const exp = [...new Set(arr.map(r => r.expiry))].length;
-  return { ticker, text: t('mOptRows')(ticker, arr.length, exp) };
+  const snaps = [...new Set(arr.map(r => r.asof))].length;
+  return { ticker, text: t('mOptRows')(ticker, arr.length, exp, snaps) };
 }
 
 /* 关键词情绪:只用于"方向倾斜",不做精细 NLP —— 每条标题最多计一次多/空 */

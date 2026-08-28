@@ -14,6 +14,23 @@
 .legendline .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
 .legendline .ln { display: inline-block; width: 14px; height: 2.5px; border-radius: 2px; vertical-align: 3px; margin-right: 5px; }
 .legendline .dt2 { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: -1px; margin-right: 5px; }
+.kllevels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 9px; }
+.kllevel { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.kllevel .k { color: var(--text-muted); font-size: 11px; }
+.kllevel .v { color: var(--text-primary); font-size: 14px; font-weight: 650; margin: 2px 0; }
+.klstrength { font-size: 12px; font-weight: 700; margin: 3px 0; }
+.klstrength.weak { color: var(--text-muted); }
+.klstrength.medium { color: var(--series-2); }
+.klstrength.strong { color: var(--series-1); }
+@media (max-width: 620px) { .kllevels { grid-template-columns: 1fr; } }
+.klrefs { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+.klrefcard, .klresonance { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 999px; padding: 5px 9px; font-size: 11.5px; color: var(--text-secondary); }
+.klrefcard .tag { font-weight: 700; color: var(--text-primary); }
+.klrefcard strong { color: var(--text-primary); }
+.klrefcard .sub { color: var(--text-muted); }
+.klrefcard.option { border-color: var(--series-2); }
+.klresonance { border-color: var(--series-1); color: var(--text-primary); font-weight: 650; }
+.klresonance.quiet { border-color: var(--border); color: var(--text-muted); font-weight: 400; }
 .footnote { color: var(--text-muted); font-size: 12px; margin-top: 14px; }
 .empty { color: var(--text-muted); padding: 22px 0; text-align: center; }
 svg text { font-family: inherit; }

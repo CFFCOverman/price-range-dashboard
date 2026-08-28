@@ -16,8 +16,11 @@ const state = {
   showOffRoster: false,   // 表格下方那个开关:临时把不在清单里的也画出来
   selected: null,
   horizon: 'fy1',        // **财年**(fy1/fy2),不是持有期。绝不能喂给 pressureLevels 的第四参。
+  mxPick: { eps: 'base', pe: 'p50' }, // 情景矩阵当前选中的 EPS 情景 × PE 分位；跨公司保留便于比较
   plHold: 'mid',         // 压力位面板的**持有期**('short'|'mid'|'long' → h = 5/21/63),与 horizon 是两回事
   klWin: 'w120',         // 价格走势面板画多少根('w60'|'w120'|'all');纯显示窗口,不进任何计算
+  klLevelHold: 'mid',    // 走势面板技术密集带尺度('short'|'mid'|'long' → 5/21/63 日)
+  klLayers: { tech: true, matrix: true, option: true }, // 三轨图层开关；只影响显示
   /* 买入模拟面板**只**记住用户挑了什么(跨公司切换保留),不缓存任何结果:
    * 回放结果是纯派生物,重算比缓存便宜,而缓存一旦跟着 state 走,切了票忘了清就会
    * 把 A 票的触发时点画在 B 票下面 —— 那种错看起来完全像真的。结果放 render/sim.js 的
@@ -27,4 +30,3 @@ const state = {
   sortKey: 'midPct',
   sortDir: -1,
 };
-

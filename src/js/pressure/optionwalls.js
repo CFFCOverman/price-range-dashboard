@@ -55,9 +55,18 @@ function optGridMark(strike) {
  *  留着这个参数只是为了让 engine.js 对三条轨用同一种调用形状,将来真有了 OI 时间序列
  *  再决定它该不该起作用。 */
 function optionWalls(co, refISO, h) {
-  const arr = co && state.options.get(co.ticker);
-  if (!arr || !arr.length || !isFinite(co.price) || co.price <= 0) return null;
+  const history = co && state.options.get(co.ticker);
+  if (!history || !history.length || !isFinite(co.price) || co.price <= 0) return null;
   const today = (refISO || new Date().toISOString().slice(0, 10));
+  /* 每个合约只取参照日前最新快照。state.options 保留全历史供行为面板使用，
+   * 压力位若直接累加所有快照，会把同一份仓位重复算十几遍。 */
+  const latest = new Map();
+  for (const r of history) {
+    if (refISO && r.asof && r.asof > refISO) continue;
+    const k = r.expiry + '|' + r.strike, old = latest.get(k);
+    if (!old || (r.asof || '') >= (old.asof || '')) latest.set(k, r);
+  }
+  const arr = [...latest.values()];
   /* 行权价窗口必须围着 **as-of 那天的价** 取,不是 `co.price`(那永远是今天的价)。
    * 写成 `co.price` 的后果是 refISO 对这个函数**完全无效**:回放到 2025-03 的某一天,
    * 窗口仍然以 2026-08 的价为中心 —— 一年的涨幅足以让整条链落到 ±PX_OPT_WINDOW 之外,
@@ -84,7 +93,6 @@ function optionWalls(co, refISO, h) {
      * 判据用 `>` 不用 `>=`:参照日**当天**收盘后登记的 OI 是那天收盘时就存在的存量,
      * 与 expiry 那条 `<=` 不同,这里没有"今晚归零"的问题。
      * refISO 为空(线上看今天)时不设限:那时候没有"未来"可偷。 */
-    if (refISO && r.asof && r.asof > refISO) continue;
     if (r.expiry <= today) continue;                          // 见文件头 ③:今晚归零的链不占名额
     if (dteOf(r.expiry) > PX_OPT_MAX_DTE) continue;           // 超出视野的远月对当下价格没有钉住力
     if (Math.abs(r.strike / px - 1) > PX_OPT_WINDOW) continue;

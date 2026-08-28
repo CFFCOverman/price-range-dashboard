@@ -217,7 +217,32 @@ table.mx td.core { outline: 2px dashed var(--series-2); outline-offset: -2px; bo
 .mxKey { display: inline-block; width: 11px; height: 11px; vertical-align: -1px; margin-right: 4px; border-radius: 2px; }
 .mxKey.base { border: 2px solid var(--series-1); }
 .mxKey.core { border: 2px dashed var(--series-2); }
+.mxControls { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin:8px 0 10px; padding:10px; background:var(--surface-2); border:1px solid var(--grid); border-radius:6px; }
+.mxControl { min-width:150px; }
+.mxControl .lb, .mxResult .lb { display:block; color:var(--text-muted); font-size:11px; margin-bottom:4px; }
+.mxControl select { width:100%; }
+.mxResult { min-width:150px; padding:2px 8px; }
+.mxResult strong { font-size:20px; margin-right:8px; color:var(--text-primary); }
+.mxResult .sub { font-size:12px; }
+table.mx td.picked { box-shadow:inset 0 0 0 2px var(--series-1); background:var(--wash-strong); font-weight:700; }
 .hint.warn { color: var(--delta-down); margin: 6px 0 0; }
+/* ---- options behavior timeline ---- */
+.optMeta { color:var(--text-secondary); font-size:12px; margin:7px 0 9px; }
+.optTimeline { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.optHorizon { border:1px solid var(--border); border-radius:10px; padding:12px; min-width:0; background:var(--surface-1); }
+.optHorizon h3 { margin:0 0 8px; font-size:13px; }
+.optHorizon.short { border-top:3px solid var(--series-2); }
+.optHorizon.mid { border-top:3px solid var(--series-1); }
+.optHorizon.long { border-top:3px solid var(--text-muted); }
+.optFacts { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; font-variant-numeric:tabular-nums; }
+.optFacts div { background:var(--ghost); border-radius:6px; padding:6px; font-size:12px; text-align:center; }
+.optDelta,.optLine { margin:7px 0 0; font-size:12px; }
+.optDelta.up { color:var(--delta-up); }.optDelta.down { color:var(--delta-down); }.optDelta.flat { color:var(--text-muted); }
+.optLine { color:var(--text-secondary); }
+.optMacroHead { font-size:13px; margin:12px 0 5px; }
+.optMacroRow { display:flex; flex-wrap:wrap; gap:7px; }
+.optMacroChip { border:1px solid var(--border); border-radius:999px; padding:4px 9px; font-size:11.5px; color:var(--text-secondary); }
+@media (max-width:760px) { .optTimeline { grid-template-columns:1fr; } }
 /* pressure / support levels */
 .plh { font-size: 12.5px; font-weight: 650; margin: 12px 0 0; letter-spacing: .02em; }
 .plh.up { color: var(--delta-down); }        /* 上方压力 = 挡住上涨,用告警色 */
@@ -344,6 +369,23 @@ table.mx.sim td.neg { color: var(--delta-down); }
 .legendline .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
 .legendline .ln { display: inline-block; width: 14px; height: 2.5px; border-radius: 2px; vertical-align: 3px; margin-right: 5px; }
 .legendline .dt2 { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: -1px; margin-right: 5px; }
+.kllevels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 9px; }
+.kllevel { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.kllevel .k { color: var(--text-muted); font-size: 11px; }
+.kllevel .v { color: var(--text-primary); font-size: 14px; font-weight: 650; margin: 2px 0; }
+.klstrength { font-size: 12px; font-weight: 700; margin: 3px 0; }
+.klstrength.weak { color: var(--text-muted); }
+.klstrength.medium { color: var(--series-2); }
+.klstrength.strong { color: var(--series-1); }
+@media (max-width: 620px) { .kllevels { grid-template-columns: 1fr; } }
+.klrefs { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+.klrefcard, .klresonance { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 999px; padding: 5px 9px; font-size: 11.5px; color: var(--text-secondary); }
+.klrefcard .tag { font-weight: 700; color: var(--text-primary); }
+.klrefcard strong { color: var(--text-primary); }
+.klrefcard .sub { color: var(--text-muted); }
+.klrefcard.option { border-color: var(--series-2); }
+.klresonance { border-color: var(--series-1); color: var(--text-primary); font-weight: 650; }
+.klresonance.quiet { border-color: var(--border); color: var(--text-muted); font-weight: 400; }
 .footnote { color: var(--text-muted); font-size: 12px; margin-top: 14px; }
 .empty { color: var(--text-muted); padding: 22px 0; text-align: center; }
 svg text { font-family: inherit; }
@@ -472,6 +514,15 @@ svg text { font-family: inherit; }
     </div>
   </div>
 
+  <div id="optBehaviorSec" hidden>
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">期权行为时间轴 · 过去 / 现在 / 未来</span><span class="le">Options behavior timeline · past / present / future</span></h2>
+    <p class="hint"><span class="lz">事实层只描述 OI 存量及相邻快照变化；Call/Put OI 本身不能证明买方方向。短期 1–7 DTE，中期 8–45 DTE，长期 46–180 DTE。</span><span class="le">Facts only: OI stock and changes between comparable snapshots. Call/put OI alone does not reveal buyer direction. Short 1–7 DTE, medium 8–45 DTE, long 46–180 DTE.</span></p>
+    <div id="optBehaviorMeta"></div>
+    <div class="optTimeline" id="optBehaviorGrid"></div>
+    <div id="optMacro"></div>
+    <p class="hint" id="optBehaviorNote"></p>
+  </div>
+
   <div id="cmpSec" hidden>
     <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">方法对比(同一把价格尺)</span><span class="le">Method comparison (one shared price axis)</span></h2>
     <div class="chartbox"><div id="cmpChart"></div></div>
@@ -551,6 +602,20 @@ svg text { font-family: inherit; }
         <button type="button" data-klw="w60"><span class="lz">近 60 根</span><span class="le">Last 60</span></button><button type="button" data-klw="w120" class="on"><span class="lz">近 120 根</span><span class="le">Last 120</span></button><button type="button" data-klw="all"><span class="lz">全部</span><span class="le">All</span></button>
       </span>
     </div>
+    <div class="plholdrow">
+      <label><span class="lz">技术密集带尺度</span><span class="le">Technical-zone horizon</span></label>
+      <span class="tabs" id="klLevelTabs">
+        <button type="button" data-klh="short"><span class="lz">短期 5 日</span><span class="le">Short 5d</span></button><button type="button" data-klh="mid" class="on"><span class="lz">中期 21 日</span><span class="le">Medium 21d</span></button><button type="button" data-klh="long"><span class="lz">长期 63 日</span><span class="le">Long 63d</span></button>
+      </span>
+    </div>
+    <div class="kllevels" id="klLevels"></div>
+    <div class="plholdrow">
+      <label><span class="lz">图层</span><span class="le">Layers</span></label>
+      <span class="tabs klLayerTabs" id="klLayerTabs">
+        <button type="button" data-kll="tech" class="on"><span class="lz">技术结构</span><span class="le">Technical</span></button><button type="button" data-kll="matrix" class="on">Matrix</button><button type="button" data-kll="option" class="on"><span class="lz">期权 OI</span><span class="le">Options OI</span></button>
+      </span>
+    </div>
+    <div class="klrefs" id="klRefs"></div>
     <div class="chartbox" id="klBox">
       <div id="klChart"></div>
       <div class="tip" id="klTip"></div>
@@ -654,8 +719,11 @@ const state = {
   showOffRoster: false,   // 表格下方那个开关:临时把不在清单里的也画出来
   selected: null,
   horizon: 'fy1',        // **财年**(fy1/fy2),不是持有期。绝不能喂给 pressureLevels 的第四参。
+  mxPick: { eps: 'base', pe: 'p50' }, // 情景矩阵当前选中的 EPS 情景 × PE 分位；跨公司保留便于比较
   plHold: 'mid',         // 压力位面板的**持有期**('short'|'mid'|'long' → h = 5/21/63),与 horizon 是两回事
   klWin: 'w120',         // 价格走势面板画多少根('w60'|'w120'|'all');纯显示窗口,不进任何计算
+  klLevelHold: 'mid',    // 走势面板技术密集带尺度('short'|'mid'|'long' → 5/21/63 日)
+  klLayers: { tech: true, matrix: true, option: true }, // 三轨图层开关；只影响显示
   /* 买入模拟面板**只**记住用户挑了什么(跨公司切换保留),不缓存任何结果:
    * 回放结果是纯派生物,重算比缓存便宜,而缓存一旦跟着 state 走,切了票忘了清就会
    * 把 A 票的触发时点画在 B 票下面 —— 那种错看起来完全像真的。结果放 render/sim.js 的
@@ -665,7 +733,6 @@ const state = {
   sortKey: 'midPct',
   sortDir: -1,
 };
-
 /* ================= i18n(动态字符串;静态文本用 .lz/.le 成对元素) ================= */
 let LANG = 'zh';
 const I18N = {
@@ -785,6 +852,20 @@ const I18N = {
     simStale: '⚠ 选项改过了,下面还是上一次的结果 —— 按「立即模拟」重跑。',
     simIdle: '选好持有期和买入规则,按「立即模拟」跑一次逐根回放。输入不会自动开跑:一次回放要把这只票的每一根日线都重算一遍压力位,量级在几百毫秒,自动跑会把输入框卡死。',
     mxCoreTip: '这一格就是上方核心区间的端点(悲观 EPS × P25 = 下沿,乐观 EPS × P75 = 上沿)',
+    mxEpsPick: '盈利情景', mxPePick: '估值情景', mxPicked: '所选情景隐含价',
+    optMeta: (n, a, b, r) => '已载入 ' + n + ' 个快照 · ' + a + ' → ' + b + ' · 当前快照 ' + r + ' 个合约位置',
+    optBucket: { short: '短期 · 1–7 DTE', mid: '中期 · 8–45 DTE', long: '长期 · 46–180 DTE' },
+    optNoBucket: '当前快照没有这个期限的合约。', optCallOI: 'Call OI', optPutOI: 'Put OI',
+    optDelta: (c, p, cov) => '可比合约较上一快照：Call ' + (c >= 0 ? '+' : '') + fmtInt(c)
+      + ' / Put ' + (p >= 0 ? '+' : '') + fmtInt(p) + ' · 覆盖 ' + Math.round(cov * 100) + '%',
+    optNoPrev: '只有一个快照，暂时不能判断仓位变化。',
+    optExpiry: (e, oi) => '最大到期日仓位：' + e + ' · OI ' + fmtInt(oi),
+    optTopCall: (s, oi) => '最大 Call 存量：' + fmtN(s) + ' · ' + fmtInt(oi),
+    optTopPut: (s, oi) => '最大 Put 存量：' + fmtN(s) + ' · ' + fmtInt(oi),
+    optMacroHead: '宏观期权对照', optMacroMissing: 'SPY / QQQ / IWM / 利率 / 信用标的缺少连续快照；本轮不生成宏观判断。',
+    optSnaps: n => n + ' 个快照', optMidDelta: d => '中期可比 OI ' + (d >= 0 ? '+' : '') + fmtInt(d),
+    optNote: (p, c) => '事实口径：当前存量取 ' + c + ' 快照；变化只比较' + (p || '上一')
+      + '与当前都存在的同一到期日＋行权价，新增/移出抓取窗口的合约不强行当作开仓或平仓。OI 不包含成交方向，不能单独证明看涨或看跌。',
     mxLegBase: '中枢 = 基准 EPS × PE 中位',
     mxLegCore: '核心区间两端 = 悲观×P25 / 乐观×P75',
     mxFlag: {
@@ -813,6 +894,24 @@ const I18N = {
       + '这里索性一条都不画。把没过线的指标画成绿色,等于把"回测数字说话"这条规矩作废。',
     klLegUp: '收 ≥ 开', klLegDown: '收 < 开', klLegClose: '收盘价',
     klLegDesc: '颜色只描述当日开收方向,不是信号',
+    klZoneUp: '上方技术密集带', klZoneDown: '下方技术密集带', klZoneNow: '现价所在密集带',
+    klSwingUp: '上方前高参考带', klSwingDown: '下方前低参考带',
+    klStructUp: '上方结构压力带', klStructDown: '下方结构支撑带',
+    klPressureStrength: (n, s) => '压力强度 ' + n + '/5 · ' + s,
+    klSupportStrength: (n, s) => '支撑强度 ' + n + '/5 · ' + s,
+    klStrengthNames: { weak: '弱', medium: '中', strong: '强' },
+    klStrengthParts: (a, b, c) => '结构证据：重复确认 +' + a + ' · 反转幅度 +' + b + ' · 新鲜度 +' + c,
+    klMxPicked: '所选情景', klMxLow: '核心下沿', klMxHigh: '核心上沿',
+    klOptWall: '期权 OI 墙', klOptMeta: (oi, exp, dte, side) => side + ' 为主 · OI ' + oi + ' · ' + exp + ' · ' + dte + ' DTE',
+    klAbovePrice: '位于现价上方', klBelowPrice: '位于现价下方', klAtPrice: '接近现价',
+    klResonance: n => n + ' 轨共振', klTechTrack: '技术', klOptTrack: '期权',
+    klNoResonance: '当前第一压力／支撑附近没有多轨共振',
+    klExternalNote: 'Matrix 线表示估值情景，期权线表示未平仓量集中位置；共振只说明不同来源落在相近价位，不会提高技术结构的 1–5 强度，也不代表一定守住。',
+    klNoStructUp: '本观察窗口内，现价上方暂无已确认的结构压力。', klNoStructDown: '本观察窗口内，现价下方暂无已确认的结构支撑。',
+    klStructBasis: (n, from, to) => '结构位按同类前高／前低聚类，并综合反转幅度、重复触及和新鲜度筛选；本尺度观察 ' + n + ' 根（' + from + ' → ' + to + '）。',
+    klZoneMeta: (touch, last, dist) => '摆动触及 ' + touch + ' 次 · 最近观测 ' + last + ' · 距现价 ' + dist,
+    klZoneNone: '这一尺度没有识别出可展示的技术密集带。',
+    klZoneBasis: (basis, n, from, to) => '密集带按' + (basis === 'volume' ? '成交量加权' : '价格停留时间') + '形成，样本 ' + n + ' 根（' + from + ' → ' + to + '）。它描述历史交易聚集区，不声称价格会在此止跌或受阻。',
     klTipO: '开 ', klTipH: '高 ', klTipL: '低 ', klTipC: '收 ',
     stTotal: (n, m) => ' 当前:' + n + ' 家公司,' + m + ' 家有历史估值序列。',
     demoLoaded: '已载入演示数据(数值为示意,非真实行情)。',
@@ -851,7 +950,7 @@ const I18N = {
     mSiRows: n => ':空头持仓记录 ' + n + ' 行',
     mNewsRows: (tk, n) => ':' + tk + ' 新闻 ' + n + ' 条',
     mNewsNoTicker: ':新闻文件未能归属到清单里的公司(文件名需形如 "NVDA-US News.csv")',
-    mOptRows: (tk, n, e) => ':' + tk + ' 期权链 ' + n + ' 个行权价 / ' + e + ' 个到期日',
+    mOptRows: (tk, n, e, s) => ':' + tk + ' 期权链 ' + n + ' 行 / ' + e + ' 个到期日 / ' + s + ' 个快照',
     mOptNoTicker: ':期权文件未能归属到清单里的公司(文件名需形如 "NVDA-US Options.csv")',
     dirPUp: 'P(6个月后上涨)', dirPUp10: 'P(涨超 +10%)', dirPDn10: 'P(跌超 -10%)', dirMedian: '终点中位数',
     dirWeights: (b, m, u) => '情景权重 熊 ' + b + '% / 中 ' + m + '% / 牛 ' + u + '%',
@@ -980,6 +1079,20 @@ const I18N = {
     simStale: '⚠ Options changed; the numbers below are still the previous run — press "Run simulation" again.',
     simIdle: 'Pick a holding period and a buy rule, then press "Run simulation" for a bar-by-bar replay. Typing does not start a run: one replay recomputes every pressure level on every daily bar of this ticker, which takes a few hundred milliseconds and would freeze the input box.',
     mxCoreTip: 'This cell is an endpoint of the core range above (low EPS × P25 = floor, high EPS × P75 = ceiling)',
+    mxEpsPick: 'Earnings scenario', mxPePick: 'Valuation scenario', mxPicked: 'Selected implied price',
+    optMeta: (n, a, b, r) => n + ' snapshots loaded · ' + a + ' → ' + b + ' · ' + r + ' contract positions in the current snapshot',
+    optBucket: { short: 'Short · 1–7 DTE', mid: 'Medium · 8–45 DTE', long: 'Long · 46–180 DTE' },
+    optNoBucket: 'No contracts in this horizon in the current snapshot.', optCallOI: 'Call OI', optPutOI: 'Put OI',
+    optDelta: (c, p, cov) => 'Comparable contracts vs prior snapshot: Call ' + (c >= 0 ? '+' : '') + fmtInt(c)
+      + ' / Put ' + (p >= 0 ? '+' : '') + fmtInt(p) + ' · ' + Math.round(cov * 100) + '% coverage',
+    optNoPrev: 'Only one snapshot; position change is not measurable yet.',
+    optExpiry: (e, oi) => 'Largest expiry position: ' + e + ' · OI ' + fmtInt(oi),
+    optTopCall: (s, oi) => 'Largest call stock: ' + fmtN(s) + ' · ' + fmtInt(oi),
+    optTopPut: (s, oi) => 'Largest put stock: ' + fmtN(s) + ' · ' + fmtInt(oi),
+    optMacroHead: 'Macro options comparison', optMacroMissing: 'SPY / QQQ / IWM / rates / credit instruments lack consecutive snapshots; no macro reading is generated.',
+    optSnaps: n => n + ' snapshots', optMidDelta: d => 'medium comparable OI ' + (d >= 0 ? '+' : '') + fmtInt(d),
+    optNote: (p, c) => 'Fact basis: current stock uses the ' + c + ' snapshot. Change compares only identical expiry-plus-strike contracts present in both '
+      + (p || 'prior') + ' and current snapshots; contracts entering or leaving the fetch window are not forced into open/close classifications. OI has no trade-side information and cannot prove bullish or bearish intent by itself.',
     mxLegBase: 'Mid = base EPS × median PE',
     mxLegCore: 'Core range ends = low×P25 / high×P75',
     mxFlag: {
@@ -1008,6 +1121,24 @@ const I18N = {
       + 'Painting a failed indicator green would void the rule that the backtest numbers decide.',
     klLegUp: 'close ≥ open', klLegDown: 'close < open', klLegClose: 'Close',
     klLegDesc: 'colour only describes that day\'s open-to-close direction — not a signal',
+    klZoneUp: 'Upper technical concentration zone', klZoneDown: 'Lower technical concentration zone', klZoneNow: 'Current-price concentration zone',
+    klSwingUp: 'Prior-high reference zone', klSwingDown: 'Prior-low reference zone',
+    klStructUp: 'Upper structural resistance zone', klStructDown: 'Lower structural support zone',
+    klPressureStrength: (n, s) => 'Resistance strength ' + n + '/5 · ' + s,
+    klSupportStrength: (n, s) => 'Support strength ' + n + '/5 · ' + s,
+    klStrengthNames: { weak: 'weak', medium: 'medium', strong: 'strong' },
+    klStrengthParts: (a, b, c) => 'Structural evidence: repeat +' + a + ' · reversal +' + b + ' · recency +' + c,
+    klMxPicked: 'Selected scenario', klMxLow: 'Core lower bound', klMxHigh: 'Core upper bound',
+    klOptWall: 'Options OI wall', klOptMeta: (oi, exp, dte, side) => side + '-led · OI ' + oi + ' · ' + exp + ' · ' + dte + ' DTE',
+    klAbovePrice: 'above current price', klBelowPrice: 'below current price', klAtPrice: 'near current price',
+    klResonance: n => n + '-track confluence', klTechTrack: 'technical', klOptTrack: 'options',
+    klNoResonance: 'No multi-track confluence near the first resistance/support',
+    klExternalNote: 'Matrix lines are valuation scenarios; options lines are open-interest concentrations. Confluence only means independent sources occupy nearby prices. It does not raise the 1–5 structural score or imply the level will hold.',
+    klNoStructUp: 'No confirmed structural resistance above price in this observation window.', klNoStructDown: 'No confirmed structural support below price in this observation window.',
+    klStructBasis: (n, from, to) => 'Structural zones cluster like-for-like pivot highs/lows and rank reversal size, repeated touches and recency across ' + n + ' bars (' + from + ' → ' + to + ').',
+    klZoneMeta: (touch, last, dist) => touch + ' swing touches · last observed ' + last + ' · distance ' + dist,
+    klZoneNone: 'No displayable technical concentration zone was found at this horizon.',
+    klZoneBasis: (basis, n, from, to) => 'Zones use ' + (basis === 'volume' ? 'volume weighting' : 'time at price') + ' across ' + n + ' bars (' + from + ' → ' + to + '). They describe historical trading concentration; they do not claim price will stop or reverse there.',
     klTipO: 'O ', klTipH: 'H ', klTipL: 'L ', klTipC: 'C ',
     stTotal: (n, m) => ' Now: ' + n + ' companies, ' + m + ' with PE history.',
     demoLoaded: 'Demo data loaded (illustrative, not real quotes).',
@@ -1046,7 +1177,7 @@ const I18N = {
     mSiRows: n => ': ' + n + ' short-interest rows',
     mNewsRows: (tk, n) => ': ' + tk + ' — ' + n + ' headlines',
     mNewsNoTicker: ': news file could not be matched to a company (name it like "NVDA-US News.csv")',
-    mOptRows: (tk, n, e) => ': ' + tk + ' — ' + n + ' strikes across ' + e + ' expiries',
+    mOptRows: (tk, n, e, s) => ': ' + tk + ' — ' + n + ' rows across ' + e + ' expiries / ' + s + ' snapshots',
     mOptNoTicker: ': options file could not be matched to a company (name it like "NVDA-US Options.csv")',
     dirPUp: 'P(up in 6 months)', dirPUp10: 'P(gain > +10%)', dirPDn10: 'P(loss > -10%)', dirMedian: 'Median endpoint',
     dirWeights: (b, m, u) => 'Scenario weights: bear ' + b + '% / base ' + m + '% / bull ' + u + '%',
@@ -1750,13 +1881,13 @@ function ingestNews(recs, fileName) {
   return { ticker, text: t('mNewsRows')(ticker, arr.length) };
 }
 /* "{ticker} Options.csv"(fetcher 从期权链累积)—— 列 asof,expiry,strike,call_oi,put_oi
- * 同一个 (到期日, 行权价) 只保留 asof 最新的一条:OI 是存量数字,昨天的快照没有意义。 */
+ * 保留每个 asof 快照：压力位读取参照日前最新快照，行为面板用相邻快照计算 OI 变化。 */
 function ingestOptions(recs, fileName) {
   const tk = ((/^([A-Z.]{1,6}-[A-Z]{2})/.exec(fileName || '') || [])[1] || '').toUpperCase();
   const ticker = tk && state.companies.has(tk) ? tk : (tk ? resolveTicker(fileName, tk, NaN) : null);
   if (!ticker || !state.companies.has(ticker)) return { ticker: null, text: t('mOptNoTicker') };
   const seen = new Map();
-  for (const r of (state.options.get(ticker) || [])) seen.set(r.expiry + '|' + r.strike, r);
+  for (const r of (state.options.get(ticker) || [])) seen.set(r.asof + '|' + r.expiry + '|' + r.strike, r);
   for (const r of recs) {
     const expiry = String(r.expiry || '').trim();
     const strike = parseFloat(r.strike);
@@ -1765,13 +1896,16 @@ function ingestOptions(recs, fileName) {
     if (!isFinite(callOI) && !isFinite(putOI)) continue;
     const rec = { asof: String(r.asof || '').trim(), expiry, strike,
       callOI: isFinite(callOI) ? callOI : 0, putOI: isFinite(putOI) ? putOI : 0 };
-    const key = expiry + '|' + strike, old = seen.get(key);
-    if (!old || (rec.asof || '') >= (old.asof || '')) seen.set(key, rec);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(rec.asof)) continue;
+    const key = rec.asof + '|' + expiry + '|' + strike;
+    seen.set(key, rec); /* 同一快照同一合约的后导入修订覆盖旧值 */
   }
-  const arr = [...seen.values()].sort((a, b) => a.expiry < b.expiry ? -1 : a.expiry > b.expiry ? 1 : a.strike - b.strike);
+  const arr = [...seen.values()].sort((a, b) => a.asof < b.asof ? -1 : a.asof > b.asof ? 1
+    : a.expiry < b.expiry ? -1 : a.expiry > b.expiry ? 1 : a.strike - b.strike);
   state.options.set(ticker, arr);
   const exp = [...new Set(arr.map(r => r.expiry))].length;
-  return { ticker, text: t('mOptRows')(ticker, arr.length, exp) };
+  const snaps = [...new Set(arr.map(r => r.asof))].length;
+  return { ticker, text: t('mOptRows')(ticker, arr.length, exp, snaps) };
 }
 
 /* 关键词情绪:只用于"方向倾斜",不做精细 NLP —— 每条标题最多计一次多/空 */
@@ -2160,6 +2294,7 @@ function renderDetail() {
   renderKpis(co, r);
   renderMatrix(co, r);
   renderBullet(co, r);
+  renderOptionsBehavior(co);
   renderCompare(co, r);
   renderPressure(co, r);
   renderSim(co);
@@ -2201,7 +2336,7 @@ function partialRefresh() {
   const rows = overviewRows(); renderOvTable(rows); renderOvChart(rows);
   const co = state.companies.get(state.selected); if (!co) return;
   const r = calcRange(co, state.horizon);
-  renderHead(co); renderKpis(co, r); renderMatrix(co, r); renderBullet(co, r); renderCompare(co, r); renderPressure(co, r); renderSim(co); scheduleDirection(co, r);
+  renderHead(co); renderKpis(co, r); renderMatrix(co, r); renderBullet(co, r); renderOptionsBehavior(co); renderCompare(co, r); renderPressure(co, r); renderSim(co); scheduleDirection(co, r);
 }
 function renderPeManualStatus(ticker) {
   const msg = $('peManualError'); if (!msg) return;
@@ -2220,6 +2355,35 @@ function renderMatrix(co, r) {
     .filter(([k]) => pePos(pe, k));
   /* 行序沿用"乐观在上",但 EPS 取的是 calcRange 清洗后的同一份情景 */
   const rows = [['opt', t('mxOpt'), eps.high], ['base', t('mxBase'), eps.mean], ['pes', t('mxPes'), eps.low]];
+  const rowMap = Object.fromEntries(rows.map(x => [x[0], x]));
+  const colMap = Object.fromEntries(cols.map(x => [x[0], x]));
+  if (!rowMap[state.mxPick.eps]) state.mxPick.eps = 'base';
+  if (!colMap[state.mxPick.pe]) state.mxPick.pe = cols.some(x => x[0] === 'p50') ? 'p50' : cols[0][0];
+
+  /* 先回答“什么情景会让数字变”：两个下拉分别只动盈利或估值，结果与下方被高亮格完全同源。 */
+  const ctl = el('div', 'mxControls');
+  const makeSelect = (label, values, picked, onChange) => {
+    const box = el('label', 'mxControl'); box.appendChild(el('span', 'lb', label));
+    const sel = el('select');
+    for (const [value, text] of values) {
+      const o = el('option', '', text); o.value = value; o.selected = value === picked; sel.appendChild(o);
+    }
+    sel.addEventListener('change', ev => {
+      onChange(ev.target.value);
+      renderMatrix(co, calcRange(co, state.horizon));
+      renderCandles(co); // Matrix 所选隐含价也是走势图的一条估值参考；选择变化必须同屏更新。
+    });
+    box.appendChild(sel); ctl.appendChild(box);
+  };
+  makeSelect(t('mxEpsPick'), rows.map(([k, lb, v]) => [k, lb + fmtN(v)]), state.mxPick.eps, v => { state.mxPick.eps = v; });
+  makeSelect(t('mxPePick'), cols.map(([k, lb]) => [k, lb + ' ' + fmtX(pe[k])]), state.mxPick.pe, v => { state.mxPick.pe = v; });
+  const pickedValue = rowMap[state.mxPick.eps][2] * pe[state.mxPick.pe];
+  const pickedPct = (pickedValue / co.price - 1) * 100;
+  const out = el('div', 'mxResult ' + (pickedPct >= 0 ? 'pos' : 'neg'));
+  out.appendChild(el('span', 'lb', t('mxPicked')));
+  out.appendChild(el('strong', '', fmtN(pickedValue)));
+  out.appendChild(el('span', 'sub', fmtPct(pickedPct) + t('vsPrice')));
+  ctl.appendChild(out); wrap.appendChild(ctl);
   /* 核心区间就是矩阵里的两个角:悲观×P25 = 核心下沿,乐观×P75 = 核心上沿。标出来,读者一眼看到两处同源 */
   const isCore = (rk, k) => (rk === 'pes' && k === 'p25') || (rk === 'opt' && k === 'p75');
   const tb = el('table', 'mx'), trh = el('tr');
@@ -2232,6 +2396,7 @@ function renderMatrix(co, r) {
     for (const [k] of cols) {
       const v = e * pe[k], d = (v / co.price - 1) * 100;
       const td = el('td', k === 'p50' ? 'med' : '');
+      if (rk === state.mxPick.eps && k === state.mxPick.pe) td.classList.add('picked');
       if (rk === 'base' && k === 'p50') td.classList.add('base');
       if (isCore(rk, k)) { td.classList.add('core'); td.title = t('mxCoreTip'); }
       td.appendChild(document.createTextNode(fmtN(v)));
@@ -2547,6 +2712,60 @@ function swingPoints(series, k) {
   return out;
 }
 
+/* 结构位回答“价格在哪些前高/前低反复转向”，不能拿最近一个小拐点顶替。
+ * h 同时决定观察窗口与摆动半径，短中长期因此真的看不同历史，而不只是改变带宽。 */
+function structuralLevels(ticker, refISO, h) {
+  const all = state.priceHist.get(ticker);
+  if (!all || all.length < PX_SIGMA_MIN_N) return null;
+  const hh = isFinite(h) && h > 0 ? h : PX_HORIZONS.mid;
+  const sliced = asOfSlice(all, refISO || null);
+  const cfg = hh <= PX_HORIZONS.short ? { look: 63, k: 2 }
+    : hh <= PX_HORIZONS.mid ? { look: 126, k: 3 } : { look: 252, k: 5 };
+  const series = sliced.slice(-cfg.look);
+  if (series.length < PX_SIGMA_MIN_N) return null;
+  const sig = sigmaD(ticker, refISO || null, PX_SIGMA_WIN);
+  if (!sig) return null;
+  const price = series.at(-1).price, u = scaleU(sig.sd, hh, price);
+  /* 聚类宽度使用日波动；若使用 √h，长期档会把十几美元揉成同一条位置。 */
+  const tol = Math.max(price * .004, price * sig.sd * .55);
+  const pivots = swingPoints(series, cfg.k).map(sp => {
+    const i = series.findIndex(d => d.date === sp.date);
+    const after = series.slice(i + 1, Math.min(series.length, i + 1 + cfg.k * 3));
+    const reaction = after.length ? (sp.kind === 'high'
+      ? sp.price - Math.min(...after.map(d => d.price))
+      : Math.max(...after.map(d => d.price)) - sp.price) : 0;
+    return { ...sp, reaction: Math.max(0, reaction), fresh: Math.pow(.5, (series.length - 1 - i) / (cfg.look / 2)) };
+  });
+  const clusters = [];
+  for (const kind of ['high', 'low']) for (const p of pivots.filter(x => x.kind === kind).sort((a, b) => a.price - b.price)) {
+    let c = clusters.filter(x => x.kind === kind).sort((a, b) => Math.abs(a.peak - p.price) - Math.abs(b.peak - p.price))[0];
+    if (!c || Math.abs(c.peak - p.price) > tol) { c = { kind, points: [], peak: p.price }; clusters.push(c); }
+    c.points.push(p);
+    const fw = c.points.reduce((s, x) => s + x.fresh, 0);
+    c.peak = c.points.reduce((s, x) => s + x.price * x.fresh, 0) / fw;
+  }
+  for (const c of clusters) {
+    const fw = c.points.reduce((s, p) => s + p.fresh, 0);
+    c.touch = c.points.length; c.last = c.points.map(p => p.date).sort().at(-1);
+    c.reaction = c.points.reduce((s, p) => s + p.reaction * p.fresh, 0) / fw;
+    c.lo = Math.min(...c.points.map(p => p.price)) - tol * .45;
+    c.hi = Math.max(...c.points.map(p => p.price)) + tol * .45;
+    const quality = fw + Math.min(2, c.reaction / Math.max(tol, 1));
+    const edge = c.kind === 'high' ? Math.max(0, c.lo - price) : Math.max(0, price - c.hi);
+    c.score = quality / (1 + edge / Math.max(u, tol) * .22);
+    /* 1–5 是结构证据等级，不是命中率：重复确认 0–2、反转幅度 0–2、新鲜度 0–1。 */
+    const repeatPts = c.touch >= 3 ? 2 : c.touch >= 2 ? 1 : 0;
+    const reactionX = c.reaction / Math.max(tol, 1);
+    const reactionPts = reactionX >= 2 ? 2 : reactionX >= 1 ? 1 : 0;
+    const recentPts = Math.max(...c.points.map(p => p.fresh)) >= .5 ? 1 : 0;
+    c.strength = 1 + Math.min(4, repeatPts + reactionPts + recentPts);
+    c.strengthParts = { repeat: repeatPts, reaction: reactionPts, recent: recentPts, reactionX };
+  }
+  const upper = clusters.filter(c => c.kind === 'high' && c.lo > price).sort((a, b) => b.score - a.score)[0] || null;
+  const lower = clusters.filter(c => c.kind === 'low' && c.hi < price).sort((a, b) => b.score - a.score)[0] || null;
+  return { upper, lower, price, u, tol, from: series[0].date, to: series.at(-1).date, n: series.length };
+}
+
 /** 价格密度 → 价位带。名字不许改:tools/backtest.mjs 的函数存在性断言点名了它。
  *  返回 { bins, bands, basis, n, from, to, swings, min, max, sd, u, asOf } | null。 */
 function priceDensity(ticker, refISO, h) {
@@ -2720,9 +2939,18 @@ function optGridMark(strike) {
  *  留着这个参数只是为了让 engine.js 对三条轨用同一种调用形状,将来真有了 OI 时间序列
  *  再决定它该不该起作用。 */
 function optionWalls(co, refISO, h) {
-  const arr = co && state.options.get(co.ticker);
-  if (!arr || !arr.length || !isFinite(co.price) || co.price <= 0) return null;
+  const history = co && state.options.get(co.ticker);
+  if (!history || !history.length || !isFinite(co.price) || co.price <= 0) return null;
   const today = (refISO || new Date().toISOString().slice(0, 10));
+  /* 每个合约只取参照日前最新快照。state.options 保留全历史供行为面板使用，
+   * 压力位若直接累加所有快照，会把同一份仓位重复算十几遍。 */
+  const latest = new Map();
+  for (const r of history) {
+    if (refISO && r.asof && r.asof > refISO) continue;
+    const k = r.expiry + '|' + r.strike, old = latest.get(k);
+    if (!old || (r.asof || '') >= (old.asof || '')) latest.set(k, r);
+  }
+  const arr = [...latest.values()];
   /* 行权价窗口必须围着 **as-of 那天的价** 取,不是 `co.price`(那永远是今天的价)。
    * 写成 `co.price` 的后果是 refISO 对这个函数**完全无效**:回放到 2025-03 的某一天,
    * 窗口仍然以 2026-08 的价为中心 —— 一年的涨幅足以让整条链落到 ±PX_OPT_WINDOW 之外,
@@ -2749,7 +2977,6 @@ function optionWalls(co, refISO, h) {
      * 判据用 `>` 不用 `>=`:参照日**当天**收盘后登记的 OI 是那天收盘时就存在的存量,
      * 与 expiry 那条 `<=` 不同,这里没有"今晚归零"的问题。
      * refISO 为空(线上看今天)时不设限:那时候没有"未来"可偷。 */
-    if (refISO && r.asof && r.asof > refISO) continue;
     if (r.expiry <= today) continue;                          // 见文件头 ③:今晚归零的链不占名额
     if (dteOf(r.expiry) > PX_OPT_MAX_DTE) continue;           // 超出视野的远月对当下价格没有钉住力
     if (Math.abs(r.strike / px - 1) > PX_OPT_WINDOW) continue;
@@ -2790,6 +3017,54 @@ function optionWalls(co, refISO, h) {
   if (!walls.length && !expiries.length) return null;
   /* 字面量,不是变量:evidence 不许因为任何输入变成 verified。 */
   return { walls, expiries, window: PX_OPT_WINDOW, evidence: 'pending' };
+}
+/* ================= options behavior: snapshot facts by horizon ================= */
+const OPT_BEHAVIOR_BUCKETS = [
+  { id: 'short', lo: 1, hi: 7 },
+  { id: 'mid', lo: 8, hi: 45 },
+  { id: 'long', lo: 46, hi: 180 },
+];
+function optDte(asof, expiry) {
+  const a = Date.parse(asof + 'T00:00:00Z'), b = Date.parse(expiry + 'T00:00:00Z');
+  return isFinite(a) && isFinite(b) ? Math.round((b - a) / 86400000) : NaN;
+}
+function optionSnapshotSeries(ticker) {
+  const byDate = new Map();
+  for (const r of (state.options.get(ticker) || [])) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(r.asof || '')) continue;
+    if (!byDate.has(r.asof)) byDate.set(r.asof, []);
+    byDate.get(r.asof).push(r);
+  }
+  return [...byDate].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([asof, rows]) => ({ asof, rows }));
+}
+function optionBehavior(ticker) {
+  const snaps = optionSnapshotSeries(ticker);
+  if (!snaps.length) return null;
+  const cur = snaps[snaps.length - 1], prev = snaps.length > 1 ? snaps[snaps.length - 2] : null;
+  const prevMap = new Map((prev ? prev.rows : []).map(r => [r.expiry + '|' + r.strike, r]));
+  const buckets = OPT_BEHAVIOR_BUCKETS.map(def => {
+    const rows = cur.rows.filter(r => { const d = optDte(cur.asof, r.expiry); return d >= def.lo && d <= def.hi; });
+    const callOI = rows.reduce((s, r) => s + r.callOI, 0), putOI = rows.reduce((s, r) => s + r.putOI, 0);
+    let comparable = 0, callDelta = 0, putDelta = 0;
+    for (const r of rows) {
+      const old = prevMap.get(r.expiry + '|' + r.strike); if (!old) continue;
+      comparable++; callDelta += r.callOI - old.callOI; putDelta += r.putOI - old.putOI;
+    }
+    const byExp = new Map();
+    for (const r of rows) byExp.set(r.expiry, (byExp.get(r.expiry) || 0) + r.callOI + r.putOI);
+    const expiry = [...byExp].sort((a, b) => b[1] - a[1])[0] || null;
+    const topCall = rows.slice().sort((a, b) => b.callOI - a.callOI)[0] || null;
+    const topPut = rows.slice().sort((a, b) => b.putOI - a.putOI)[0] || null;
+    return { ...def, rows: rows.length, callOI, putOI, totalOI: callOI + putOI,
+      callDelta, putDelta, totalDelta: callDelta + putDelta, comparable,
+      coverage: rows.length ? comparable / rows.length : 0, expiry, topCall, topPut };
+  });
+  return { ticker, snaps: snaps.length, from: snaps[0].asof, asof: cur.asof, prev: prev && prev.asof,
+    rows: cur.rows.length, buckets };
+}
+function optionMacroPeers(selected) {
+  const ids = ['SPY-US', 'QQQ-US', 'IWM-US', 'IEF-US', 'TLT-US', 'HYG-US'];
+  return ids.filter(x => x !== selected).map(optionBehavior).filter(x => x && x.snaps >= 2);
 }
 /* ================= 压力位引擎:组装 =================
  * 取 as-of 价 → 拿密度带与 OI 墙 → 合并 → 算触及概率 → 按现价分上下。
@@ -2994,6 +3269,46 @@ function pressureLevels(co, r, refISO, horizon) {
       opt: PX_EVIDENCE.opt, val: PX_EVIDENCE.val },
     why,
   };
+}
+/* ================= render: options behavior timeline ================= */
+function renderOptionsBehavior(co) {
+  const sec = $('optBehaviorSec'), grid = $('optBehaviorGrid'), meta = $('optBehaviorMeta'), macro = $('optMacro'), note = $('optBehaviorNote');
+  const data = co && optionBehavior(co.ticker);
+  sec.hidden = !data; grid.replaceChildren(); meta.replaceChildren(); macro.replaceChildren(); note.textContent = '';
+  if (!data) return;
+  meta.className = 'optMeta';
+  meta.textContent = t('optMeta')(data.snaps, data.from, data.asof, data.rows);
+  for (const b of data.buckets) {
+    const card = el('div', 'optHorizon ' + b.id);
+    card.appendChild(el('h3', '', t('optBucket')[b.id]));
+    if (!b.rows) { card.appendChild(el('p', 'empty', t('optNoBucket'))); grid.appendChild(card); continue; }
+    const pc = b.callOI ? b.putOI / b.callOI : NaN;
+    const facts = el('div', 'optFacts');
+    facts.appendChild(el('div', '', t('optCallOI') + ' ' + fmtInt(b.callOI)));
+    facts.appendChild(el('div', '', t('optPutOI') + ' ' + fmtInt(b.putOI)));
+    facts.appendChild(el('div', '', 'P/C ' + (isFinite(pc) ? pc.toFixed(2) : '—')));
+    card.appendChild(facts);
+    const delta = el('p', 'optDelta ' + (b.totalDelta > 0 ? 'up' : b.totalDelta < 0 ? 'down' : 'flat'));
+    delta.textContent = data.prev ? t('optDelta')(b.callDelta, b.putDelta, b.coverage) : t('optNoPrev');
+    card.appendChild(delta);
+    if (b.expiry) card.appendChild(el('p', 'optLine', t('optExpiry')(b.expiry[0], b.expiry[1])));
+    if (b.topCall) card.appendChild(el('p', 'optLine', t('optTopCall')(b.topCall.strike, b.topCall.callOI)));
+    if (b.topPut) card.appendChild(el('p', 'optLine', t('optTopPut')(b.topPut.strike, b.topPut.putOI)));
+    grid.appendChild(card);
+  }
+  const peers = optionMacroPeers(co.ticker);
+  const mh = el('h3', 'optMacroHead', t('optMacroHead')); macro.appendChild(mh);
+  if (!peers.length) macro.appendChild(el('p', 'hint warn', t('optMacroMissing')));
+  else {
+    const row = el('div', 'optMacroRow');
+    for (const p of peers) {
+      const d = p.buckets.find(x => x.id === 'mid');
+      row.appendChild(el('div', 'optMacroChip', p.ticker.split('-')[0] + ' · ' + t('optSnaps')(p.snaps)
+        + ' · ' + t('optMidDelta')(d ? d.totalDelta : 0)));
+    }
+    macro.appendChild(row);
+  }
+  note.textContent = t('optNote')(data.prev, data.asof);
 }
 /* ================= 压力位 / 支撑位面板 =================
  * 这一版对上一版删掉的东西比加上的多,每一处删除都有一条回测结论顶着:
@@ -4357,7 +4672,8 @@ function klStep(span) {
 
 function renderCandles(co) {
   const sec = $('klSec'), box = $('klChart'), note = $('klNote'), leg = $('klLegend'), tabs = $('klWinTabs');
-  box.replaceChildren(); note.replaceChildren(); leg.replaceChildren();
+  const levelTabs = $('klLevelTabs'), layerTabs = $('klLayerTabs'), levels = $('klLevels'), refsBox = $('klRefs');
+  box.replaceChildren(); note.replaceChildren(); leg.replaceChildren(); levels.replaceChildren(); refsBox.replaceChildren();
   const all = (co && state.priceHist.get(co.ticker)) || [];
   /* 两根以下画不出任何东西(连一段线都连不起来),整块收起而不是留一个空框 */
   if (all.length < 2) { sec.hidden = true; return; }
@@ -4376,12 +4692,63 @@ function renderCandles(co) {
     };
   }
 
+  const levelHold = PX_HORIZONS[state.klLevelHold] ? state.klLevelHold : 'mid';
+  if (levelTabs) {
+    for (const b of levelTabs.querySelectorAll('button')) b.classList.toggle('on', b.dataset.klh === levelHold);
+    levelTabs.onclick = ev => {
+      const b = ev.target.closest('button');
+      if (!b || !PX_HORIZONS[b.dataset.klh] || b.dataset.klh === levelHold) return;
+      state.klLevelHold = b.dataset.klh;
+      renderCandles(co);
+    };
+  }
+  const layers = state.klLayers || (state.klLayers = { tech: true, matrix: true, option: true });
+  if (layerTabs) {
+    for (const b of layerTabs.querySelectorAll('button')) b.classList.toggle('on', layers[b.dataset.kll] !== false);
+    layerTabs.onclick = ev => {
+      const b = ev.target.closest('button');
+      if (!b || !b.dataset.kll) return;
+      layers[b.dataset.kll] = layers[b.dataset.kll] === false;
+      renderCandles(co);
+    };
+  }
+
   const h = win.n > 0 ? all.slice(-win.n) : all;
   const ohlc = klHasOHLC(h);
   const n = h.length;
-  const W = 1100, H = 320, L = 52, R = 66, T = 14, B = 28;
+  const lastPx = all[all.length - 1].price;
+  const dens = priceDensity(co.ticker, null, PX_HORIZONS[levelHold]);
+  const structure = structuralLevels(co.ticker, null, PX_HORIZONS[levelHold]);
+  const range = calcRange(co, state.horizon);
+  const epsKey = state.mxPick.eps === 'opt' ? 'high' : state.mxPick.eps === 'pes' ? 'low' : 'mean';
+  const pickedMatrix = range && pePos(range.pe, state.mxPick.pe) && isFinite(range.eps[epsKey])
+    ? range.eps[epsKey] * range.pe[state.mxPick.pe] : NaN;
+  const matrixRefs = range ? [
+    isFinite(pickedMatrix) && { price: pickedMatrix, label: t('klMxPicked'), role: 'picked' },
+    isFinite(range.coreLow) && { price: range.coreLow, label: t('klMxLow'), role: 'core' },
+    isFinite(range.coreHigh) && { price: range.coreHigh, label: t('klMxHigh'), role: 'core' },
+  ].filter(Boolean).filter((x, i, a) => a.findIndex(y => Math.abs(y.price - x.price) < .005) === i) : [];
+  const opt = optionWalls(co, null, PX_HORIZONS[levelHold]);
+  const optWalls = opt ? opt.walls.slice().sort((a, b) => (b.oi * b.w * b.align) - (a.oi * a.w * a.align)) : [];
+  const optRefs = [
+    optWalls.find(w => w.strike > lastPx),
+    optWalls.find(w => w.strike < lastPx),
+  ].filter(Boolean).filter((x, i, a) => a.findIndex(y => y.strike === x.strike) === i);
+  const bands = dens ? dens.bands : [];
+  const inside = bands.filter(b => lastPx >= b.lo && lastPx <= b.h).sort((a, b) => b.share - a.share)[0] || null;
+  let upper = structure && structure.upper ? { ...structure.upper, structural: true } : null;
+  let lower = structure && structure.lower ? { ...structure.lower, structural: true } : null;
+  const zones = [{ kind: 'down', band: lower }, { kind: 'now', band: inside }, { kind: 'up', band: upper }].filter(z => z.band);
+  const W = 1100, H = 320, L = 52, R = 176, T = 14, B = 28;
   let mn = Math.min(...h.map(d => ohlc ? d.l : d.price));
   let mx = Math.max(...h.map(d => ohlc ? d.h : d.price));
+  /* 最近上下带属于本图的核心读数，纳入纵轴，避免它恰好在窗口外时被悄悄裁掉。 */
+  if (layers.tech) for (const z of zones) { mn = Math.min(mn, z.band.lo); mx = Math.max(mx, z.band.hi); }
+  /* 只把仍在现价合理视野内的外部参考纳入纵轴，极端估值情景留在卡片中，不能压扁价格线。 */
+  const plottedMx = layers.matrix ? matrixRefs.filter(v => v.price >= lastPx * .65 && v.price <= lastPx * 1.45) : [];
+  const plottedOpt = layers.option ? optRefs.filter(v => v.strike >= lastPx * .65 && v.strike <= lastPx * 1.45) : [];
+  for (const v of plottedMx) { mn = Math.min(mn, v.price); mx = Math.max(mx, v.price); }
+  for (const v of plottedOpt) { mn = Math.min(mn, v.strike); mx = Math.max(mx, v.strike); }
   const pad = (mx - mn) * .06 || Math.max(1, mx * .02);
   mn -= pad; mx += pad;
   const step = (W - L - R) / n;
@@ -4391,6 +4758,41 @@ function renderCandles(co) {
     viewBox: `0 0 ${W} ${H}`, role: 'img',
     'aria-label': ohlc ? '每日开高低收蜡烛图(颜色仅描述当日涨跌事实)' : '每日收盘价折线(导出无 OHLC 列)',
   });
+
+  /* 密集带是历史价格/成交量分布，不是技术指标线，也不是“必守”的预测位。 */
+  for (const z of layers.tech ? zones : []) {
+    const col = z.kind === 'up' ? 'var(--series-2)' : z.kind === 'down' ? 'var(--series-1)' : 'var(--axis)';
+    svg.appendChild(svgEl('rect', {
+      class: 'klzone klzone-' + z.kind, x: L, y: y(z.band.hi), width: W - L - R,
+      height: Math.max(2, y(z.band.lo) - y(z.band.hi)), fill: col,
+      opacity: z.band.structural ? (.045 + (z.band.strength || 1) * .025) : .11,
+    }));
+    svg.appendChild(svgEl('line', {
+      x1: L, x2: W - R, y1: y(z.band.peak), y2: y(z.band.peak), stroke: col,
+      'stroke-width': 1, 'stroke-dasharray': '2 4', opacity: .75,
+    }));
+    const zt = svgEl('text', { x: W - R + 8, y: y(z.band.peak) + 4, 'font-size': 10.5,
+      fill: 'var(--text-secondary)', 'font-weight': 650 });
+    const zn = z.kind === 'up' ? t('klStructUp') : z.kind === 'down' ? t('klStructDown') : t('klZoneNow');
+    zt.textContent = zn + ' ' + fmtN(z.band.lo) + '–' + fmtN(z.band.hi)
+      + (z.band.structural ? ' ' + z.band.strength + '/5' : '');
+    svg.appendChild(zt);
+  }
+  /* Matrix 是估值参考，期权墙是 OI 存量：使用不同线型，不与技术结构带混色。 */
+  for (const v of plottedMx) {
+    svg.appendChild(svgEl('line', { class: 'klref klref-matrix', x1: L, x2: W - R, y1: y(v.price), y2: y(v.price),
+      stroke: 'var(--axis)', 'stroke-width': v.role === 'picked' ? 1.8 : 1, 'stroke-dasharray': v.role === 'picked' ? '7 4' : '3 5', opacity: .85 }));
+    svg.appendChild(svgEl('text', { x: L + 8, y: y(v.price) - 4, 'font-size': 10.5, fill: 'var(--text-muted)' },
+      'Matrix · ' + v.label + ' ' + fmtN(v.price)));
+  }
+  const maxOptOI = Math.max(1, ...plottedOpt.map(v => v.oi));
+  for (const v of plottedOpt) {
+    const len = (W - L - R) * (.12 + .18 * v.oi / maxOptOI);
+    svg.appendChild(svgEl('line', { class: 'klref klref-opt', x1: W - R - len, x2: W - R,
+      y1: y(v.strike), y2: y(v.strike), stroke: 'var(--series-2)', 'stroke-width': 3, opacity: .78 }));
+    svg.appendChild(svgEl('text', { x: W - R - len - 7, y: y(v.strike) + 4, 'text-anchor': 'end',
+      'font-size': 10.5, fill: 'var(--text-secondary)' }, t('klOptWall') + ' ' + fmtN(v.strike)));
+  }
 
   /* y 网格 + 右侧价格刻度 */
   const gs = klStep(mx - mn);
@@ -4471,6 +4873,46 @@ function renderCandles(co) {
   svg.appendChild(hit);
   box.appendChild(svg);
 
+  if (zones.length) {
+    for (const z of zones) {
+      const b = z.band, distU = dens && dens.u > 0
+        ? (z.kind === 'up' ? Math.max(0, b.lo - lastPx) : z.kind === 'down' ? Math.max(0, lastPx - b.hi) : 0) / dens.u
+        : 0;
+      const card = el('div', 'kllevel ' + z.kind);
+      const titleKey = z.band.structural
+        ? (z.kind === 'up' ? 'klStructUp' : 'klStructDown')
+        : z.band.fallback
+          ? (z.kind === 'up' ? 'klSwingUp' : 'klSwingDown')
+        : (z.kind === 'up' ? 'klZoneUp' : z.kind === 'down' ? 'klZoneDown' : 'klZoneNow');
+      card.appendChild(el('div', 'k', t(titleKey)));
+      card.appendChild(el('div', 'v', fmtN(b.lo) + ' – ' + fmtN(b.hi)));
+      if (b.structural) {
+        const level = b.strength >= 4 ? 'strong' : b.strength >= 3 ? 'medium' : 'weak';
+        card.appendChild(el('div', 'klstrength ' + level,
+          t(z.kind === 'up' ? 'klPressureStrength' : 'klSupportStrength')(b.strength, t('klStrengthNames')[level])));
+        card.appendChild(el('div', 'k', t('klStrengthParts')(b.strengthParts.repeat, b.strengthParts.reaction, b.strengthParts.recent)));
+      }
+      card.appendChild(el('div', 'k', t('klZoneMeta')(b.touch || 0, b.last || '—', fmtN(distU) + 'u')));
+      levels.appendChild(card);
+    }
+    if (!upper) levels.appendChild(el('div', 'kllevel up', t('klNoStructUp')));
+    if (!lower) levels.appendChild(el('div', 'kllevel down', t('klNoStructDown')));
+  } else levels.appendChild(el('div', 'hint', t('klZoneNone')));
+
+  let resonanceShown = false;
+  for (const z of zones.filter(x => x.band.structural)) {
+    const nearMx = matrixRefs.some(v => v.price >= z.band.lo - (structure ? structure.tol : 0) && v.price <= z.band.hi + (structure ? structure.tol : 0));
+    const nearOpt = optRefs.some(v => v.strike >= z.band.lo - (structure ? structure.tol : 0) && v.strike <= z.band.hi + (structure ? structure.tol : 0));
+    const nTrack = 1 + (nearMx ? 1 : 0) + (nearOpt ? 1 : 0);
+    if (nTrack > 1) {
+      const badge = el('div', 'klresonance', t('klResonance')(nTrack));
+      badge.appendChild(document.createTextNode(' · ' + [t('klTechTrack'), nearMx && 'Matrix', nearOpt && t('klOptTrack')].filter(Boolean).join(' + ')));
+      refsBox.appendChild(badge);
+      resonanceShown = true;
+    }
+  }
+  if (!resonanceShown) refsBox.appendChild(el('div', 'klresonance quiet', t('klNoResonance')));
+
   /* 图例:蜡烛模式下两块色片 + 一句"颜色只描述当日方向";折线模式下只有一条线,没有颜色可解释 */
   const swatch = (bg, txt) => {
     const s = el('span');
@@ -4489,6 +4931,9 @@ function renderCandles(co) {
 
   plRich(note.appendChild(el('span', 'plnl')), t('klRange')(n, h[0].date, last.date, all.length));
   plRich(note.appendChild(el('span', 'plnl')), t(ohlc ? 'klModeCandle' : 'klModeLine'));
+  if (structure) plRich(note.appendChild(el('span', 'plnl')), t('klStructBasis')(structure.n, structure.from, structure.to));
+  if (matrixRefs.length || optRefs.length) plRich(note.appendChild(el('span', 'plnl')), t('klExternalNote'));
+  if (dens) plRich(note.appendChild(el('span', 'plnl')), t('klZoneBasis')(dens.basis, dens.n, dens.from, dens.to));
   plRich(note.appendChild(el('span', 'plnl')), t('klNoInd'));
 }
 /* ================= render root ================= */

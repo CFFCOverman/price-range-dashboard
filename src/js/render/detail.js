@@ -31,6 +31,7 @@ function renderDetail() {
   renderKpis(co, r);
   renderMatrix(co, r);
   renderBullet(co, r);
+  renderOptionsBehavior(co);
   renderCompare(co, r);
   renderPressure(co, r);
   renderSim(co);
@@ -72,7 +73,7 @@ function partialRefresh() {
   const rows = overviewRows(); renderOvTable(rows); renderOvChart(rows);
   const co = state.companies.get(state.selected); if (!co) return;
   const r = calcRange(co, state.horizon);
-  renderHead(co); renderKpis(co, r); renderMatrix(co, r); renderBullet(co, r); renderCompare(co, r); renderPressure(co, r); renderSim(co); scheduleDirection(co, r);
+  renderHead(co); renderKpis(co, r); renderMatrix(co, r); renderBullet(co, r); renderOptionsBehavior(co); renderCompare(co, r); renderPressure(co, r); renderSim(co); scheduleDirection(co, r);
 }
 function renderPeManualStatus(ticker) {
   const msg = $('peManualError'); if (!msg) return;
@@ -91,6 +92,35 @@ function renderMatrix(co, r) {
     .filter(([k]) => pePos(pe, k));
   /* 行序沿用"乐观在上",但 EPS 取的是 calcRange 清洗后的同一份情景 */
   const rows = [['opt', t('mxOpt'), eps.high], ['base', t('mxBase'), eps.mean], ['pes', t('mxPes'), eps.low]];
+  const rowMap = Object.fromEntries(rows.map(x => [x[0], x]));
+  const colMap = Object.fromEntries(cols.map(x => [x[0], x]));
+  if (!rowMap[state.mxPick.eps]) state.mxPick.eps = 'base';
+  if (!colMap[state.mxPick.pe]) state.mxPick.pe = cols.some(x => x[0] === 'p50') ? 'p50' : cols[0][0];
+
+  /* 先回答“什么情景会让数字变”：两个下拉分别只动盈利或估值，结果与下方被高亮格完全同源。 */
+  const ctl = el('div', 'mxControls');
+  const makeSelect = (label, values, picked, onChange) => {
+    const box = el('label', 'mxControl'); box.appendChild(el('span', 'lb', label));
+    const sel = el('select');
+    for (const [value, text] of values) {
+      const o = el('option', '', text); o.value = value; o.selected = value === picked; sel.appendChild(o);
+    }
+    sel.addEventListener('change', ev => {
+      onChange(ev.target.value);
+      renderMatrix(co, calcRange(co, state.horizon));
+      renderCandles(co); // Matrix 所选隐含价也是走势图的一条估值参考；选择变化必须同屏更新。
+    });
+    box.appendChild(sel); ctl.appendChild(box);
+  };
+  makeSelect(t('mxEpsPick'), rows.map(([k, lb, v]) => [k, lb + fmtN(v)]), state.mxPick.eps, v => { state.mxPick.eps = v; });
+  makeSelect(t('mxPePick'), cols.map(([k, lb]) => [k, lb + ' ' + fmtX(pe[k])]), state.mxPick.pe, v => { state.mxPick.pe = v; });
+  const pickedValue = rowMap[state.mxPick.eps][2] * pe[state.mxPick.pe];
+  const pickedPct = (pickedValue / co.price - 1) * 100;
+  const out = el('div', 'mxResult ' + (pickedPct >= 0 ? 'pos' : 'neg'));
+  out.appendChild(el('span', 'lb', t('mxPicked')));
+  out.appendChild(el('strong', '', fmtN(pickedValue)));
+  out.appendChild(el('span', 'sub', fmtPct(pickedPct) + t('vsPrice')));
+  ctl.appendChild(out); wrap.appendChild(ctl);
   /* 核心区间就是矩阵里的两个角:悲观×P25 = 核心下沿,乐观×P75 = 核心上沿。标出来,读者一眼看到两处同源 */
   const isCore = (rk, k) => (rk === 'pes' && k === 'p25') || (rk === 'opt' && k === 'p75');
   const tb = el('table', 'mx'), trh = el('tr');
@@ -103,6 +133,7 @@ function renderMatrix(co, r) {
     for (const [k] of cols) {
       const v = e * pe[k], d = (v / co.price - 1) * 100;
       const td = el('td', k === 'p50' ? 'med' : '');
+      if (rk === state.mxPick.eps && k === state.mxPick.pe) td.classList.add('picked');
       if (rk === 'base' && k === 'p50') td.classList.add('base');
       if (isCore(rk, k)) { td.classList.add('core'); td.title = t('mxCoreTip'); }
       td.appendChild(document.createTextNode(fmtN(v)));

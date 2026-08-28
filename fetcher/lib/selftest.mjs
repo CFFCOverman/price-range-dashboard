@@ -292,14 +292,14 @@ export async function runSelftest() {
    *   ③ 报告里一个能登录的串都不许有。③ 是红线 —— 这份日志是要发出去的。 */
 
   /* ① 候选清单:逐字钉死内容和顺序。写成 length >= 4 之类就是空断言 —— 这个仓库栽过三次 */
-  eq(RANGE_LABELS.join('|'), '5Y|5 Years|5 Year|5Yr|5yr', '诊断 时间跨度候选逐字不变');
+  eq(RANGE_LABELS.join('|'), '5y|5Y|5 Years|5 Year|5Yr|5yr', '诊断 时间跨度候选逐字不变');
   eq(RANGE_MENUS.join('|'), 'Date Range|Range|Period|Time Frame|Timeframe|Zoom', '诊断 时间跨度菜单入口逐字不变');
   eq(OHLC_LABELS.join('|'), 'Candlestick|Candle|OHLC|Bar', '诊断 K 线候选逐字不变(Bar 排最后是因为它太短容易撞)');
   eq(OHLC_MENUS.join('|'), 'Chart Type|Chart Style|Series Type|Style', '诊断 图表类型菜单入口逐字不变');
   eq(OHLC_SERIES_MENUS.join('|'), 'Series|Edit Series|Studies|Study', '诊断 Series 层菜单入口逐字不变');
   eq(VOL_MENUS.join('|'), 'Studies|Study|Indicators|Add Study', '诊断 成交量菜单入口逐字不变(这一组是唯一走通过的)');
   eq(CHART_PROBES.length, 6, '诊断 六组候选全部报给用户,不挑着报');
-  eq(CHART_PROBES.map(p => p[1].length).join(','), '5,6,4,4,4,4', '诊断 每组的候选个数');
+  eq(CHART_PROBES.map(p => p[1].length).join(','), '6,6,4,4,4,4', '诊断 每组的候选个数');
   eq(CHART_PROBES[0][1] === RANGE_LABELS && CHART_PROBES[2][1] === OHLC_LABELS, true,
     '诊断 报给用户的清单和真正点击时用的是**同一个数组**,不是抄写(抄写迟早说岔)');
 

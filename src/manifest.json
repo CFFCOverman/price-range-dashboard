@@ -3,6 +3,7 @@
     "src/styles/base.css",
     "src/styles/overview.css",
     "src/styles/detail.css",
+    "src/styles/options.css",
     "src/styles/pressure.css",
     "src/styles/sim.css",
     "src/styles/charts.css"
@@ -33,7 +34,9 @@
     "src/js/pressure/scale.js",
     "src/js/pressure/grid.js",
     "src/js/pressure/optionwalls.js",
+    "src/js/options/behavior.js",
     "src/js/pressure/engine.js",
+    "src/js/render/options.js",
     "src/js/render/pressure.js",
     "src/js/sim/rules.js",
     "src/js/sim/engine.js",

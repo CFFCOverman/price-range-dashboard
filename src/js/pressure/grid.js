@@ -44,6 +44,60 @@ function swingPoints(series, k) {
   return out;
 }
 
+/* 结构位回答“价格在哪些前高/前低反复转向”，不能拿最近一个小拐点顶替。
+ * h 同时决定观察窗口与摆动半径，短中长期因此真的看不同历史，而不只是改变带宽。 */
+function structuralLevels(ticker, refISO, h) {
+  const all = state.priceHist.get(ticker);
+  if (!all || all.length < PX_SIGMA_MIN_N) return null;
+  const hh = isFinite(h) && h > 0 ? h : PX_HORIZONS.mid;
+  const sliced = asOfSlice(all, refISO || null);
+  const cfg = hh <= PX_HORIZONS.short ? { look: 63, k: 2 }
+    : hh <= PX_HORIZONS.mid ? { look: 126, k: 3 } : { look: 252, k: 5 };
+  const series = sliced.slice(-cfg.look);
+  if (series.length < PX_SIGMA_MIN_N) return null;
+  const sig = sigmaD(ticker, refISO || null, PX_SIGMA_WIN);
+  if (!sig) return null;
+  const price = series.at(-1).price, u = scaleU(sig.sd, hh, price);
+  /* 聚类宽度使用日波动；若使用 √h，长期档会把十几美元揉成同一条位置。 */
+  const tol = Math.max(price * .004, price * sig.sd * .55);
+  const pivots = swingPoints(series, cfg.k).map(sp => {
+    const i = series.findIndex(d => d.date === sp.date);
+    const after = series.slice(i + 1, Math.min(series.length, i + 1 + cfg.k * 3));
+    const reaction = after.length ? (sp.kind === 'high'
+      ? sp.price - Math.min(...after.map(d => d.price))
+      : Math.max(...after.map(d => d.price)) - sp.price) : 0;
+    return { ...sp, reaction: Math.max(0, reaction), fresh: Math.pow(.5, (series.length - 1 - i) / (cfg.look / 2)) };
+  });
+  const clusters = [];
+  for (const kind of ['high', 'low']) for (const p of pivots.filter(x => x.kind === kind).sort((a, b) => a.price - b.price)) {
+    let c = clusters.filter(x => x.kind === kind).sort((a, b) => Math.abs(a.peak - p.price) - Math.abs(b.peak - p.price))[0];
+    if (!c || Math.abs(c.peak - p.price) > tol) { c = { kind, points: [], peak: p.price }; clusters.push(c); }
+    c.points.push(p);
+    const fw = c.points.reduce((s, x) => s + x.fresh, 0);
+    c.peak = c.points.reduce((s, x) => s + x.price * x.fresh, 0) / fw;
+  }
+  for (const c of clusters) {
+    const fw = c.points.reduce((s, p) => s + p.fresh, 0);
+    c.touch = c.points.length; c.last = c.points.map(p => p.date).sort().at(-1);
+    c.reaction = c.points.reduce((s, p) => s + p.reaction * p.fresh, 0) / fw;
+    c.lo = Math.min(...c.points.map(p => p.price)) - tol * .45;
+    c.hi = Math.max(...c.points.map(p => p.price)) + tol * .45;
+    const quality = fw + Math.min(2, c.reaction / Math.max(tol, 1));
+    const edge = c.kind === 'high' ? Math.max(0, c.lo - price) : Math.max(0, price - c.hi);
+    c.score = quality / (1 + edge / Math.max(u, tol) * .22);
+    /* 1–5 是结构证据等级，不是命中率：重复确认 0–2、反转幅度 0–2、新鲜度 0–1。 */
+    const repeatPts = c.touch >= 3 ? 2 : c.touch >= 2 ? 1 : 0;
+    const reactionX = c.reaction / Math.max(tol, 1);
+    const reactionPts = reactionX >= 2 ? 2 : reactionX >= 1 ? 1 : 0;
+    const recentPts = Math.max(...c.points.map(p => p.fresh)) >= .5 ? 1 : 0;
+    c.strength = 1 + Math.min(4, repeatPts + reactionPts + recentPts);
+    c.strengthParts = { repeat: repeatPts, reaction: reactionPts, recent: recentPts, reactionX };
+  }
+  const upper = clusters.filter(c => c.kind === 'high' && c.lo > price).sort((a, b) => b.score - a.score)[0] || null;
+  const lower = clusters.filter(c => c.kind === 'low' && c.hi < price).sort((a, b) => b.score - a.score)[0] || null;
+  return { upper, lower, price, u, tol, from: series[0].date, to: series.at(-1).date, n: series.length };
+}
+
 /** 价格密度 → 价位带。名字不许改:tools/backtest.mjs 的函数存在性断言点名了它。
  *  返回 { bins, bands, basis, n, from, to, swings, min, max, sd, u, asOf } | null。 */
 function priceDensity(ticker, refISO, h) {
