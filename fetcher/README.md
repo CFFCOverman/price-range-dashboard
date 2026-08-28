@@ -32,6 +32,9 @@ Windows 上更省事的做法是直接双击**仓库根目录**的 `run-factset.
 依赖缺失或与 `package-lock.json` 不一致时才会用 `npm ci` 修复，Chrome 不在标准安装位置时才会安装。
 命令行参数照传(`run-factset.bat --login`)。
 
+macOS 可双击仓库根目录的 `run-factset.command`，首次登录可在 Terminal 运行
+`./run-factset.command --login`。启动器会检查 Node、依赖和 Google Chrome；数据仍只写入本机 `Assets/`。
+
 拉取结束后默认**不自动打开仪表盘**，避免定时任务或连续补数据时不断弹窗口。确实希望完成后打开时，
 先设置环境变量 `FS_OPEN_DASHBOARD=1`；未设置、设为 `0` 或其它文字都保持关闭。
 

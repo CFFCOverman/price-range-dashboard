@@ -3,7 +3,7 @@
  */
 
 import fs from 'node:fs';
-import { exec } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import { ensureBrowser } from './browser.mjs';
 import { COMPANIES_CSV, CSV_HEADER, FRESH_HOURS, isFresh, priceMap } from './companies.mjs';
 import { APP_HTML, OPEN_DASHBOARD } from './config.mjs';
@@ -13,6 +13,7 @@ import { MARKETS, marketFile } from './markets.mjs';
 import { metaCharting, metaCompanies } from './registry.mjs';
 import { writeRoster } from './roster.mjs';
 import { TICKERS } from './tickers.mjs';
+import { openDashboardAction } from './menu-actions.mjs';
 import { fetchCharting } from '../steps/charting.mjs';
 import { fetchTicker } from '../steps/ticker.mjs';
 
@@ -79,9 +80,10 @@ export async function runRound() {
     + Object.values(mktResults).filter(m => !m.ok).length;
   console.log(misses === 0 ? '全部完成 ✔' : `有 ${misses} 项未完成(✖),可重跑或按提示手动补。`);
   console.log('==========================================');
-  if (OPEN_DASHBOARD && !appOpened && process.platform === 'win32' && fs.existsSync(APP_HTML)) {
+  if (OPEN_DASHBOARD && !appOpened && fs.existsSync(APP_HTML)) {
     appOpened = true;
     log('正在打开 Price Range Dashboard……点「重连上次文件夹」→「允许」载入数据(之后再拉取只需在页面里点「重新扫描」)。');
-    exec(`start "" "${APP_HTML}"`);
+    openDashboardAction({ platform: process.platform, appHtml: APP_HTML, exists: fs.existsSync,
+      launch: spec => spec.file ? execFile(spec.file, spec.args || []) : exec(spec.command) });
   }
 }

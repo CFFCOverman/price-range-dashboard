@@ -29,7 +29,7 @@ import { parseShortInt, shortIntDiagnosis, shortIntSanity, siBlockTooWide } from
 import { FRESH_HOURS, freshHoursFor, hasPriceToday, priceMap } from './companies.mjs';
 import { metaCharting, metaCompanies, metaEst, metaNews, metaOptions, metaShortInt, metaTargets } from './registry.mjs';
 import { factsetSessionValid, headlessMode, initialHeadless, loginFallback } from './browser-policy.mjs';
-import { menuCommand, menuScreen, openDashboardAction, runFetcherLoop } from './menu-actions.mjs';
+import { menuCommand, menuScreen, openDashboardAction, openPathSpec, runFetcherLoop } from './menu-actions.mjs';
 
 /* --selftest:不开浏览器,验证核心逻辑(财年判定/标签位移/xlsx 写读回)
  * async 是为了 dumpChartDiag 那一组:它本身是 async(要 await 页面采集),
@@ -64,9 +64,13 @@ export async function runSelftest() {
   const opened = [];
   const od = openDashboardAction({ platform: 'win32', appHtml: 'C:\\x\\dash.html', exists: () => true, launch: s => opened.push(s) });
   eq(od.ok && opened.length, 1, 'Dashboard 动作可注入,自检不真开窗');
-  eq(opened[0], 'start "" "C:\\x\\dash.html"', 'Windows Dashboard 命令带完整引号');
-  eq(openDashboardAction({ platform: 'linux', appHtml: '/x/dash.html', exists: () => true, launch: () => {} }).ok, false,
-    '非 Windows 不冒充打开成功');
+  eq(opened[0].command, 'start "" "C:\\x\\dash.html"', 'Windows Dashboard 命令带完整引号');
+  eq(JSON.stringify(openPathSpec('darwin', '/x/dash.html')), '{"file":"open","args":["/x/dash.html"]}',
+    'macOS Dashboard 使用 open 且路径作为独立参数');
+  eq(JSON.stringify(openPathSpec('darwin', '/x/tickers.txt', true)), '{"file":"open","args":["-e","/x/tickers.txt"]}',
+    'macOS 文本配置使用 TextEdit 打开');
+  eq(openDashboardAction({ platform: 'linux', appHtml: '/x/dash.html', exists: () => true, launch: () => {} }).ok, true,
+    'Linux 使用 xdg-open,不再误报只能手动打开');
   eq(openDashboardAction({ platform: 'win32', appHtml: 'missing', exists: () => false, launch: () => {} }).ok, false,
     'Dashboard 文件缺失明确失败');
   const actions = ['run', 'run', 'exit']; let menuN = 0, roundN = 0, afterN = 0; const ioTrace = [];

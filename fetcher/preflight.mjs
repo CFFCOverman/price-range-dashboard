@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* run-factset.bat 的只读准备检查。退出 0=已经就绪，2=需要修复/安装，1=检查器自身出错。 */
+/* Windows/macOS 启动器共用的只读准备检查。退出 0=已经就绪，2=需要修复/安装，1=检查器自身出错。 */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,14 +30,19 @@ export function dependenciesReady(root = DIR, exists = fs.existsSync, read = p =
   }
 }
 
-export function chromeCandidates(env = process.env) {
+export function chromeCandidates(env = process.env, platform = process.platform, home = env.HOME || '') {
+  if (platform === 'darwin') return [...new Set([
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    home && path.posix.join(home, 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),
+  ].filter(Boolean))];
+  if (platform !== 'win32') return ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/opt/google/chrome/chrome'];
   const suffix = path.win32.join('Google', 'Chrome', 'Application', 'chrome.exe');
   return [...new Set([env.PROGRAMFILES, env['PROGRAMFILES(X86)'], env.LOCALAPPDATA]
     .filter(Boolean).map(base => path.win32.join(base, suffix)))];
 }
 
-export function chromeReady(env = process.env, exists = fs.existsSync) {
-  return chromeCandidates(env).some(exists);
+export function chromeReady(env = process.env, exists = fs.existsSync, platform = process.platform, home = env.HOME || '') {
+  return chromeCandidates(env, platform, home).some(exists);
 }
 
 function selftest() {
@@ -62,6 +67,8 @@ function selftest() {
     ['Playwright/core 不同版会要求修复', !dependenciesReady('X', exists, p => key(p) === 'node_modules/playwright-core/package.json' ? '{"version":"1.60.0"}' : read(p))],
     ['Chrome 候选存在才算就绪', chromeReady({ LOCALAPPDATA: 'C:\\Local' }, p => /chrome\.exe$/i.test(p))],
     ['Chrome 候选全不存在不假绿', !chromeReady({ LOCALAPPDATA: 'C:\\Local' }, () => false)],
+    ['macOS 识别系统 Applications 里的 Chrome', chromeReady({ HOME: '/Users/test' }, p => p === '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', 'darwin', '/Users/test')],
+    ['macOS 同时识别用户 Applications 里的 Chrome', chromeCandidates({ HOME: '/Users/test' }, 'darwin', '/Users/test').includes('/Users/test/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')],
   ];
   for (const [name, pass] of results) console.log(`  ${pass ? 'PASS' : 'FAIL'} ${name}`);
   process.exit(results.every(([, pass]) => pass) ? 0 : 1);

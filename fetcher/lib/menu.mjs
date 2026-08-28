@@ -4,7 +4,7 @@
 
 import fs from 'node:fs';
 import readline from 'node:readline/promises';
-import { exec } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import { lastBacktestDate, runBacktest } from './backtest.mjs';
 import { APP_HTML, LOGIN_ONLY, MARKETS_FILE, TICKERS_FILE } from './config.mjs';
 import { healthReport } from './health.mjs';
@@ -12,7 +12,14 @@ import { SOURCES_FILE, writeSources } from './ledger.mjs';
 import { MARKETS, loadMarkets, saveMarkets, setMarkets } from './markets.mjs';
 import { reconcileReport } from './reconcile.mjs';
 import { IGNORED, TICKERS, VALID, loadIgnored, loadTickers, saveTickers, setIgnored, setTickers } from './tickers.mjs';
-import { menuCommand, menuScreen, openDashboardAction } from './menu-actions.mjs';
+import { menuCommand, menuScreen, openDashboardAction, openPathSpec } from './menu-actions.mjs';
+
+function launchSpec(spec) {
+  if (!spec) return false;
+  if (spec.file) execFile(spec.file, spec.args || []);
+  else exec(spec.command);
+  return true;
+}
 
 export const RL = (!LOGIN_ONLY && process.stdin.isTTY)
   ? readline.createInterface({ input: process.stdin, output: process.stdout })
@@ -48,13 +55,13 @@ export async function manageMenu() {
       return 'run';
     }
     if (cmd === 'dashboard') {
-      const r = openDashboardAction({ platform: process.platform, appHtml: APP_HTML, exists: fs.existsSync, launch: command => exec(command) });
+      const r = openDashboardAction({ platform: process.platform, appHtml: APP_HTML, exists: fs.existsSync, launch: launchSpec });
       console.log(r.why);
       continue;
     }
     if (cmd === 'edit') {
       saveTickers(TICKERS);
-      exec(`start notepad "${TICKERS_FILE}"`);
+      launchSpec(openPathSpec(process.platform, TICKERS_FILE, true));
       carryInput(await askLine('已打开记事本(tickers.txt)—— 保存后按回车刷新；也可直接输入下一条命令 '));
       setTickers(loadTickers());
       setIgnored(loadIgnored());   /* 忽略名单就写在同一个文件的注释行里,一起刷新 */
@@ -62,7 +69,7 @@ export async function manageMenu() {
     }
     if (cmd === 'markets') {
       saveMarkets(MARKETS);
-      exec(`start notepad "${MARKETS_FILE}"`);
+      launchSpec(openPathSpec(process.platform, MARKETS_FILE, true));
       carryInput(await askLine('已打开记事本(markets.txt)—— 保存后按回车刷新；也可直接输入下一条命令 '));
       setMarkets(loadMarkets());
       console.log('市场级序列: ' + (MARKETS.length ? MARKETS.map(([s, r]) => s + '(' + r + ')').join('  ') : '(空,不拉取)'));
@@ -85,7 +92,7 @@ export async function manageMenu() {
     }
     if (cmd === 'sources') {
       if (!fs.existsSync(SOURCES_FILE)) writeSources();
-      exec(`start notepad "${SOURCES_FILE}"`);
+      launchSpec(openPathSpec(process.platform, SOURCES_FILE, true));
       console.log('已打开源出台账(sources.txt,只读性质——每次拉取自动更新,手改会被覆盖)');
       continue;
     }

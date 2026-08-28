@@ -11,7 +11,8 @@ A single-file, offline-friendly dashboard that turns FactSet exports into **impl
 - **New machine (Windows) · 新机器**: double-click **`setup.bat`** at the repo root. It finds (or offers to install) Node.js, then installs dependencies, runs the health check, verifies the build and runs the tests. It stops to ask you exactly twice — install Node with winget, and download chromium (~150MB) — and installs nothing behind your back. 双击根目录的 **`setup.bat`** 就行,只有那两处会停下来问你。
 - **Just want to look at the dashboard · 只想看仪表盘**: skip `setup.bat` entirely — open `price-range-dashboard.html` (or `index.html`, same file) in Chrome/Edge. No install, no server, no Node.
 - **Online**: enable GitHub Pages for this repo (Settings → Pages → Deploy from branch → `main` / root), then open `https://<your-username>.github.io/<repo-name>/`.
-- **Fetching data (Windows)**: double-click **`run-factset.bat`** at the repo root. First run installs the dependencies for you; every run writes into `Assets/` and logs into `Assets/_logs/`.
+- **Fetching data (Windows)**: double-click **`run-factset.bat`** at the repo root.
+- **Fetching data (macOS)**: double-click **`run-factset.command`** (on first use, Control-click → Open if Gatekeeper asks). It checks Node/Chrome, installs locked dependencies when needed, and uses the same local `Assets/` layout.
 
 Click **载入演示数据 / Load demo data** to explore with sample companies, or drag in your own FactSet exports.
 

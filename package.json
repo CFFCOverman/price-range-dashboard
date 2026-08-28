@@ -13,7 +13,7 @@
     "test:full": "node tools/doctor.mjs --preflight && node tests/test-app.mjs --require-data",
     "doctor": "node tools/doctor.mjs",
     "doctor:selftest": "node tools/doctor.mjs --selftest",
-    "test:fetcher-preflight": "node fetcher/preflight.mjs --selftest && node tools/scratch/bat-lint.mjs && node tools/scratch/test-run-factset-bat.mjs",
+    "test:fetcher-preflight": "node fetcher/preflight.mjs --selftest && node tools/scratch/bat-lint.mjs && node tools/scratch/test-run-factset-bat.mjs && node tools/scratch/test-run-factset-command.mjs",
     "test:fetch": "node fetcher/factset-fetch.mjs --selftest",
     "backtest": "node tools/backtest.mjs",
     "backtest:selftest": "node tools/backtest.mjs --selftest",

@@ -34,11 +34,22 @@ export function menuScreen(tickers = [], markets = []) {
   ].join('\n');
 }
 
+export function openPathSpec(platform, target, editor = false) {
+  if (platform === 'darwin') return { file: 'open', args: editor ? ['-e', target] : [target] };
+  if (platform === 'linux') return { file: 'xdg-open', args: [target] };
+  if (platform === 'win32') {
+    const safe = String(target).replaceAll('"', '""');
+    return { command: editor ? `start "" notepad "${safe}"` : `start "" "${safe}"` };
+  }
+  return null;
+}
+
 /* launch 可注入：自检只记录命令，不真的打开窗口。 */
 export function openDashboardAction({ platform, appHtml, exists, launch }) {
-  if (platform !== 'win32') return { ok: false, why: `当前系统请手动打开: ${appHtml}` };
   if (!exists(appHtml)) return { ok: false, why: `找不到仪表盘: ${appHtml}` };
-  launch(`start "" "${appHtml}"`);
+  const spec = openPathSpec(platform, appHtml);
+  if (!spec) return { ok: false, why: `当前系统请手动打开: ${appHtml}` };
+  launch(spec);
   return { ok: true, why: `已打开 Price Range Dashboard: ${appHtml}` };
 }
 
