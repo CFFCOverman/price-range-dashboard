@@ -80,12 +80,16 @@ reconcileReport({ apply: true });
 const { rosterReport } = await import('./lib/roster.mjs');
 rosterReport({ apply: true });
 let btDone = false;
-await runFetcherLoop({
-  interactive: !!RL, menu: manageMenu, runRound,
-  afterRound: async () => {
-    if (!btDone) { btDone = true; maybeMonthlyBacktest(new Date().toISOString().slice(0, 10)); }
-  },
-});
-if (RL) RL.close();
-if (browser.ctx) await browser.ctx.close();
-log('已退出。');
+try {
+  await runFetcherLoop({
+    interactive: !!RL, menu: manageMenu, runRound,
+    afterRound: async () => {
+      if (!btDone) { btDone = true; maybeMonthlyBacktest(new Date().toISOString().slice(0, 10)); }
+    },
+  });
+  log('已退出。');
+} finally {
+  /* 某个抓取步骤抛错时也必须释放 persistent profile；否则遗留 Chrome 会让下一轮以 exit code 21 立即失败。 */
+  if (RL) RL.close();
+  if (browser.ctx) await browser.ctx.close().catch(() => {});
+}

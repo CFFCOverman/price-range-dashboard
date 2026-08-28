@@ -14,10 +14,22 @@ async function closeBrowser() {
   if (old) await old.close().catch(() => {});
 }
 async function launchBrowser(headless) {
-  ctx = await chromium.launchPersistentContext(PROFILE, {
-    channel: 'chrome', headless, viewport: { width: 1600, height: 900 },
-    acceptDownloads: true,
-  });
+  try {
+    ctx = await chromium.launchPersistentContext(PROFILE, {
+      channel: 'chrome', headless, viewport: { width: 1600, height: 900 },
+      acceptDownloads: true,
+    });
+  } catch (err) {
+    ctx = null; page = null;
+    const detail = String(err?.message || err || '');
+    if (/exitCode=21|ProcessSingleton|profile directory|Target page, context or browser has been closed/i.test(detail)) {
+      throw new Error(
+        'FactSet 专用 Chrome 配置正在被另一个 Chrome 进程占用。请关闭先前拉取遗留的 Chrome 窗口/进程后再输入 run；不要删除 .factset-bot-profile（其中保存着登录态）。',
+        { cause: err },
+      );
+    }
+    throw err;
+  }
   page = ctx.pages()[0] || await ctx.newPage();
 }
 async function openAndCheck() {
