@@ -8,7 +8,7 @@ import { noteArtifact, phase, stampUTC, step } from '../lib/ledger.mjs';
 import { log } from '../lib/log.mjs';
 import { metaCharting, metaEst, metaNews, metaOptions, metaShortInt, metaTargets } from '../lib/registry.mjs';
 import { fetchCharting } from './charting.mjs';
-import { currentPeriod, fyTag, openEstimateHistory, saveEstimateXlsx, shiftLabel, switchPeriod } from './estimates.mjs';
+import { currentPeriod, estimateRowsVerdict, fyTag, openEstimateHistory, rowsWithOneRetry, saveEstimateXlsx, shiftLabel, switchPeriod } from './estimates.mjs';
 import { fetchNews } from './news.mjs';
 import { fetchOptions } from './options.mjs';
 import { scrapePrice } from './price.mjs';
@@ -54,6 +54,31 @@ export async function fetchTicker(ticker, R, adv) {
   } else {
     adv(0, `${ticker} · 打开 Estimate History…`);
     let price = NaN, tag0 = 'FY1', p0 = null, nav = null, tbl = null;
+    const captureEstimate = async (period, tag, initialTable) => {
+      let activeTable = initialTable;
+      const captured = await rowsWithOneRetry(
+        async attempt => {
+          if (attempt === 2) {
+            ({ nav, tbl: activeTable } = await openEstimateHistory(ticker));
+            const current = await currentPeriod();
+            if (period && current !== period) {
+              phase('切换 Report Type');
+              if (!(await switchPeriod(period))) throw new Error(`重拉时切回 ${period} 失败`);
+              activeTable = nav.frameLocator('iframe[src*="estimate-reports"]');
+              await page.waitForTimeout(1500);
+            }
+          }
+          phase('解析行');
+          return scrapeTable(activeTable);
+        },
+        rows => estimateRowsVerdict(tag, rows),
+        verdict => log(`  ⚠ ${ticker} ${tag} 首次数据异常: ${verdict.reason}；重新打开 FactSet 再拉一次`),
+      );
+      phase('写文件');
+      return saveEstimateXlsx(ticker, tag, captured.rows,
+        `FactSet Estimate History ${period || tag} | ${stampUTC()}`,
+        { quarantine: captured.attempts === 2 && !captured.verdict.ok });
+    };
     R.FY1 = await step(metaEst(ticker, 'FY1'), async () => {
       phase('导航'); ({ nav, tbl } = await openEstimateHistory(ticker));
       phase('解析行');
@@ -64,8 +89,7 @@ export async function fetchTicker(ticker, R, adv) {
       /* 标签空的时候上面那个 FY1 是**猜**的:FactSet 打开默认停在 FY1,绝大多数时候猜得对,
        * 但猜错就是拿 FY2 的表覆盖掉 FY1 的文件,而文件名看不出任何异常。说一声,别闷着。 */
       if (!p0) log(`  ⚠ 财年标签没读出来,这份表按 FY1 存了(默认页就是 FY1);要是 P/E 明显不对,删掉 ${ticker} FY1 Estimate History.xlsx 重拉一轮`);
-      phase('写文件');
-      const okNow = saveEstimateXlsx(ticker, tag0, await scrapeTable(tbl), `FactSet Estimate History ${p0 || tag0} | ${stampUTC()}`);
+      const okNow = await captureEstimate(p0, tag0, tbl);
       if (tag0 !== 'FY1') { R[tag0] = okNow; return okNow; }   /* 极少见:页面停在 FY2 */
       return okNow;
     });
@@ -81,8 +105,7 @@ export async function fetchTicker(ticker, R, adv) {
         phase('定位表格');
         const tblO = nav.frameLocator('iframe[src*="estimate-reports"]');
         await page.waitForTimeout(1500);
-        phase('写文件');
-        return saveEstimateXlsx(ticker, otherTag, await scrapeTable(tblO), `FactSet Estimate History ${other} | ${stampUTC()}`);
+        return captureEstimate(other, otherTag, tblO);
       });
     } else {
       /* 标签读不出来(或认不出是 FY1/FY2)就没法切财年 —— 但**必须显式记一笔失败**。

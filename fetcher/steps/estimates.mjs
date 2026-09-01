@@ -3,9 +3,10 @@
  */
 
 import * as XLSX from 'xlsx';
+import fs from 'node:fs';
 import path from 'node:path';
 import { clickTextInFrames, findTextInFrames, page } from '../lib/browser.mjs';
-import { BASE, assetPath } from '../lib/config.mjs';
+import { BASE, LOG_DIR, assetPath } from '../lib/config.mjs';
 import { log } from '../lib/log.mjs';
 
 /** 进入某 ticker 的 Estimate History 页,返回 {navFrame, tableFrame} */
@@ -57,18 +58,68 @@ export async function switchPeriod(label) {
   return false;
 }
 
-/** 表格数组 → 仪表盘可识别的 Estimate History xlsx(B2 写入数据源出处,app 解析不受影响) */
-export function saveEstimateXlsx(ticker, fyTag, rows, srcInfo) {
-  const HEAD = ['Date','Mean','Sharp Cons','Num of Est','Num Up','Num Down','Low','High','Std Dev','Chg (%)','Chg Amt','P/E (x)','PEG (x)'];
-  const data = rows.filter(r => /^\d{1,2} [A-Z][a-z]{2} '\d{2}$/.test(r[0] || ''))
+export const EST_HEAD = ['Date','Mean','Sharp Cons','Num of Est','Num Up','Num Down','Low','High','Std Dev','Chg (%)','Chg Amt','P/E (x)','PEG (x)'];
+export function estimateDataRows(rows) {
+  return rows.filter(r => /^\d{1,2} [A-Z][a-z]{2} '\d{2}$/.test(r[0] || ''))
     .map(r => r.length === 12 ? [...r.slice(0, 2), '-', ...r.slice(2)] : r);   // 无 Sharp Cons 列时补齐
-  if (!data.length) { log(`  ⚠ ${ticker} ${fyTag}: 未抓到数据行`); return false; }
-  const src = srcInfo || `FactSet Company/Security > Estimates > Estimate History (${ticker})`;
-  const ws = XLSX.utils.aoa_to_sheet([[ticker], ['Estimate History', src], HEAD, ...data]);
+}
+export function estimateRowsVerdict(fy, rows) {
+  const data = estimateDataRows(rows);
+  if (!data.length) return { ok: false, reason: '未抓到数据行', data, pe: 0 };
+  const pe = data.filter(r => isFinite(parseFloat(r[11])) && parseFloat(r[11]) > 0).length;
+  const latestMean = parseFloat(data[0][1]);
+  /* FY2 的 P/E 不能替代 FY1；这里只守 FY1。盈利为正、样本够做分位却连 12 个
+   * 正 P/E 都没有，正是 2026-08-28 NVDA/AMD/AVGO 整列变成 '-' 的故障形状。 */
+  if (fy === 'FY1' && isFinite(latestMean) && latestMean > 0 && data.length >= 12 && pe < 12) {
+    return { ok: false, reason: `FY1 P/E 只有 ${pe}/${data.length} 个有效点(至少需要 12 个)`, data, pe };
+  }
+  return { ok: true, reason: '', data, pe };
+}
+export async function rowsWithOneRetry(loadRows, validate, onRetry = () => {}) {
+  const first = await loadRows(1), v1 = validate(first);
+  if (v1.ok) return { rows: first, verdict: v1, attempts: 1 };
+  await onRetry(v1);
+  const second = await loadRows(2), v2 = validate(second);
+  return { rows: second, verdict: v2, attempts: 2 };
+}
+function writeEstimateBook(file, ticker, data, src) {
+  const ws = XLSX.utils.aoa_to_sheet([[ticker], ['Estimate History', src], EST_HEAD, ...data]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, ticker.slice(0, 31));
+  XLSX.writeFile(wb, file);
+}
+function existingEstimateIsGood(file, fy) {
+  try {
+    const wb = XLSX.read(fs.readFileSync(file), { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+    return estimateRowsVerdict(fy, rows).ok;
+  } catch { return false; }
+}
+/** 表格数组 → 仪表盘可识别的 Estimate History xlsx(B2 写入数据源出处,app 解析不受影响) */
+export function saveEstimateXlsx(ticker, fyTag, rows, srcInfo, { quarantine = false } = {}) {
+  const verdict = estimateRowsVerdict(fyTag, rows), data = verdict.data;
+  if (!verdict.ok) {
+    log(`  ⚠ ${ticker} ${fyTag}: ${verdict.reason}`);
+    if (quarantine && data.length) {
+      const dir = path.join(LOG_DIR, 'rejected-estimates');
+      fs.mkdirSync(dir, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const rejected = path.join(dir, `${stamp} ${ticker} ${fyTag} Estimate History.xlsx`);
+      writeEstimateBook(rejected, ticker, data, srcInfo || `Rejected FactSet Estimate History (${ticker})`);
+      log(`  ⚠ 第二次仍异常,已隔离 ${path.basename(rejected)}；标准文件保持不变`);
+    }
+    return false;
+  }
+  const src = srcInfo || `FactSet Company/Security > Estimates > Estimate History (${ticker})`;
   const f = assetPath(`${ticker} ${fyTag} Estimate History.xlsx`);
-  XLSX.writeFile(wb, f);
+  /* 成功文件覆盖前留一份 last-good。目录在 _logs 下，仪表盘不会误扫成第二份公司数据。 */
+  if (fs.existsSync(f) && existingEstimateIsGood(f, fyTag)) {
+    const dir = path.join(LOG_DIR, 'last-good-estimates');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(f, path.join(dir, path.basename(f)));
+  }
+  writeEstimateBook(f, ticker, data, src);
   const span = data.length > 1 ? `${data[data.length - 1][0]} ~ ${data[0][0]}` : data[0][0];
   log(`  ✔ ${path.basename(f)} (${data.length} 行, ${span})`);
   return true;

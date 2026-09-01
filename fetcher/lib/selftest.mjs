@@ -18,7 +18,7 @@ import {
   CHART_PROBES, OHLC_LABELS, OHLC_MENUS, OHLC_SERIES_MENUS, RANGE_LABELS, RANGE_MENUS, VOL_MENUS,
   spanNote, spanOK, xlsxDateSpan, xlsxHasOHLC, xlsxHasVolume,
 } from '../steps/charting.mjs';
-import { fyTag, saveEstimateXlsx, shiftLabel } from '../steps/estimates.mjs';
+import { estimateRowsVerdict, fyTag, rowsWithOneRetry, saveEstimateXlsx, shiftLabel } from '../steps/estimates.mjs';
 import { csvCell, parseNewsDate, parseNewsRows, splitCsvLine } from '../steps/news.mjs';
 import { ingestOptExports, optExportFresh, optSymOf, parseOptExpiry, parseOptNum, parseOptSheetName, parseOptionRows, parseOptionsExport } from '../steps/options.mjs';
 import { OPT_URL_FILE, expandOptUrl, expandOptUrlVariants, optionsUrlCandidates, templatizeOptUrl } from './options-url.mjs';
@@ -134,6 +134,26 @@ export async function runSelftest() {
   const fake12 = [["28 Jul '26", '12.75', '45', '35', '1', '9.65', '16.45', '1.29', '0.9', '0.11', '15.4', '0.4']];
   eq(saveEstimateXlsx('TEST-US', 'FY1', [['junk'], ...fake13]), true, 'save 13-col');
   eq(saveEstimateXlsx('TEST-US', 'FY2', [['junk'], ...fake12]), true, 'save 12-col');
+  const badPe = Array.from({ length: 24 }, (_, i) => [`${String(28 - (i % 20)).padStart(2, '0')} Jul '26`, '9.00', '-', '47', '35', '1', '8.20', '9.85', '0.32', '0.3', '0.02', '-', '-']);
+  eq(estimateRowsVerdict('FY1', badPe).ok, false, 'FY1 盈利为正但 P/E 整列为空:判异常,不准覆盖 last-good');
+  eq(estimateRowsVerdict('FY2', badPe).ok, true, 'FY2 不冒充 FY1 分位,但也不被 FY1 专用护栏误杀');
+  const lossPe = badPe.map(r => [r[0], '-0.20', ...r.slice(2)]);
+  eq(estimateRowsVerdict('FY1', lossPe).ok, true, '亏损公司没有 P/E 是合法形状,不无限重试');
+  let retryN = 0;
+  const retried = await rowsWithOneRetry(async () => (++retryN === 1 ? badPe : fake13),
+    rows => estimateRowsVerdict('FY1', rows));
+  eq(`${retryN}/${retried.attempts}/${retried.verdict.ok}`, '2/2/true', '首次 P/E 异常立即重拉一次,第二次正常才交付');
+  retryN = 0;
+  const twiceBad = await rowsWithOneRetry(async () => { retryN++; return badPe; }, rows => estimateRowsVerdict('FY1', rows));
+  eq(`${retryN}/${twiceBad.attempts}/${twiceBad.verdict.ok}`, '2/2/false', '连续两次异常后停止重拉并进入保护路径');
+  const beforeGuard = fs.readFileSync(assetPath('TEST-US FY1 Estimate History.xlsx'));
+  eq(saveEstimateXlsx('TEST-US', 'FY1', badPe, 'bad retry', { quarantine: true }), false,
+    '第二次仍异常返回失败,让台账明确标红');
+  const afterGuard = fs.readFileSync(assetPath('TEST-US FY1 Estimate History.xlsx'));
+  eq(Buffer.compare(beforeGuard, afterGuard), 0, '异常导出不覆盖标准文件');
+  const rejectedDir = path.join(LOG_DIR, 'rejected-estimates');
+  eq(fs.existsSync(rejectedDir) && fs.readdirSync(rejectedDir).some(f => /TEST-US FY1 Estimate History\.xlsx$/.test(f)), true,
+    '连续两次异常样本进入 _logs/rejected-estimates 隔离目录');
   const wbBack = XLSX.read(fs.readFileSync(assetPath('TEST-US FY2 Estimate History.xlsx')), { type: 'buffer' });
   const back = XLSX.utils.sheet_to_json(wbBack.Sheets['TEST-US'], { header: 1 });
   eq(String(back[2][2]), 'Sharp Cons', 'header col3');
