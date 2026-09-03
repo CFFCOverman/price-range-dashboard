@@ -4,8 +4,14 @@
 
 import { findTextInFrames } from '../lib/browser.mjs';
 
-export async function scrapePrice() {
-  const t = await findTextInFrames('\\$[\\d,]+\\.\\d{2}');
+export async function scrapePrice(scope = null) {
+  let t = null;
+  if (scope) {
+    try {
+      const txt = await scope.locator('body').innerText({ timeout: 12000 });
+      t = txt.match(/\$[\d,]+\.\d{2}/)?.[0] || null;
+    } catch {}
+  } else t = await findTextInFrames('\\$[\\d,]+\\.\\d{2}');
   return t ? parseFloat(t.replace(/[$,]/g, '')) : NaN;
 }
 

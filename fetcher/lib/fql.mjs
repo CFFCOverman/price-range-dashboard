@@ -166,8 +166,14 @@ export function parseFqlValues(json, expr) {
  * 两条腿哪条没取到就记成缺一次,并且**在 miss 里数出来**。
  * 两条腿都是 0 的行直接不要:它只会把 csv 撑大,仪表盘那边本来也会跳过。
  */
-export function assembleOptionRows(kept, oiMap) {
+export function assembleOptionRows(kept, oiMap, metricMaps = {}) {
   const m = oiMap instanceof Map ? oiMap : new Map(Object.entries(oiMap || {}));
+  const metric = (name, sym) => {
+    const map = metricMaps[name];
+    if (!(map instanceof Map) || !map.has(sym)) return '';
+    const v = map.get(sym);
+    return typeof v === 'number' && isFinite(v) ? v : '';
+  };
   const out = [];
   let miss = 0, legs = 0;
   for (const k of kept || []) {
@@ -178,7 +184,11 @@ export function assembleOptionRows(kept, oiMap) {
     if (p === null) miss++;
     const call_oi = Math.round(c || 0), put_oi = Math.round(p || 0);
     if (call_oi <= 0 && put_oi <= 0) continue;
-    out.push({ expiry: k.expiry, strike: k.strike, call_oi, put_oi });
+    out.push({ expiry: k.expiry, strike: k.strike, call_oi, put_oi,
+      call_volume: metric('P_OPT_VOLUME', k.call), put_volume: metric('P_OPT_VOLUME', k.put),
+      call_delta: metric('P_OPT_DELTA', k.call), put_delta: metric('P_OPT_DELTA', k.put),
+      call_bid: metric('P_OPT_BID_PRICE', k.call), call_ask: metric('P_OPT_ASK_PRICE', k.call),
+      put_bid: metric('P_OPT_BID_PRICE', k.put), put_ask: metric('P_OPT_ASK_PRICE', k.put) });
   }
   out.sort((a, b) => (a.expiry < b.expiry ? -1 : a.expiry > b.expiry ? 1 : a.strike - b.strike));
   return { rows: out, miss, legs, expiries: [...new Set(out.map(r => r.expiry))].sort() };

@@ -21,7 +21,8 @@ export async function fetchTicker(ticker, R, adv) {
   const freshCh  = isFresh(metaCharting(ticker));
   const freshTg = isFresh(metaTargets(ticker));
   const freshNw = isFresh(metaNews(ticker));
-  const freshOp = isFresh(metaOptions(ticker));
+  /* 字段升级或人工复核时可只强制重拉期权；其它数据仍按各自新鲜周期判断。 */
+  const freshOp = process.env.FS_FORCE_OPTIONS !== '1' && isFresh(metaOptions(ticker));
   const freshSi = hasShortIntToday(ticker);
   const freshPx = hasPriceToday(ticker);
   /* 跳过时也把元信息登记进台账,体检才认得出"这个产出应该存在" */
@@ -42,8 +43,8 @@ export async function fetchTicker(ticker, R, adv) {
       /* 估值周更，但现价必须日更：只打开同一页读页头报价，不重写两份 Estimate 文件。 */
       adv(0, `${ticker} · 更新现价…`);
       try {
-        await openEstimateHistory(ticker);
-        const price = await scrapePrice();
+        const { tbl } = await openEstimateHistory(ticker);
+        const price = await scrapePrice(tbl);
         if (isFinite(price)) {
           priceMap.set(ticker, [ticker, ticker, 'USD', price, today, '', '', '', '', '', ''].join(','));
           R.价格 = true;
@@ -82,7 +83,7 @@ export async function fetchTicker(ticker, R, adv) {
     R.FY1 = await step(metaEst(ticker, 'FY1'), async () => {
       phase('导航'); ({ nav, tbl } = await openEstimateHistory(ticker));
       phase('解析行');
-      price = await scrapePrice();
+      price = await scrapePrice(tbl);
       p0 = await currentPeriod();
       tag0 = (p0 ? fyTag(p0) : null) || 'FY1';
       log(`  当前财年: ${p0}(${tag0})  价格: ${price}`);

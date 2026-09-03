@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import readline from 'node:readline/promises';
 import { exec, execFile } from 'node:child_process';
 import { lastBacktestDate, runBacktest } from './backtest.mjs';
-import { APP_HTML, LOGIN_ONLY, MARKETS_FILE, TICKERS_FILE } from './config.mjs';
+import { APP_HTML, LOGIN_ONLY, MARKETS_FILE, OPTIONS_APP_HTML, TICKERS_FILE } from './config.mjs';
 import { healthReport } from './health.mjs';
 import { SOURCES_FILE, writeSources } from './ledger.mjs';
 import { MARKETS, loadMarkets, saveMarkets, setMarkets } from './markets.mjs';
@@ -57,6 +57,11 @@ export async function manageMenu() {
     if (cmd === 'dashboard') {
       const r = openDashboardAction({ platform: process.platform, appHtml: APP_HTML, exists: fs.existsSync, launch: launchSpec });
       console.log(r.why);
+      continue;
+    }
+    if (cmd === 'options-dashboard') {
+      const r = openDashboardAction({ platform: process.platform, appHtml: OPTIONS_APP_HTML, exists: fs.existsSync, launch: launchSpec });
+      console.log(r.ok ? `已打开 Options Positioning Dashboard: ${OPTIONS_APP_HTML}` : r.why);
       continue;
     }
     if (cmd === 'edit') {

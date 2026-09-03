@@ -6,7 +6,14 @@ import fs from 'node:fs';
 import { assetPath } from './config.mjs';
 
 // ================= 主流程 =================
-export const today = new Date().toISOString().slice(0, 10);
+/** FactSet 美股快照按纽约交易日归档；UTC 午夜后纽约仍是前一日，不能提前造出“明天”的 OI。 */
+export function marketDate(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  const get = k => parts.find(x => x.type === k)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+export const today = marketDate();
 export const FRESH_HOURS = 20;   /* 文件在此小时数内视为最新,跳过重复拉取 */
 export const FRESH_HOURS_BY_KIND = Object.freeze({
   price: 0, estimates: 96, targets: 144,

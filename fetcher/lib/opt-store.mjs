@@ -23,6 +23,8 @@ export const OPT_RETAIN_DAYS = 365;
 /** 单个 ticker 的行数上限。实测一轮约 37 行,天天跑一年约 9.3k 行(≈350 KB);
  *  两万行给的是两年以上的余量,真顶到了也是按"整份最老的快照"往外扔,不会剩半份。 */
 export const OPT_CSV_MAX = 20000;
+export const OPT_EXTRA_FIELDS = ['fetched_at', 'call_volume', 'put_volume', 'call_delta', 'put_delta',
+  'call_bid', 'call_ask', 'put_bid', 'put_ask', 'call_iv', 'put_iv', 'call_gamma', 'put_gamma'];
 
 const ymd = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -56,8 +58,9 @@ export function mergeOptionSnapshots(oldRows, recs, stamp, todayISO, opts = {}) 
      * 仪表盘那边也危险(ingestOptions 是按 asof 字符串比大小挑最新的)。计数报出来,不闷声删。 */
     if (!ymd.test(asof) || !ymd.test(expiry) || !strike) { dropped++; return; }
     if (isFinite(dayDiff(asof, todayISO)) && dayDiff(asof, todayISO) > retain) { agedOut++; return; }
-    seen.set(asof + '|' + expiry + '|' + strike,
-      { asof, expiry, strike, call_oi: String(r.call_oi ?? ''), put_oi: String(r.put_oi ?? '') });
+    const row = { asof, expiry, strike, call_oi: String(r.call_oi ?? ''), put_oi: String(r.put_oi ?? '') };
+    for (const f of OPT_EXTRA_FIELDS) row[f] = String(r[f] ?? '');
+    seen.set(asof + '|' + expiry + '|' + strike, row);
   };
 
   for (const r of oldRows || []) put(r);

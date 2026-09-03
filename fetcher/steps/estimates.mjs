@@ -9,13 +9,36 @@ import { clickTextInFrames, findTextInFrames, page } from '../lib/browser.mjs';
 import { BASE, LOG_DIR, assetPath } from '../lib/config.mjs';
 import { log } from '../lib/log.mjs';
 
+export function tickerIdentityMatches(text, ticker) {
+  const wanted = String(ticker || '').trim().toUpperCase();
+  if (!wanted) return false;
+  const tokens = [...new Set([wanted, wanted.split('-')[0]].filter(Boolean))];
+  return tokens.some(token => {
+    const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^A-Z0-9])${escaped}([^A-Z0-9]|$)`, 'i').test(String(text || ''));
+  });
+}
+async function estimatePageIdentity(tbl, ticker) {
+  try {
+    const txt = await tbl.locator('body').innerText({ timeout: 12000 });
+    return tickerIdentityMatches(txt, ticker);
+  } catch { return false; }
+}
 /** 进入某 ticker 的 Estimate History 页,返回 {navFrame, tableFrame} */
 export async function openEstimateHistory(ticker) {
-  await page.goto(`${BASE}/workstation/navigator/company-security/estimate-history/${ticker}`, { waitUntil: 'domcontentloaded' });
-  const nav = page.frameLocator('iframe[src*="company-security"]');
-  const tbl = nav.frameLocator('iframe[src*="estimate-reports"]');
-  await tbl.locator('tr').nth(5).waitFor({ timeout: 45000 });   // 等表格渲染
-  return { nav, tbl };
+  const url = `${BASE}/workstation/navigator/company-security/estimate-history/${ticker}`;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    const nav = page.frameLocator('iframe[src*="company-security"]');
+    const tbl = nav.frameLocator('iframe[src*="estimate-reports"]');
+    await tbl.locator('tr').nth(5).waitFor({ timeout: 45000 });   // 等表格渲染
+    if (await estimatePageIdentity(tbl, ticker)) return { nav, tbl };
+    if (attempt === 1) {
+      log(`  ⚠ 页面表格已出现,但证券身份不是 ${ticker}；重新导航一次,不读取上一家公司残留内容`);
+      await page.waitForTimeout(1200);
+    }
+  }
+  throw new Error(`页面证券身份连续两次不是 ${ticker},拒绝写入估值和现价`);
 }
 
 /** 从内层 iframe 抓表格 → 二维数组 */

@@ -16,7 +16,7 @@ import {
 import { phase } from '../lib/ledger.mjs';
 import { log } from '../lib/log.mjs';
 import { optionsUrlCandidates, saveOptUrlTemplate } from '../lib/options-url.mjs';
-import { mergeOptionSnapshots } from '../lib/opt-store.mjs';
+import { mergeOptionSnapshots, OPT_EXTRA_FIELDS } from '../lib/opt-store.mjs';
 import { csvCell, newsMonth, pad2, splitCsvLine } from './news.mjs';
 
 /* ============ 期权链未平仓量(OI)—— 压力位面板的第三轨 ============
@@ -360,23 +360,28 @@ export async function fetchOptionsViaApi(ticker) {
     kept.length = Math.floor(OPT_API_MAX_CONTRACTS / 2);
   }
 
-  phase('取未平仓量');
+  phase('取未平仓量 / 成交量 / Delta / 报价');
   const syms = [];
   for (const k of kept) syms.push(k.call, k.put);
   const oi = new Map();
+  const optionalExprs = ['P_OPT_VOLUME', 'P_OPT_DELTA', 'P_OPT_BID_PRICE', 'P_OPT_ASK_PRICE'];
+  const metricMaps = Object.fromEntries(optionalExprs.map(x => [x, new Map()]));
   const batches = chunk(syms, FQL_BATCH);
   for (let i = 0; i < batches.length; i++) {
-    const r = await apiFql(batches[i], ['P_OPT_OPEN_INTEREST']);
+    const r = await apiFql(batches[i], ['P_OPT_OPEN_INTEREST', ...optionalExprs]);
     if (r.status !== 200) throw new Error(`FQL 第 ${i + 1}/${batches.length} 批回了 HTTP ${r.status}`);
     if (!r.json) throw new Error(`FQL 第 ${i + 1}/${batches.length} 批返回的不是 JSON:${r.text}`);
     for (const [k, v] of parseFqlValues(r.json, 'P_OPT_OPEN_INTEREST')) oi.set(k, v);
+    for (const expr of optionalExprs) for (const [k, v] of parseFqlValues(r.json, expr)) metricMaps[expr].set(k, v);
   }
 
   phase('拼装');
-  const built = assembleOptionRows(kept, oi);
+  const built = assembleOptionRows(kept, oi, metricMaps);
   const bad = optApiVerdict(built);
   if (bad) throw new Error(bad);
-  return { ...built, spot, stats, batches: batches.length };
+  const coverage = Object.fromEntries(optionalExprs.map(expr => [expr,
+    built.legs ? metricMaps[expr].size / built.legs : 0]));
+  return { ...built, spot, stats, batches: batches.length, coverage };
 }
 
 /** 读回 "{ticker} Options.csv" 已有的行;文件不在或读坏了都当空表(纯读,不抛) */
@@ -384,10 +389,13 @@ export function readOptionsCsv(f) {
   const out = [];
   try {
     if (!fs.existsSync(f)) return out;
-    for (const line of fs.readFileSync(f, 'utf8').split(/\r?\n/).slice(1)) {
+    const lines = fs.readFileSync(f, 'utf8').split(/\r?\n/);
+    const header = splitCsvLine(lines.shift() || '').map(x => x.trim().toLowerCase());
+    for (const line of lines) {
       if (!line.trim()) continue;
       const c = splitCsvLine(line);
-      if (c.length >= 5 && c[1]) out.push({ asof: c[0], expiry: c[1], strike: c[2], call_oi: c[3], put_oi: c[4] });
+      const row = Object.fromEntries(header.map((h, i) => [h, c[i] ?? '']));
+      if (row.asof && row.expiry) out.push(row);
     }
   } catch {}
   return out;
@@ -398,9 +406,12 @@ export function readOptionsCsv(f) {
 export function saveOptionsCsv(ticker, recs, asof) {
   const f = assetPath(`${ticker} Options.csv`);
   const stamp = asof || today;
-  const m = mergeOptionSnapshots(readOptionsCsv(f), recs, stamp, today);
-  fs.writeFileSync(f, 'asof,expiry,strike,call_oi,put_oi\n'
-    + m.rows.map(r => [r.asof, r.expiry, r.strike, r.call_oi, r.put_oi].map(csvCell).join(',')).join('\n') + '\n');
+  const fetched_at = new Date().toISOString();
+  const enriched = (recs || []).map(r => ({ ...r, fetched_at: r.fetched_at || fetched_at }));
+  const m = mergeOptionSnapshots(readOptionsCsv(f), enriched, stamp, today);
+  const fields = ['asof', 'fetched_at', 'expiry', 'strike', 'call_oi', 'put_oi', ...OPT_EXTRA_FIELDS.filter(x => x !== 'fetched_at')];
+  fs.writeFileSync(f, fields.join(',') + '\n'
+    + m.rows.map(r => fields.map(k => csvCell(r[k] ?? '')).join(',')).join('\n') + '\n');
   return { total: m.rows.length, added: m.added, snapshots: m.snapshots, agedOut: m.agedOut + m.capped };
 }
 /** 期权链表格:先找规规矩矩的 <tr>,再退回按 bounding rect 还原(和新闻页同一套办法) */
@@ -538,6 +549,8 @@ export async function fetchOptions(ticker) {
     log(`  ✔ ${ticker} Options.csv (接口 ${api.rows.length} 个行权价 / ${api.expiries.length} 个到期日`
       + `,现价 ${api.spot},${api.legs} 条腿分 ${api.batches} 批取回,新增 ${added},累计 ${total} 行 / ${snapshots} 天)`);
     if (api.miss) log(`  · 有 ${api.miss} 条腿没给出未平仓量(占 ${(api.miss / api.legs * 100).toFixed(1)}%,在容忍范围内,按 0 计)`);
+    const cv = api.coverage || {};
+    log(`  · 附加字段覆盖率:Volume ${((cv.P_OPT_VOLUME || 0) * 100).toFixed(0)}% / Delta ${((cv.P_OPT_DELTA || 0) * 100).toFixed(0)}% / Bid ${((cv.P_OPT_BID_PRICE || 0) * 100).toFixed(0)}% / Ask ${((cv.P_OPT_ASK_PRICE || 0) * 100).toFixed(0)}%`);
     return true;
   } catch (e) {
     /* 接口这条路失败只降级、不中断:导出那条路照样能把这一轮救回来。

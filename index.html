@@ -1880,7 +1880,7 @@ function ingestNews(recs, fileName) {
   state.news.set(ticker, arr);
   return { ticker, text: t('mNewsRows')(ticker, arr.length) };
 }
-/* "{ticker} Options.csv"(fetcher 从期权链累积)—— 列 asof,expiry,strike,call_oi,put_oi
+/* "{ticker} Options.csv"(fetcher 从期权链累积)—— 前五列兼容旧文件；新文件另带 volume/delta/bid/ask 等可选事实列
  * 保留每个 asof 快照：压力位读取参照日前最新快照，行为面板用相邻快照计算 OI 变化。 */
 function ingestOptions(recs, fileName) {
   const tk = ((/^([A-Z.]{1,6}-[A-Z]{2})/.exec(fileName || '') || [])[1] || '').toUpperCase();
@@ -1894,8 +1894,13 @@ function ingestOptions(recs, fileName) {
     const callOI = parseFloat(r.call_oi), putOI = parseFloat(r.put_oi);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry) || !isFinite(strike) || strike <= 0) continue;
     if (!isFinite(callOI) && !isFinite(putOI)) continue;
-    const rec = { asof: String(r.asof || '').trim(), expiry, strike,
-      callOI: isFinite(callOI) ? callOI : 0, putOI: isFinite(putOI) ? putOI : 0 };
+    const optional = k => { const v = parseFloat(r[k]); return isFinite(v) ? v : null; };
+    const rec = { asof: String(r.asof || '').trim(), fetchedAt: String(r.fetched_at || '').trim(), expiry, strike,
+      callOI: isFinite(callOI) ? callOI : 0, putOI: isFinite(putOI) ? putOI : 0,
+      callVolume: optional('call_volume'), putVolume: optional('put_volume'),
+      callDelta: optional('call_delta'), putDelta: optional('put_delta'),
+      callBid: optional('call_bid'), callAsk: optional('call_ask'), putBid: optional('put_bid'), putAsk: optional('put_ask'),
+      callIV: optional('call_iv'), putIV: optional('put_iv'), callGamma: optional('call_gamma'), putGamma: optional('put_gamma') };
     if (!/^\d{4}-\d{2}-\d{2}$/.test(rec.asof)) continue;
     const key = rec.asof + '|' + expiry + '|' + strike;
     seen.set(key, rec); /* 同一快照同一合约的后导入修订覆盖旧值 */

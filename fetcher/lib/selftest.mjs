@@ -18,7 +18,7 @@ import {
   CHART_PROBES, OHLC_LABELS, OHLC_MENUS, OHLC_SERIES_MENUS, RANGE_LABELS, RANGE_MENUS, VOL_MENUS,
   spanNote, spanOK, xlsxDateSpan, xlsxHasOHLC, xlsxHasVolume,
 } from '../steps/charting.mjs';
-import { estimateRowsVerdict, fyTag, rowsWithOneRetry, saveEstimateXlsx, shiftLabel } from '../steps/estimates.mjs';
+import { estimateRowsVerdict, fyTag, rowsWithOneRetry, saveEstimateXlsx, shiftLabel, tickerIdentityMatches } from '../steps/estimates.mjs';
 import { csvCell, parseNewsDate, parseNewsRows, splitCsvLine } from '../steps/news.mjs';
 import { ingestOptExports, optExportFresh, optSymOf, parseOptExpiry, parseOptNum, parseOptSheetName, parseOptionRows, parseOptionsExport } from '../steps/options.mjs';
 import { OPT_URL_FILE, expandOptUrl, expandOptUrlVariants, optionsUrlCandidates, templatizeOptUrl } from './options-url.mjs';
@@ -26,7 +26,7 @@ import { assembleOptionRows, bareSym, chunk, daysBetween, ocDate, optApiVerdict,
 import { mergeOptionSnapshots } from './opt-store.mjs';
 import { BT_SCRIPT, backtestDue, btExitNote, pickLastRunDate } from './backtest.mjs';
 import { parseShortInt, shortIntDiagnosis, shortIntSanity, siBlockTooWide } from '../steps/short-interest.mjs';
-import { FRESH_HOURS, freshHoursFor, hasPriceToday, priceMap } from './companies.mjs';
+import { FRESH_HOURS, freshHoursFor, hasPriceToday, marketDate, priceMap } from './companies.mjs';
 import { metaCharting, metaCompanies, metaEst, metaNews, metaOptions, metaShortInt, metaTargets } from './registry.mjs';
 import { factsetSessionValid, headlessMode, initialHeadless, loginFallback } from './browser-policy.mjs';
 import { menuCommand, menuScreen, openDashboardAction, openPathSpec, runFetcherLoop } from './menu-actions.mjs';
@@ -94,6 +94,8 @@ export async function runSelftest() {
   eq(freshHoursFor(metaOptions('T-US')), 20, 'fresh options daily');
   eq(freshHoursFor(metaShortInt()), 20, 'fresh short daily');
   eq(freshHoursFor({ file: 'x', kind: 'targets' }, 7), 7, 'fresh explicit override wins');
+  eq(marketDate(new Date('2026-09-03T01:26:00Z')), '2026-09-02',
+    '市场日按纽约日期归档：UTC 已过午夜也不能提前生成明天的期权快照');
   const oldPriceRow = priceMap.get('FRESH-TEST');
   priceMap.set('FRESH-TEST', 'FRESH-TEST,FRESH-TEST,USD,10,2026-08-25,,,,,,');
   eq(hasPriceToday('FRESH-TEST', '2026-08-25'), true, 'price same date fresh');
@@ -130,6 +132,11 @@ export async function runSelftest() {
   eq(fyTag("Dec '27E"), 'FY2', "fyTag Dec'27E");
   eq(shiftLabel("Jan '27E", 1), "Jan '28E", 'shiftLabel +1');
   eq(shiftLabel("Dec '27E", -1), "Dec '26E", 'shiftLabel -1');
+  eq(tickerIdentityMatches('Meta Platforms  META-US  Price', 'META-US'), true, '页面身份精确命中目标 ticker');
+  eq(tickerIdentityMatches('Meta Platforms  META  Price', 'META-US'), true, 'FactSet 页面只显示裸代码时仍能确认身份');
+  eq(tickerIdentityMatches('Meta Platforms  META-USA  Price', 'META-US'), true, 'FactSet 使用 USA 后缀时仍能确认身份');
+  eq(tickerIdentityMatches('Rocket Lab  RKLB-US  Price', 'META-US'), false, '页面仍是上一家公司时拒绝串票');
+  eq(tickerIdentityMatches('XXMETA-USX', 'META-US'), false, 'ticker 必须是完整边界,不接受子串误命中');
   const fake13 = [["28 Jul '26", '9.00', '-', '47', '35', '1', '8.20', '9.85', '0.32', '0.3', '0.02', '21.9', '0.6']];
   const fake12 = [["28 Jul '26", '12.75', '45', '35', '1', '9.65', '16.45', '1.29', '0.9', '0.11', '15.4', '0.4']];
   eq(saveEstimateXlsx('TEST-US', 'FY1', [['junk'], ...fake13]), true, 'save 13-col');
@@ -631,6 +638,20 @@ export async function runSelftest() {
   eq(AS.miss, 1, '拼装 没取到 OI 的那条腿被数出来(195 的看跌),不是悄悄按 0 混过去');
   eq(AS.rows[2].put_oi, 0, '拼装 缺的那一腿按 0 计,但上面那个 miss 计数才是判断依据');
   eq(AS.expiries.join(','), '2026-08-21', '拼装 到期日一并交出');
+  const METRICS = {
+    P_OPT_VOLUME: new Map([[PK.kept[0].call, 1234], [PK.kept[0].put, 567]]),
+    P_OPT_DELTA: new Map([[PK.kept[0].call, 0.42], [PK.kept[0].put, -0.58]]),
+    P_OPT_BID_PRICE: new Map([[PK.kept[0].call, 5.1], [PK.kept[0].put, 4.8]]),
+    P_OPT_ASK_PRICE: new Map([[PK.kept[0].call, 5.3], [PK.kept[0].put, 5.0]]),
+  };
+  const ENRICHED = assembleOptionRows(PK.kept, FV, METRICS);
+  eq(`${ENRICHED.rows[0].call_volume}/${ENRICHED.rows[0].put_volume}`, '1234/567',
+    '拼装 可选成交量按 Call/Put 分腿保存');
+  eq(`${ENRICHED.rows[0].call_delta}/${ENRICHED.rows[0].put_delta}`, '0.42/-0.58',
+    '拼装 Delta 保留符号与小数，不误当 OI 四舍五入');
+  eq(`${ENRICHED.rows[0].call_bid}/${ENRICHED.rows[0].call_ask}`, '5.1/5.3',
+    '拼装 Bid/Ask 不混列');
+  eq(ENRICHED.rows[1].call_volume, '', '拼装 可选字段缺失保持空值，不伪装成 0');
   const ZERO = assembleOptionRows(PK.kept, new Map());
   eq(ZERO.rows.length, 0, '拼装 两条腿都是 0 的行不写进 csv(仪表盘本来也会跳过,留着只撑大文件)');
   eq(optApiVerdict(AS), null, '验收 缺 1/6 在容忍范围内,这一轮算数');
@@ -650,7 +671,7 @@ export async function runSelftest() {
     { asof: '2026-07-29', expiry: '2026-07-31', strike: '330', call_oi: '7832', put_oi: '1514' },
   ];
   const NEW_D2 = [
-    { expiry: '2026-07-31', strike: 325, call_oi: 2100, put_oi: 1400 },
+    { expiry: '2026-07-31', strike: 325, call_oi: 2100, put_oi: 1400, call_volume: 900, call_delta: 0.4 },
     { expiry: '2026-08-21', strike: 340, call_oi: 55, put_oi: 66 },
   ];
   const M1 = mergeOptionSnapshots(OLD_D1, NEW_D2, '2026-07-30', '2026-07-30');
@@ -661,6 +682,10 @@ export async function runSelftest() {
     '滚存 按 asof 升序:最新那层永远在文件末尾,追加出来的文件人读着也是这个顺序');
   eq(M1.rows.find(r => r.asof === '2026-07-29' && r.strike === '325').call_oi, '1804',
     '滚存 昨天那格的 OI 原样保留 —— 回测要的就是"当时看到的是多少",不是现在的值');
+  eq(M1.rows.find(r => r.asof === '2026-07-30' && r.strike === '325').call_volume, '900',
+    '滚存 新可选字段跟随每日快照保留');
+  eq(M1.rows.find(r => r.asof === '2026-07-29' && r.strike === '325').call_volume, '',
+    '滚存 老五列文件自动补空字段，不把历史缺失伪装成 0');
   const M2 = mergeOptionSnapshots(M1.rows, [
     { expiry: '2026-07-31', strike: 325, call_oi: 2222, put_oi: 1400 },
   ], '2026-07-30', '2026-07-30');

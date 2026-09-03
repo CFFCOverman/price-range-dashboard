@@ -32,6 +32,7 @@ export const MARKETS_FILE = path.join(FETCHER_DIR, 'markets.txt');   // 市场�
 export const APP_HTML = ['price-range-dashboard.html', 'index.html']
   .map(f => path.join(ROOT_DIR, f)).find(f => { try { return fs.existsSync(f); } catch { return false; } })
   || path.join(ROOT_DIR, 'price-range-dashboard.html');
+export const OPTIONS_APP_HTML = path.join(ROOT_DIR, 'options-dashboard.html');
 
 /* ---- Assets 下按数据类型分子目录 ----
  * 分目录只为"人看得清",不改变导入语义:仪表盘的文件夹扫描本来就往下钻 3 层,

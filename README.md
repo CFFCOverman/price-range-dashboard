@@ -12,6 +12,8 @@ A single-file, offline-friendly dashboard that turns FactSet exports into **impl
 - **Just want to look at the dashboard · 只想看仪表盘**: skip `setup.bat` entirely — open `price-range-dashboard.html` (or `index.html`, same file) in Chrome/Edge. No install, no server, no Node.
 - **Online**: enable GitHub Pages for this repo (Settings → Pages → Deploy from branch → `main` / root), then open `https://<your-username>.github.io/<repo-name>/`.
 - **Fetching data (Windows)**: double-click **`run-factset.bat`** at the repo root.
+- **Options interpretation**: open **`options-dashboard.html`**, or choose **`9`** in the `run-factset.bat` menu. Connect the repo's `Assets/` folder once; the browser remembers the folder and automatically scans `options/` plus `summary/` on later visits. After a new fetch, click **重新扫描 / Rescan**. The manual CSV picker remains as a fallback. The page separates OI facts from directional inference and explicitly marks unavailable Volume/Bid/Ask/IV/Greeks.
+  The built-in Chinese field guide explains OI, Volume, ΔOI, Delta, Bid–Ask and the evidence levels; table headers also carry hover explanations.
 - **Fetching data (macOS)**: double-click **`run-factset.command`** (on first use, Control-click → Open if Gatekeeper asks). It checks Node/Chrome, installs locked dependencies when needed, and uses the same local `Assets/` layout.
 
 Click **载入演示数据 / Load demo data** to explore with sample companies, or drag in your own FactSet exports.
@@ -55,7 +57,7 @@ npm run fetch          # 跑一轮 FactSet 抓取(Windows 也可直接双击根�
 | `<ticker> Targets Ratings.xlsx` (Targets & Ratings, History view) | monthly mean target price + rating distribution → auto sentiment signal |
 | `short-interest.csv` (accumulated by the fetcher) | short interest (days to cover / % of float) → auto sentiment signal |
 | `<ticker> News.csv` (StreetAccount headlines, accumulated by the fetcher; columns `date,ids,headline`) | 30-day headline keyword score → auto sentiment signal |
-| `<ticker> Options.csv` (option-chain open interest, accumulated by the fetcher; columns `asof,expiry,strike,call_oi,put_oi`) | OI walls, from the heaviest-OI expiries inside a 60-day window (weight `w = 1/(1+dte/30)`, not calendar rank) → options track of the pressure/support panel. Rows whose `asof` is later than the reference date are dropped: a snapshot taken after the date being replayed is not evidence, it is the answer sheet |
+| `<ticker> Options.csv` (option-chain snapshots, accumulated by the fetcher; core columns `asof,expiry,strike,call_oi,put_oi`, plus optional `fetched_at`, per-leg Volume, Delta and Bid/Ask) | OI walls and an activity/liquidity evidence layer. Old five-column files remain valid. Optional-field absence is stored as blank, never zero. OI remains a position stock and does not identify dealer direction. |
 
 Use **Connect folder** (Chrome/Edge) to scan a whole folder at once — files import oldest→newest so the latest data wins; the folder is remembered across sessions where browser storage is available.
 

@@ -35,6 +35,8 @@ Windows 上更省事的做法是直接双击**仓库根目录**的 `run-factset.
 macOS 可双击仓库根目录的 `run-factset.command`，首次登录可在 Terminal 运行
 `./run-factset.command --login`。启动器会检查 Node、依赖和 Google Chrome；数据仍只写入本机 `Assets/`。
 
+需要在同一天强制刷新新版期权字段时，可临时设置 `FS_FORCE_OPTIONS=1`；它只绕过期权文件的新鲜度判断，其它数据仍按原周期运行。
+
 拉取结束后默认**不自动打开仪表盘**，避免定时任务或连续补数据时不断弹窗口。确实希望完成后打开时，
 先设置环境变量 `FS_OPEN_DASHBOARD=1`；未设置、设为 `0` 或其它文字都保持关闭。
 
@@ -161,7 +163,8 @@ POST /services/Fql?app=html_reports&string_na=1      按合约代码取值
 
 第二个按合约代码取未平仓量,返回扁平 JSON,每项 `{$error,$expression,$symbol,$value:[[数]]}`。
 实测可用的标识符:`P_OPT_OPEN_INTEREST` · `P_OPT_STRIKE_PRICE` · `P_OPT_EXP_DATE` ·
-`P_OPT_VOLUME` · `P_OPT_DELTA` · `P_PRICE`。
+`P_OPT_VOLUME` · `P_OPT_DELTA` · `P_OPT_BID_PRICE` · `P_OPT_ASK_PRICE` · `P_PRICE`。
+账号或合约不给可选字段时保留为空，并在日志中报告覆盖率，不影响核心 OI 快照落盘。
 
 **吞吐实测:** NVDA 目录 1947 行,筛完 626 条腿一个请求 2.8 秒全回,零报错。
 **导出那条路"一次最多 500 个合约"的上限在这里不存在。**

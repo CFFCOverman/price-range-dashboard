@@ -11,6 +11,7 @@ export function menuCommand(raw, eof = false) {
   if (/^(6|sync|align|对齐)$/i.test(s)) return 'sync';
   if (/^(7|sources|src)$/i.test(s)) return 'sources';
   if (/^(8|bt|backtest|回测)$/i.test(s)) return 'backtest';
+  if (/^(9|options|option|opt|期权|期权仪表盘)$/i.test(s)) return 'options-dashboard';
   return 'other';
 }
 
@@ -29,7 +30,8 @@ export function menuScreen(tickers = [], markets = []) {
     '├─ 清单与工具 ─────────────────────────────────────────────',
     '│ 输入 META-US 添加；输入 -META-US 删除',
     '│ [4] 编辑公司清单  [5] 编辑市场清单    [6] 数据对齐',
-    '│ [7] 来源台账      [8] 回测            [0] 退出',
+    '│ [7] 来源台账      [8] 回测            [9] 期权仪表盘',
+    '│ [0] 退出',
     '└───────────────────────────────────────────────────────────',
   ].join('\n');
 }
