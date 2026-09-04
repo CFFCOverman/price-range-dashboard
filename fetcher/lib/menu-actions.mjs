@@ -12,6 +12,7 @@ export function menuCommand(raw, eof = false) {
   if (/^(7|sources|src)$/i.test(s)) return 'sources';
   if (/^(8|bt|backtest|回测)$/i.test(s)) return 'backtest';
   if (/^(9|options|option|opt|期权|期权仪表盘)$/i.test(s)) return 'options-dashboard';
+  if (/^(10|flow|monitor|tray|期权监测|方向监测)$/i.test(s)) return 'options-flow-tray';
   return 'other';
 }
 
@@ -31,6 +32,7 @@ export function menuScreen(tickers = [], markets = []) {
     '│ 输入 META-US 添加；输入 -META-US 删除',
     '│ [4] 编辑公司清单  [5] 编辑市场清单    [6] 数据对齐',
     '│ [7] 来源台账      [8] 回测            [9] 期权仪表盘',
+    '│ [10] 启动期权方向监测（系统托盘 · 全清单）',
     '│ [0] 退出',
     '└───────────────────────────────────────────────────────────',
   ].join('\n');

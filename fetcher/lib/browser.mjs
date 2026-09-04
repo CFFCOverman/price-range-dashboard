@@ -13,6 +13,8 @@ async function closeBrowser() {
   const old = ctx; ctx = null; page = null;
   if (old) await old.close().catch(() => {});
 }
+/** Release the persistent FactSet profile before handing monitoring to an independent process. */
+export async function releaseBrowser() { await closeBrowser(); }
 async function launchBrowser(headless) {
   try {
     ctx = await chromium.launchPersistentContext(PROFILE, {

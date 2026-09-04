@@ -187,6 +187,8 @@ export function assembleOptionRows(kept, oiMap, metricMaps = {}) {
     out.push({ expiry: k.expiry, strike: k.strike, call_oi, put_oi,
       call_volume: metric('P_OPT_VOLUME', k.call), put_volume: metric('P_OPT_VOLUME', k.put),
       call_delta: metric('P_OPT_DELTA', k.call), put_delta: metric('P_OPT_DELTA', k.put),
+      /* FactSet 对期权合约不用股票的 P_PRICE；实测 P_OPT_CLOSE_PRICE 返回当前显示的成交/收盘价。 */
+      call_last: metric('P_OPT_CLOSE_PRICE', k.call), put_last: metric('P_OPT_CLOSE_PRICE', k.put),
       call_bid: metric('P_OPT_BID_PRICE', k.call), call_ask: metric('P_OPT_ASK_PRICE', k.call),
       put_bid: metric('P_OPT_BID_PRICE', k.put), put_ask: metric('P_OPT_ASK_PRICE', k.put) });
   }

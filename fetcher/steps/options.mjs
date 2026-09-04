@@ -360,11 +360,11 @@ export async function fetchOptionsViaApi(ticker) {
     kept.length = Math.floor(OPT_API_MAX_CONTRACTS / 2);
   }
 
-  phase('取未平仓量 / 成交量 / Delta / 报价');
+  phase('取未平仓量 / 成交量 / 最新成交价 / Delta / 报价');
   const syms = [];
   for (const k of kept) syms.push(k.call, k.put);
   const oi = new Map();
-  const optionalExprs = ['P_OPT_VOLUME', 'P_OPT_DELTA', 'P_OPT_BID_PRICE', 'P_OPT_ASK_PRICE'];
+  const optionalExprs = ['P_OPT_VOLUME', 'P_OPT_CLOSE_PRICE', 'P_OPT_DELTA', 'P_OPT_BID_PRICE', 'P_OPT_ASK_PRICE'];
   const metricMaps = Object.fromEntries(optionalExprs.map(x => [x, new Map()]));
   const batches = chunk(syms, FQL_BATCH);
   for (let i = 0; i < batches.length; i++) {
@@ -550,7 +550,7 @@ export async function fetchOptions(ticker) {
       + `,现价 ${api.spot},${api.legs} 条腿分 ${api.batches} 批取回,新增 ${added},累计 ${total} 行 / ${snapshots} 天)`);
     if (api.miss) log(`  · 有 ${api.miss} 条腿没给出未平仓量(占 ${(api.miss / api.legs * 100).toFixed(1)}%,在容忍范围内,按 0 计)`);
     const cv = api.coverage || {};
-    log(`  · 附加字段覆盖率:Volume ${((cv.P_OPT_VOLUME || 0) * 100).toFixed(0)}% / Delta ${((cv.P_OPT_DELTA || 0) * 100).toFixed(0)}% / Bid ${((cv.P_OPT_BID_PRICE || 0) * 100).toFixed(0)}% / Ask ${((cv.P_OPT_ASK_PRICE || 0) * 100).toFixed(0)}%`);
+    log(`  · 附加字段覆盖率:Volume ${((cv.P_OPT_VOLUME || 0) * 100).toFixed(0)}% / Last ${((cv.P_OPT_CLOSE_PRICE || 0) * 100).toFixed(0)}% / Delta ${((cv.P_OPT_DELTA || 0) * 100).toFixed(0)}% / Bid ${((cv.P_OPT_BID_PRICE || 0) * 100).toFixed(0)}% / Ask ${((cv.P_OPT_ASK_PRICE || 0) * 100).toFixed(0)}%`);
     return true;
   } catch (e) {
     /* 接口这条路失败只降级、不中断:导出那条路照样能把这一轮救回来。

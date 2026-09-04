@@ -163,7 +163,16 @@ POST /services/Fql?app=html_reports&string_na=1      按合约代码取值
 
 第二个按合约代码取未平仓量,返回扁平 JSON,每项 `{$error,$expression,$symbol,$value:[[数]]}`。
 实测可用的标识符:`P_OPT_OPEN_INTEREST` · `P_OPT_STRIKE_PRICE` · `P_OPT_EXP_DATE` ·
-`P_OPT_VOLUME` · `P_OPT_DELTA` · `P_OPT_BID_PRICE` · `P_OPT_ASK_PRICE` · `P_PRICE`。
+`P_OPT_VOLUME` · `P_OPT_CLOSE_PRICE`（期权最新显示成交/收盘价）· `P_OPT_DELTA` · `P_OPT_BID_PRICE` · `P_OPT_ASK_PRICE` · `P_PRICE`（标的现价）。
+
+盘中“三级方向代理”使用独立快照文件，不会污染每日 OI 历史：
+
+```text
+npm run fetch:options-flow -- NVDA-US SPY-US
+npm run fetch:options-flow -- --watch --interval=300 NVDA-US SPY-US
+```
+
+第一条命令抓一份基线；第二条每 5 分钟抓一份。相邻快照的累计 Volume 差配合 Last 在 Bid–Ask 中的位置，只能推测主动买卖方向；不是交易所客户/Dealer 分类。
 账号或合约不给可选字段时保留为空，并在日志中报告覆盖率，不影响核心 OI 快照落盘。
 
 **吞吐实测:** NVDA 目录 1947 行,筛完 626 条腿一个请求 2.8 秒全回,零报错。

@@ -4,9 +4,10 @@
 
 import fs from 'node:fs';
 import readline from 'node:readline/promises';
-import { exec, execFile } from 'node:child_process';
+import { exec, execFile, spawn } from 'node:child_process';
+import { releaseBrowser } from './browser.mjs';
 import { lastBacktestDate, runBacktest } from './backtest.mjs';
-import { APP_HTML, LOGIN_ONLY, MARKETS_FILE, OPTIONS_APP_HTML, TICKERS_FILE } from './config.mjs';
+import { APP_HTML, LOGIN_ONLY, MARKETS_FILE, OPTIONS_APP_HTML, OPTIONS_FLOW_TRAY, OPTIONS_FLOW_TRAY_LAUNCHER, TICKERS_FILE } from './config.mjs';
 import { healthReport } from './health.mjs';
 import { SOURCES_FILE, writeSources } from './ledger.mjs';
 import { MARKETS, loadMarkets, saveMarkets, setMarkets } from './markets.mjs';
@@ -62,6 +63,19 @@ export async function manageMenu() {
     if (cmd === 'options-dashboard') {
       const r = openDashboardAction({ platform: process.platform, appHtml: OPTIONS_APP_HTML, exists: fs.existsSync, launch: launchSpec });
       console.log(r.ok ? `已打开 Options Positioning Dashboard: ${OPTIONS_APP_HTML}` : r.why);
+      continue;
+    }
+    if (cmd === 'options-flow-tray') {
+      if (!fs.existsSync(OPTIONS_FLOW_TRAY) || !fs.existsSync(OPTIONS_FLOW_TRAY_LAUNCHER)) console.log(`找不到托盘监测器或启动器: ${OPTIONS_FLOW_TRAY}`);
+      else {
+        /* stdio 必须是 ignore：默认 pipe 会把托盘寿命绑在主菜单进程上。
+         * 同时先释放本进程的 persistent profile，否则独立监测器拿不到 FactSet 登录态。 */
+        await releaseBrowser();
+        const child = spawn('wscript.exe', [OPTIONS_FLOW_TRAY_LAUNCHER],
+          { windowsHide: true, detached: true, stdio: 'ignore' });
+        child.unref();
+        console.log('正在独立启动期权方向监测；几秒后右下角系统托盘会出现图标。关闭本菜单不会停止。');
+      }
       continue;
     }
     if (cmd === 'edit') {

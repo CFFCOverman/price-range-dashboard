@@ -24,6 +24,9 @@ import { ingestOptExports, optExportFresh, optSymOf, parseOptExpiry, parseOptNum
 import { OPT_URL_FILE, expandOptUrl, expandOptUrlVariants, optionsUrlCandidates, templatizeOptUrl } from './options-url.mjs';
 import { assembleOptionRows, bareSym, chunk, daysBetween, ocDate, optApiVerdict, parseFqlValues, parseOptionChainTable, pickChainContracts } from './fql.mjs';
 import { mergeOptionSnapshots } from './opt-store.mjs';
+import { flowRows, retainFlowRows } from './option-flow-store.mjs';
+import { buildOptionSignal, resolveOneHourReturns } from './option-flow-signal.mjs';
+import { optionHolidays, optionPollPlan, optionSession } from './options-market-clock.mjs';
 import { BT_SCRIPT, backtestDue, btExitNote, pickLastRunDate } from './backtest.mjs';
 import { parseShortInt, shortIntDiagnosis, shortIntSanity, siBlockTooWide } from '../steps/short-interest.mjs';
 import { FRESH_HOURS, freshHoursFor, hasPriceToday, marketDate, priceMap } from './companies.mjs';
@@ -56,9 +59,12 @@ export async function runSelftest() {
   eq(menuCommand('6'), 'sync', '菜单数字 6 = 数据对齐');
   eq(menuCommand('7'), 'sources', '菜单数字 7 = 来源台账');
   eq(menuCommand('8'), 'backtest', '菜单数字 8 = 回测');
+  eq(menuCommand('10'), 'options-flow-tray', '菜单数字 10 = 期权方向托盘监测');
+  eq(menuCommand('tray'), 'options-flow-tray', '菜单 tray 别名 = 期权方向托盘监测');
   eq(menuCommand('0'), 'exit', '菜单数字 0 = 退出');
   eq(menuCommand('NVDA-US'), 'other', '代码仍交给清单增删逻辑');
   const ms = menuScreen(['META-US', 'NVDA-US'], [['SPY-US', 'BENCH']]);
+  eq(ms.includes('[10] 启动期权方向监测'), true, '菜单首页显示托盘监测入口');
   eq(ms.includes('公司  2 家') && ms.includes('META-US') && ms.includes('[1] 开始拉取'), true,
     '菜单首页同时显示清单摘要和编号操作,不用记命令');
   const opened = [];
@@ -641,6 +647,7 @@ export async function runSelftest() {
   const METRICS = {
     P_OPT_VOLUME: new Map([[PK.kept[0].call, 1234], [PK.kept[0].put, 567]]),
     P_OPT_DELTA: new Map([[PK.kept[0].call, 0.42], [PK.kept[0].put, -0.58]]),
+    P_OPT_CLOSE_PRICE: new Map([[PK.kept[0].call, 5.2], [PK.kept[0].put, 4.9]]),
     P_OPT_BID_PRICE: new Map([[PK.kept[0].call, 5.1], [PK.kept[0].put, 4.8]]),
     P_OPT_ASK_PRICE: new Map([[PK.kept[0].call, 5.3], [PK.kept[0].put, 5.0]]),
   };
@@ -651,6 +658,8 @@ export async function runSelftest() {
     '拼装 Delta 保留符号与小数，不误当 OI 四舍五入');
   eq(`${ENRICHED.rows[0].call_bid}/${ENRICHED.rows[0].call_ask}`, '5.1/5.3',
     '拼装 Bid/Ask 不混列');
+  eq(`${ENRICHED.rows[0].call_last}/${ENRICHED.rows[0].put_last}`, '5.2/4.9',
+    '拼装 期权 Last 按 Call/Put 分腿保存');
   eq(ENRICHED.rows[1].call_volume, '', '拼装 可选字段缺失保持空值，不伪装成 0');
   const ZERO = assembleOptionRows(PK.kept, new Map());
   eq(ZERO.rows.length, 0, '拼装 两条腿都是 0 的行不写进 csv(仪表盘本来也会跳过,留着只撑大文件)');
@@ -715,6 +724,32 @@ export async function runSelftest() {
   eq(M5.dropped, 3, '滚存 扔掉的残行也要计数');
   eq(mergeOptionSnapshots(null, null, '2026-07-30', '2026-07-30').rows.length, 0,
     '滚存 空文件 / 没抓到任何行都不炸(第一次跑就是这个情形)');
+  const FLOW = flowRows('NVDA-US', { spot: 190, rows: [NEW_D2[0]] }, '2026-07-30T15:31:00.000Z');
+  eq(FLOW[0].ticker + '/' + FLOW[0].timestamp + '/' + FLOW[0].call_volume,
+    'NVDA-US/2026-07-30T15:31:00.000Z/900', '盘中快照 保留时间、标的与累计成交量');
+  eq(retainFlowRows([{ timestamp: '2026-07-19T00:00:00Z' }, { timestamp: '2026-07-30T00:00:00Z' }],
+    new Date('2026-07-30T01:00:00Z'), 10).length, 1, '盘中快照 超过保留期的行滚掉');
+  eq(optionSession(new Date('2026-09-03T12:00:00-04:00')).open, true,
+    '期权时钟 美东工作日中午是正常交易时段');
+  eq(optionSession(new Date('2026-09-05T12:00:00-04:00')).open, false,
+    '期权时钟 周末休市');
+  eq(optionHolidays(2026).has('2026-12-25'), true, '期权时钟 美股圣诞节休市');
+  eq(optionSession(new Date('2026-11-27T13:30:00-05:00')).open, false,
+    '期权时钟 感恩节次日按 13:00 ET 提前收市');
+  eq(optionPollPlan(new Date('2026-09-03T12:00:00-04:00'), 0).delayMs/60000, 15,
+    '期权时钟 正常交易时段每 15 分钟检查');
+  eq(optionPollPlan(new Date('2026-09-03T12:00:00-04:00'), 3).delayMs/60000, 60,
+    '期权时钟 连续无新增成交自动退避到 60 分钟');
+  const SIG_PREV=[{timestamp:'2026-09-03T14:00:00Z',asof:'2026-09-03',spot:'100',expiry:'2026-09-04',strike:'100',
+    call_volume:'100',put_volume:'50',call_last:'1.1',call_bid:'1',call_ask:'1.2',call_delta:'.5'}];
+  const SIG_CUR=[{...SIG_PREV[0],timestamp:'2026-09-03T14:15:00Z',call_volume:'110',call_last:'1.2'}];
+  const SIG=buildOptionSignal('TEST-US',SIG_PREV,SIG_CUR);
+  eq(SIG.net_delta_shares,500,'Delta Flow Ask-side 买 Call：10 张 × 100 × 0.5 = +500 股');
+  eq(SIG.delta_imbalance,1,'Delta Flow 全部同向时标准化 imbalance = +1');
+  eq(SIG.core_net_delta_shares,500,'Delta Flow 0–7 DTE 且现价 ±2% 进入核心信号');
+  eq(SIG.direction,'bullish','Delta Flow 可用且显著为正 → bullish');
+  const LABELED=resolveOneHourReturns([SIG,{...SIG,timestamp:'2026-09-03T15:15:00Z',spot:'101'}]);
+  eq((+LABELED[0].future_1h_return).toFixed(2),'0.01','信号成熟后用约一小时后的标的价格补 future_1h_return');
   /* 上限:顶到了按"整份最老的快照"往外扔,不从尾巴切一刀 —— 半份链算出来的 max pain 是错的 */
   const many = [];
   for (const d of ['2026-07-28', '2026-07-29', '2026-07-30'])

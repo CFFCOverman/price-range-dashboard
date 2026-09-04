@@ -22,6 +22,8 @@
     "ledger:param": "node tools/ledger.mjs --param",
     "ledger:resolve": "node tools/ledger.mjs --resolve",
     "fetch": "node fetcher/factset-fetch.mjs",
+    "fetch:options-flow": "node fetcher/options-flow.mjs",
+    "backfill:options-signals": "node fetcher/options-signals-backfill.mjs",
     "fetch:login": "node fetcher/factset-fetch.mjs --login"
   },
   "devDependencies": {

@@ -24,7 +24,8 @@ export const OPT_RETAIN_DAYS = 365;
  *  两万行给的是两年以上的余量,真顶到了也是按"整份最老的快照"往外扔,不会剩半份。 */
 export const OPT_CSV_MAX = 20000;
 export const OPT_EXTRA_FIELDS = ['fetched_at', 'call_volume', 'put_volume', 'call_delta', 'put_delta',
-  'call_bid', 'call_ask', 'put_bid', 'put_ask', 'call_iv', 'put_iv', 'call_gamma', 'put_gamma'];
+  'call_last', 'put_last', 'call_bid', 'call_ask', 'put_bid', 'put_ask',
+  'call_iv', 'put_iv', 'call_gamma', 'put_gamma'];
 
 const ymd = /^\d{4}-\d{2}-\d{2}$/;
 

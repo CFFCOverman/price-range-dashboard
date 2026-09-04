@@ -33,6 +33,8 @@ export const APP_HTML = ['price-range-dashboard.html', 'index.html']
   .map(f => path.join(ROOT_DIR, f)).find(f => { try { return fs.existsSync(f); } catch { return false; } })
   || path.join(ROOT_DIR, 'price-range-dashboard.html');
 export const OPTIONS_APP_HTML = path.join(ROOT_DIR, 'options-dashboard.html');
+export const OPTIONS_FLOW_TRAY = path.join(FETCHER_DIR, 'options-flow-tray.ps1');
+export const OPTIONS_FLOW_TRAY_LAUNCHER = path.join(FETCHER_DIR, 'options-flow-tray-launch.vbs');
 
 /* ---- Assets 下按数据类型分子目录 ----
  * 分目录只为"人看得清",不改变导入语义:仪表盘的文件夹扫描本来就往下钻 3 层,
@@ -43,7 +45,8 @@ export const ASSET_RULES = [
   ['charting', /Charting\.xlsx$/i],                    // <代码> Daily Charting.xlsx / _MARKET-* 同款
   ['targets', /Targets Ratings\.xlsx$/i],              // <代码> Targets Ratings.xlsx
   ['news', /News\.csv$/i],                             // <代码> News.csv
-  ['options', /Options\.csv$/i],                       // <代码> Options.csv
+  ['options-signals', /Options Signals\.csv$/i],       // 15-minute aggregated option-flow signals
+  ['options', /Options(?: Flow)?\.csv$/i],             // <代码> Options.csv / Options Flow.csv
   ['summary', /^(companies|short-interest|roster)\.csv$/i],   // 汇总与逐轮累积(roster = 给仪表盘看的拉取清单)
 ];
 export const ASSET_DIRS = [...ASSET_RULES.map(r => r[0]), 'misc'];
