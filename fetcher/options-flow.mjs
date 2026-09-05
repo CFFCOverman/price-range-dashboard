@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import { ensureAssetDirs, assetPath } from './lib/config.mjs';
 import * as browser from './lib/browser.mjs';
 import { csvCell, splitCsvLine } from './steps/news.mjs';
-import { fetchOptionsViaApi } from './steps/options.mjs';
+import { fetchOptionsViaMontage } from './steps/options-live.mjs';
 import { FLOW_FIELDS, flowRows, retainFlowRows } from './lib/option-flow-store.mjs';
 import { SIGNAL_FIELDS, buildOptionSignal, resolveOneHourReturns } from './lib/option-flow-signal.mjs';
 import { loadTickers } from './lib/tickers.mjs';
@@ -33,7 +33,9 @@ function save(ticker, snapshot) {
   const file = assetPath(`${ticker} Options Flow.csv`);
   const old = retainFlowRows(readCsv(file));
   const fresh = flowRows(ticker, snapshot);
-  const priorTime = [...new Set(old.filter(r=>r.asof===fresh[0]?.asof).map(r=>r.timestamp))].sort().at(-1);
+  // Never calculate a flow across a data-source migration.  Old FQL snapshots
+  // are daily values; Montage snapshots are live and have a different baseline.
+  const priorTime = [...new Set(old.filter(r=>r.asof===fresh[0]?.asof && r.source===fresh[0]?.source).map(r=>r.timestamp))].sort().at(-1);
   const prior = priorTime ? old.filter(r=>r.timestamp===priorTime) : [];
   const signal = buildOptionSignal(ticker, prior, fresh);
   const rows = [...old, ...fresh];
@@ -51,7 +53,7 @@ async function round() {
   let totalVolume = 0, succeeded = 0;
   for (const ticker of tickers) {
     try {
-      const snap = await fetchOptionsViaApi(ticker);
+      const snap = await fetchOptionsViaMontage(ticker);
       const s = save(ticker, snap);
       totalVolume += snap.rows.reduce((n, r) => n + (+r.call_volume || 0) + (+r.put_volume || 0), 0);
       succeeded++;

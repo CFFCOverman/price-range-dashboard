@@ -67,7 +67,8 @@ function calcRange(co, hz) {
     extLow: pePos(pe, 'p10') ? eps.low * pe.p10 : NaN,
     extHigh: pePos(pe, 'p90') ? eps.high * pe.p90 : NaN,
   };
-  r.baseGap = baseGap(co.price, pe, eps);
+  // The historical series is FY1-based even when displaying a FY2 scenario.
+  r.baseGap = baseGap(co.price, pe, epsFor(co.ticker, 'fy1'));
   r.midPct = (r.mid / co.price - 1) * 100;
   r.downPct = (r.coreLow / co.price - 1) * 100;
   r.upPct = (r.coreHigh / co.price - 1) * 100;

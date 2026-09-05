@@ -28,6 +28,7 @@ function leg(prev, cur, kind) {
 
 export function buildOptionSignal(ticker, previousRows, currentRows) {
   if(!previousRows?.length||!currentRows?.length)return null;
+  if(previousRows[0].asof!==currentRows[0].asof || (previousRows[0].source||'')!==(currentRows[0].source||''))return null;
   const timestamp=currentRows[0].timestamp,priorTimestamp=previousRows[0].timestamp;
   const seconds=Math.round((Date.parse(timestamp)-Date.parse(priorTimestamp))/1000);
   if(!Number.isFinite(seconds)||seconds<30||seconds>7200)return null;
@@ -41,7 +42,7 @@ export function buildOptionSignal(ticker, previousRows, currentRows) {
   const core=usable.filter(x=>dte(asof,x.cur.expiry)>=0&&dte(asof,x.cur.expiry)<=7&&spot>0&&Math.abs(+x.cur.strike/spot-1)<=.02);
   const coreNet=core.reduce((s,x)=>s+x.flow,0),coreGross=core.reduce((s,x)=>s+Math.abs(x.flow),0);
   const coverage=total?classified/total:0,imbalance=gross?net/gross:0,coreImbalance=coreGross?coreNet/coreGross:0;
-  const quality=total===0?'no-new-volume':coverage<.35?'low-coverage':spread/classified>.5?'spread-heavy':'usable';
+  const quality=total===0?'no-new-volume':coverage<.35?'low-coverage':spread/classified>.5?'spread-heavy':gross===0?'missing-delta':'usable';
   const direction=quality!=='usable'||gross===0?'unavailable':imbalance>=.2?'bullish':imbalance<=-.2?'bearish':'mixed';
   const row={timestamp,asof,ticker,spot:spot??'',interval_seconds:seconds,total_new_contracts:total,
     classified_contracts:classified,classification_coverage:coverage,spread_suspect_contracts:spread,

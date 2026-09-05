@@ -1355,7 +1355,8 @@ function calcRange(co, hz) {
     extLow: pePos(pe, 'p10') ? eps.low * pe.p10 : NaN,
     extHigh: pePos(pe, 'p90') ? eps.high * pe.p90 : NaN,
   };
-  r.baseGap = baseGap(co.price, pe, eps);
+  // The historical series is FY1-based even when displaying a FY2 scenario.
+  r.baseGap = baseGap(co.price, pe, epsFor(co.ticker, 'fy1'));
   r.midPct = (r.mid / co.price - 1) * 100;
   r.downPct = (r.coreLow / co.price - 1) * 100;
   r.upPct = (r.coreHigh / co.price - 1) * 100;
@@ -1610,7 +1611,7 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
   let peNote = '';
   if (fy !== 1) {
     peNote = isFar ? t('estFarSkip')(fy) : '';   /* 非第一财年:PE 分位一律不收,口径以 FY1/NTM 为准 */
-  } else if (peSeries.length > existing.length) {
+  } else if (peSeries.length > existing.length || (peSeries.length === existing.length && peSeries.length && peSeries.at(-1).date >= existing.at(-1).date)) {
     state.history.set(ticker, peSeries);
     peNote = t('peSeries')(peSeries.length, peSeries[0].date.slice(0, 7), peSeries[peSeries.length - 1].date.slice(0, 7)) + truncNote
       + (peSeries.length < 36 ? t('shortWin') : '');
@@ -1883,6 +1884,9 @@ function ingestNews(recs, fileName) {
 /* "{ticker} Options.csv"(fetcher 从期权链累积)—— 前五列兼容旧文件；新文件另带 volume/delta/bid/ask 等可选事实列
  * 保留每个 asof 快照：压力位读取参照日前最新快照，行为面板用相邻快照计算 OI 变化。 */
 function ingestOptions(recs, fileName) {
+  // Intraday Flow shares OI columns but is not a daily chain. Mixing the two
+  // makes daily walls and delta-OI depend on folder import order.
+  if (/ Options Flow\.csv$/i.test(fileName || '')) return { ticker:null, text:'盘中方向快照请在 Options 页面查看；每日 OI 不混入盘中数据。' };
   const tk = ((/^([A-Z.]{1,6}-[A-Z]{2})/.exec(fileName || '') || [])[1] || '').toUpperCase();
   const ticker = tk && state.companies.has(tk) ? tk : (tk ? resolveTicker(fileName, tk, NaN) : null);
   if (!ticker || !state.companies.has(ticker)) return { ticker: null, text: t('mOptNoTicker') };

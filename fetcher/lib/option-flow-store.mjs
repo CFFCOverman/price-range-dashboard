@@ -1,5 +1,5 @@
 /* 盘中期权快照单独滚存。Volume 是当日累计值，相邻快照之差才是区间成交量。 */
-export const FLOW_FIELDS = ['timestamp', 'asof', 'ticker', 'spot', 'expiry', 'strike',
+export const FLOW_FIELDS = ['timestamp', 'asof', 'ticker', 'spot', 'source', 'source_time', 'expiry', 'strike',
   'call_oi', 'put_oi', 'call_volume', 'put_volume', 'call_last', 'put_last',
   'call_bid', 'call_ask', 'put_bid', 'put_ask', 'call_delta', 'put_delta'];
 export const FLOW_RETAIN_DAYS = 10;
@@ -14,7 +14,7 @@ function nyDate(timestamp) {
 export function flowRows(ticker, snapshot, timestamp = new Date().toISOString()) {
   const asof = nyDate(timestamp);
   return (snapshot?.rows || []).map(r => {
-    const out = { timestamp, asof, ticker, spot: snapshot.spot, ...r };
+    const out = { timestamp, asof, ticker, spot: snapshot.spot, source:snapshot.source || '', source_time:snapshot.sourceTime || '', ...r };
     return Object.fromEntries(FLOW_FIELDS.map(k => [k, out[k] ?? '']));
   });
 }

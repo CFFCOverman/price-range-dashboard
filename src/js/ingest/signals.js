@@ -33,6 +33,9 @@ function ingestNews(recs, fileName) {
 /* "{ticker} Options.csv"(fetcher 从期权链累积)—— 前五列兼容旧文件；新文件另带 volume/delta/bid/ask 等可选事实列
  * 保留每个 asof 快照：压力位读取参照日前最新快照，行为面板用相邻快照计算 OI 变化。 */
 function ingestOptions(recs, fileName) {
+  // Intraday Flow shares OI columns but is not a daily chain. Mixing the two
+  // makes daily walls and delta-OI depend on folder import order.
+  if (/ Options Flow\.csv$/i.test(fileName || '')) return { ticker:null, text:'盘中方向快照请在 Options 页面查看；每日 OI 不混入盘中数据。' };
   const tk = ((/^([A-Z.]{1,6}-[A-Z]{2})/.exec(fileName || '') || [])[1] || '').toUpperCase();
   const ticker = tk && state.companies.has(tk) ? tk : (tk ? resolveTicker(fileName, tk, NaN) : null);
   if (!ticker || !state.companies.has(ticker)) return { ticker: null, text: t('mOptNoTicker') };

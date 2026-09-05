@@ -115,7 +115,7 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
   let peNote = '';
   if (fy !== 1) {
     peNote = isFar ? t('estFarSkip')(fy) : '';   /* 非第一财年:PE 分位一律不收,口径以 FY1/NTM 为准 */
-  } else if (peSeries.length > existing.length) {
+  } else if (peSeries.length > existing.length || (peSeries.length === existing.length && peSeries.length && peSeries.at(-1).date >= existing.at(-1).date)) {
     state.history.set(ticker, peSeries);
     peNote = t('peSeries')(peSeries.length, peSeries[0].date.slice(0, 7), peSeries[peSeries.length - 1].date.slice(0, 7)) + truncNote
       + (peSeries.length < 36 ? t('shortWin') : '');

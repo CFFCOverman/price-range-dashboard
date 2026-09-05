@@ -24,7 +24,9 @@ $existing = Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction
 if ($existing) {
   $proc = Get-Process -Id $existing.ProcessId -ErrorAction SilentlyContinue
 } else {
-  $env:FS_HEADLESS = '1'
+  # Auto stays in the background while the saved FactSet session is valid, but opens a visible
+  # login window when the session expires. Headless=1 used to make the worker exit at the open.
+  $env:FS_HEADLESS = 'auto'
   $errFile = Join-Path $logDir 'options-flow-monitor-error.log'
   $proc = Start-Process -FilePath 'node.exe' `
     -ArgumentList @("`"$nodeScript`"", '--watch', '--all') `

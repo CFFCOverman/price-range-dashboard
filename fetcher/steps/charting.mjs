@@ -11,6 +11,15 @@ import { BASE, WANT_5Y, WANT_OHLC, WANT_VOLUME, WANT_YEARS, assetPath, volState 
 import { phase } from '../lib/ledger.mjs';
 import { log } from '../lib/log.mjs';
 
+export function chartHasPrices(file) {
+  const wb=XLSX.read(fs.readFileSync(file),{type:'buffer'});
+  return wb.SheetNames.some(sn=>{
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1});
+    const col=(rows[0]||[]).findIndex(h=>/(^| - )Close$/i.test(String(h)));
+    return col>=0 && rows.slice(1).filter(r=>Number.isFinite(+r[col]) && +r[col]>0).length>=13;
+  });
+}
+
 export function xlsxHasVolume(file) {
   try {
     const wb = XLSX.read(fs.readFileSync(file), { type: 'buffer' });
@@ -363,7 +372,11 @@ export async function fetchCharting(ticker, outName) {
     clickTextInFrames('Download data to Excel', false),
   ]);
   const f = assetPath(outName || `${ticker} Daily Charting.xlsx`);
-  await download.saveAs(f);
+  // Validate the downloaded candidate before replacing a last-good history.
+  const candidate=f+'.pending.xlsx';
+  await download.saveAs(candidate);
+  if(!chartHasPrices(candidate))throw new Error(`走势图导出缺少至少 13 个有效收盘价，未覆盖原文件；待查文件：${candidate}`);
+  fs.renameSync(candidate,f);
   /* 三项一律以文件内容为准,不以"点击是否成功"为准 —— 上面那三个 try* 只会说自己点着了什么。 */
   const vol = xlsxHasVolume(f);
   const span = xlsxDateSpan(f);
