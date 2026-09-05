@@ -227,6 +227,10 @@ table.mx td.core { outline: 2px dashed var(--series-2); outline-offset: -2px; bo
 table.mx td.picked { box-shadow:inset 0 0 0 2px var(--series-1); background:var(--wash-strong); font-weight:700; }
 .hint.warn { color: var(--delta-down); margin: 6px 0 0; }
 /* ---- options behavior timeline ---- */
+#decisionContext { margin:16px 0; padding:16px; border:1px solid var(--border); border-left:3px solid var(--series-1); border-radius:10px; background:var(--surface-1); }
+#decisionContext h3 { margin:0 0 12px; font-size:15px; }
+#decisionContext h3:not(:first-child) { margin-top:20px; padding-top:16px; border-top:1px solid var(--border); }
+#decisionContext p { color:var(--text-secondary); font-size:13px; line-height:1.7; margin:8px 0; }
 .optMeta { color:var(--text-secondary); font-size:12px; margin:7px 0 9px; }
 .optTimeline { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
 .optHorizon { border:1px solid var(--border); border-radius:10px; padding:12px; min-width:0; background:var(--surface-1); }
@@ -715,6 +719,7 @@ const state = {
   shortInt: new Map(),    // ticker -> [{date,days,pct}] 空头持仓(fetcher 逐日累积)
   news: new Map(),        // ticker -> [{date,headline}] StreetAccount 新闻标题(fetcher 累积去重)
   options: new Map(),     // ticker -> [{asof,expiry,strike,callOI,putOI}] 期权链未平仓量(按到期日+行权价取最新 asof)
+  optionSignals: new Map(), // ticker -> interval observations; separate from daily OI
   roster: null,           // Set(ticker) 拉取清单(Assets/summary/roster.csv);null = 没有清单文件,不过滤
   showOffRoster: false,   // 表格下方那个开关:临时把不在清单里的也画出来
   selected: null,
@@ -1222,6 +1227,7 @@ function ingestCompanies(recs) {
       priceSrc: userPx ? 'user' : 'file',
       priceDate: userPx ? prev.priceDate : (r.price_date || ''),
       extra: prev ? prev.extra : undefined,
+      estimateMeta: prev ? prev.estimateMeta : undefined,
       eps: (() => {   /* 合并语义:CSV 里留空的 EPS 不覆盖已有值 */
         const keep = (k, pv) => { const v = num(k); return isFinite(v) ? v : (prev ? pv : NaN); };
         const pe1 = prev ? prev.eps.fy1 : {}, pe2 = prev ? prev.eps.fy2 : {};
@@ -1330,6 +1336,17 @@ function epsScen(eps) {
 }
 /* 估值分位必须为正:历史里有亏损年份时 P/E 会是负数,乘出来的"价格"没有意义 */
 const pePos = (pe, k) => isFinite(pe[k]) && pe[k] > 0;
+function impliedExpectations(co) {
+  const pe=peStats(co.ticker),e1=epsFor(co.ticker,'fy1'),e2=epsFor(co.ticker,'fy2');
+  const positive=x=>typeof x==='number'&&isFinite(x)&&x>0;
+  if(!positive(co.price))return null;
+  const required=pe&&positive(pe.p50)?co.price/pe.p50:null;
+  return {fy1:positive(e1?.mean)?co.price/e1.mean:null,fy2:positive(e2?.mean)?co.price/e2.mean:null,
+    required,gap:required&&positive(e1?.mean)?required/e1.mean-1:null,
+    growth:positive(e1?.mean)&&positive(e2?.mean)?e2.mean/e1.mean-1:null,
+    revision:state.overrides.has(co.ticker+'|fy1')?null:co.estimateMeta?.fy1?.revision??null,
+    epsDate:co.estimateMeta?.fy1?.date||'',peDate:pe?.series?.at(-1)?.date||'',manual:pe?.src==='manual'};
+}
 /* 口径自查:分位库最新一点 × 基准 EPS ≈ 现价。
  * 这两个数本该出自同一份 Estimate History 的同一行(P/E 和 Mean 并排摆着),
  * 乘回去就是那一行当天的股价。和现价差得离谱,说明分位库和 EPS 压根不是同一个口径。
@@ -1587,7 +1604,13 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
     ticker, name: ticker, currency: '', price: NaN, priceDate: '',
     eps: { fy1: { low: NaN, mean: NaN, high: NaN }, fy2: { low: NaN, mean: NaN, high: NaN } },
   };
-  if (!isFar) co.eps[isFY2 ? 'fy2' : 'fy1'] = { low: latest.low, mean: latest.mean, high: latest.high };
+  if (!isFar) {
+    const hz=isFY2 ? 'fy2' : 'fy1';
+    co.eps[hz] = { low: latest.low, mean: latest.mean, high: latest.high };
+    co.estimateMeta ||= {};
+    const prior=recs.filter(r=>r.date<=new Date(Date.parse(latest.date+'T00:00:00Z')-30*86400000).toISOString().slice(0,10)).at(-1);
+    co.estimateMeta[hz]={date:latest.date,label:String((aoa[sec]||[])[1]||''),priorDate:prior?.date||'',revision:prior&&prior.mean>0?latest.mean/prior.mean-1:null};
+  }
   if (fy === 1) {   /* 修正动量:最新一期上调/下调家数(方向信号) */
     co.rev = {
       n: latest.n,
@@ -2055,6 +2078,11 @@ async function handleFiles(files) {
             msgs.push(f.name + t('mSiRows')(ingestShortInt(recs)));
           } else if (h.includes('headline')) {
             msgs.push(f.name + ingestNews(recs, f.name).text);
+          } else if (h.includes('net_delta_shares') && h.includes('timestamp')) {
+            const grouped = new Map();
+            for (const r of recs) { if (!r.ticker || !r.timestamp) continue; if (!grouped.has(r.ticker)) grouped.set(r.ticker, new Map()); grouped.get(r.ticker).set(r.timestamp, r); }
+            for (const [tk, rs] of grouped) state.optionSignals.set(tk, [...rs.values()].sort((a,b)=>a.timestamp.localeCompare(b.timestamp)));
+            msgs.push(f.name + ': ' + recs.length + ' observations');
           } else if (h.includes('strike') && (h.includes('call_oi') || h.includes('put_oi'))) {
             msgs.push(f.name + ingestOptions(recs, f.name).text);
           } else if (h.includes('pe_ntm') || (h.includes('eps_ntm') && h.includes('date'))) {
@@ -2073,7 +2101,6 @@ async function handleFiles(files) {
   if (vis.length && (!state.selected || !vis.some(c => c.ticker === state.selected))) state.selected = vis[0].ticker;
   renderAll(msgs.join(' · '));
 }
-
 /* ================= 文件夹连接(File System Access API;记忆通过 IndexedDB,不可用时静默降级) ================= */
 let dirHandle = null;
 function idbOpen() {
@@ -2319,6 +2346,7 @@ function renderHead(co) {
   head.appendChild(el('span', 'cur', (co.currency || '—') + (pd ? ' · ' + pd : '') + ' · ' + co.name + ' ' + co.ticker));
 }
 function renderKpis(co, r) {
+  renderDecisionContext(co);
   const pe = peStats(co.ticker);
   const kp = $('detKpis'); kp.replaceChildren();
   const tile = (lb, vl, dt, cls) => {
@@ -2340,6 +2368,56 @@ function renderKpis(co, r) {
     const manual = !state.history.has(co.ticker) || (state.history.get(co.ticker) || []).length < 12;
     kp.appendChild(el('div', 'empty', manual && !peStats(co.ticker) ? t('needPct') : t('needEps')));
   }
+}
+function signalOutcomeSummary(rows, field) {
+  // Non-overlapping observations per horizon; selection never uses outcomes.
+  const gap=field==='future_1h_return'?90*60000:2*86400000;
+  let last=-Infinity;const chosen=[];
+  for(const r of rows){const stamp=Date.parse(r.timestamp);
+    if(r.signal_version!=='2'||r.quality!=='usable'||!['bullish','bearish'].includes(r.direction)||stamp-last<gap)continue;
+    last=stamp;chosen.push(r);
+  }
+  const matured=chosen.filter(r=>r[field]!==''&&r[field]!=null&&isFinite(+r[field]));
+  const n=matured.length;
+  return {n,pending:chosen.length-n,hit:n?matured.filter(r=>(r.direction==='bullish'?1:-1)*+r[field]>0).length/n:null,
+    longHit:n?matured.filter(r=>+r[field]>0).length/n:null,
+    momentumN:matured.filter(r=>r.interval_price_return!==''&&r.interval_price_return!=null&&+r.interval_price_return!==0).length,
+    momentumHit:(()=>{const a=matured.filter(r=>r.interval_price_return!==''&&r.interval_price_return!=null&&+r.interval_price_return!==0);return a.length?a.filter(r=>Math.sign(+r.interval_price_return)*+r[field]>0).length/a.length:null})(),
+    mean:n?matured.reduce((s,r)=>s+(r.direction==='bullish'?1:-1)*+r[field],0)/n:null};
+}
+function renderDecisionContext(co) {
+  let panel=$('decisionContext');
+  if(!panel){panel=el('section','');panel.id='decisionContext';$('detKpis').insertAdjacentElement('afterend',panel);}
+  panel.replaceChildren();
+  const en=LANG==='en',say=(cn,eng)=>en?eng:cn;
+  const add=(label,value)=>panel.appendChild(el('p','hint',label+' '+value));
+  panel.appendChild(el('h3','',say('现价隐含预期与观察条件','Implied expectations and observation conditions')));
+  const x=impliedExpectations(co),pct=x=>x===null?'—':fmtPct(x*100);
+  if(x){
+    add(say('现价对应 PE：','Current-price PE:'),`FY1 ${x.fy1===null?'—':fmtX(x.fy1)} · FY2 ${x.fy2===null?'—':fmtX(x.fy2)}`);
+    add(say('历史中位估值下所需 EPS：','EPS required at median valuation:'),`${x.required===null?'—':fmtN(x.required)} · ${say('相对 FY1 共识','vs FY1 consensus')} ${pct(x.gap)}`);
+    add(say('盈利增长与修订：','Earnings growth and revisions:'),`FY2/FY1 ${pct(x.growth)} · ${say('FY1 约30日前至最新修订','FY1 revision from ~30d prior')} ${pct(x.revision)}`);
+    add(say('估值观察：','Valuation observation:'),x.gap===null?say('盈利或估值不足，暂不判断。','Insufficient earnings or valuation data.'):
+      x.gap>0?say('现价需要高于 FY1 共识的盈利，或高于历史中位数的估值支撑。','Price requires earnings above FY1 consensus or a multiple above the historical median.'):
+      say('FY1 共识在中位估值下可覆盖现价；仍需观察盈利是否下修。','FY1 consensus supports price at the median multiple; monitor downward revisions.'));
+    add(say('时点与口径：','Dates and basis:'),`${say('价格','Price')} ${co.priceDate||'—'} · EPS ${x.epsDate||'—'} · PE ${x.peDate||'—'} · ${say('固定财年/所导入历史，非严格滚动 NTM；手工覆盖改变假设。','Fixed fiscal year / imported history, not necessarily rolling NTM; overrides change assumptions.')}`);
+  }
+  const rows=state.optionSignals.get(co.ticker)||[],latest=rows.at(-1);
+  panel.appendChild(el('h3','',say('期权方向 × 价格响应','Options direction × price response')));
+  if(!latest){add('',say('尚无信号文件：连接 Assets 文件夹并重新扫描，读入 Options Signals.csv。','No signals: rescan Assets to import Options Signals.csv.'));return;}
+  const stale=Date.now()-Date.parse(latest.timestamp)>2*3600000;
+  const status=stale||latest.signal_version!=='2'?'watch':latest.condition_state||'watch';
+  add(say('状态：','State:'),({watch:say('观察','Watch'),confirmed:say('条件成立：同向响应','Condition met: aligned response'),invalidated:say('判断失效：价格反向','Invalidated: opposing price')})[status]);
+  add(say('数据时点：','Observation:'),`${latest.timestamp} · ${stale?say('历史记录，不能作当前触发','Historical observation, not a current trigger'):say('最近快照','Latest snapshot')}`);
+  add('Net Delta Flow',`${latest.net_delta_shares} ${say('股','shares')} · ${latest.direction} · ${latest.quality}`);
+  add(say('区间价格变化：','Interval price return:'),latest.interval_price_return===''||latest.interval_price_return==null?'—':pct(+latest.interval_price_return));
+  add(say('预设条件：','Rule:'),say('可用方向代理且价格同向变化至少 0.10% → 条件成立；反向至少 0.10% → 判断失效；其余观察。阈值为待验证规则，不是买卖指令。','Usable directional proxy and aligned price move ≥0.10%: condition met; opposing move ≥0.10%: invalidated; otherwise watch. Experimental rule, not an order.'));
+  for(const [field,label] of [['future_1h_return','1h'],['future_1d_return','1d']]){
+    const s=signalOutcomeSummary(rows,field);
+    add(label+say(' 后续验证：',' forward validation:'),`${s.n} ${say('成熟样本','mature samples')} / ${s.pending} ${say('待观察','pending')} · ${say('方向命中','direction hit')} ${pct(s.hit)} · ${say('同期只看上涨基线','always-up baseline')} ${pct(s.longHit)} · ${say('有符号平均收益','signed mean return')} ${pct(s.mean)}`);
+    add('',`${say('只看本区间价格方向的基线','Price-direction-only baseline')}: ${pct(s.momentumHit)} (${s.momentumN})`);
+  }
+  add('',say('同一时段价格响应不是预测结果。1h 为至少60分钟后的首个可用点（最多90分钟）；1d 为下一交易日相近时刻。样本隔离仍不等于统计有效，未计交易成本。','Contemporaneous response is not prediction. 1h uses the first point 60–90 minutes later; 1d uses a similar time next session. Spacing observations does not establish significance; costs excluded.'));
 }
 function partialRefresh() {
   const rows = overviewRows(); renderOvTable(rows); renderOvChart(rows);

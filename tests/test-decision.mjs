@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {buildOptionSignal,resolveOneHourReturns} from '../fetcher/lib/option-flow-signal.mjs';
+const a={ticker:'TEST',source:'live',asof:'2026-09-04',timestamp:'2026-09-04T14:00:00Z',spot:100,expiry:'2026-09-18',strike:100,call_volume:100,put_volume:0,call_delta:.5,call_last:1.1,call_bid:1,call_ask:1.1};
+const b={...a,timestamp:'2026-09-04T14:05:00Z',spot:101,call_volume:200};
+assert.equal(buildOptionSignal('TEST',[a],[b]).condition_state,'confirmed');
+assert.equal(buildOptionSignal('TEST',[a],[{...b,spot:99}]).condition_state,'invalidated');
+assert.equal(buildOptionSignal('TEST',[a],[{...b,spot:100}]).condition_state,'watch');
+assert.equal(buildOptionSignal('TEST',[a],[{...b,call_delta:''}]).condition_state,'watch');
+const observation=(timestamp,spot,ticker='TEST')=>({ticker,source:'live',timestamp,asof:timestamp.slice(0,10),spot,future_1h_return:'',future_1d_return:''});
+const rows=resolveOneHourReturns([observation('2026-09-04T14:00:00Z',100),observation('2026-09-04T14:59:00Z',150),observation('2026-09-04T15:00:00Z',102,'OTHER'),observation('2026-09-04T15:05:00Z',101),observation('2026-09-08T14:05:00Z',103)]);
+assert.ok(Math.abs(rows[0].future_1h_return-.01)<1e-10);
+assert.ok(Math.abs(rows[0].future_1d_return-.03)<1e-10);
+console.log('PASS decision states, missing delta, 1h no early label, cross-ticker isolation, next-session holiday label');

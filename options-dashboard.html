@@ -26,6 +26,7 @@
 <div class="fact warn"><b>证据等级</b><br>一级·OI＝仓位集中；二级·活动＝Volume/ΔOI；三级·方向代理＝相邻盘中快照的新增 Volume，配合 Last 在 Bid–Ask 中的位置。三级仍是推测，不是交易所客户/Dealer 分类。</div>
 </div></div></details>
 <section id="out" hidden>
+<section class="card"><h2>估值预期与方向验证</h2><p class="note">主仪表盘已新增“现价隐含预期与观察条件”：将 PE、盈利修订与 Options Signals.csv 一起导入，可查看方向是否得到价格响应，以及未来 1h／1d 的成熟样本。</p><a href="price-range-dashboard.html" style="color:var(--accent)">打开 PE＋期权条件判断面板 →</a></section>
 <div class="card kpis" id="kpis"></div>
 <div class="grid"><section class="card"><h2>行权价结构 · Call / Put OI</h2><div class="bars" id="bars"></div></section><section class="card"><h2>10 秒解读</h2><div class="facts" id="facts"></div></section></div>
 <section class="card"><h2>重点合约（按近现价仓位与成交活跃度排序）</h2><div style="overflow:auto"><table><thead><tr><th>Strike</th><th>距现价</th><th>Call OI / Vol</th><th>Put OI / Vol</th><th>Vol/OI</th><th>Call Last / Bid–Ask</th><th>Put Last / Bid–Ask</th><th>区间新增量 C / P</th><th>ΔOI C / P</th><th title="三级是基于盘中快照的成交方向代理；Dealer 结论以其作为客户对手方为前提">方向证据</th></tr></thead><tbody id="rows"></tbody></table></div></section>

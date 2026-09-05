@@ -1,9 +1,11 @@
 /* Pure option-flow signal construction. No filesystem and no network. */
+import { optionSession } from './options-market-clock.mjs';
 export const SIGNAL_FIELDS = [
   'timestamp','asof','ticker','spot','interval_seconds','total_new_contracts','classified_contracts',
   'classification_coverage','spread_suspect_contracts','net_delta_shares','gross_delta_shares',
   'delta_imbalance','delta_notional','core_net_delta_shares','core_gross_delta_shares','core_imbalance',
   'quality','direction','future_1h_return','future_1d_return',
+  'signal_version','interval_price_return','price_response','condition_state','source',
 ];
 
 const n = x => x === '' || x == null ? null : Number.isFinite(+x) ? +x : null;
@@ -44,12 +46,17 @@ export function buildOptionSignal(ticker, previousRows, currentRows) {
   const coverage=total?classified/total:0,imbalance=gross?net/gross:0,coreImbalance=coreGross?coreNet/coreGross:0;
   const quality=total===0?'no-new-volume':coverage<.35?'low-coverage':spread/classified>.5?'spread-heavy':gross===0?'missing-delta':'usable';
   const direction=quality!=='usable'||gross===0?'unavailable':imbalance>=.2?'bullish':imbalance<=-.2?'bearish':'mixed';
+  const priorSpot=n(previousRows[0].spot),priceReturn=spot>0&&priorSpot>0?spot/priorSpot-1:null;
+  // This is contemporaneous agreement, NOT a forward prediction result.
+  const sign=direction==='bullish'?1:direction==='bearish'?-1:0;
+  const response=!sign||priceReturn===null?'unavailable':Math.abs(priceReturn)<.001?'flat':sign*priceReturn>0?'aligned':'opposed';
+  const condition=response==='aligned'?'confirmed':response==='opposed'?'invalidated':'watch';
   const row={timestamp,asof,ticker,spot:spot??'',interval_seconds:seconds,total_new_contracts:total,
     classified_contracts:classified,classification_coverage:coverage,spread_suspect_contracts:spread,
     net_delta_shares:Math.round(net),gross_delta_shares:Math.round(gross),delta_imbalance:imbalance,
     delta_notional:spot===null?'':Math.round(net*spot),core_net_delta_shares:Math.round(coreNet),
     core_gross_delta_shares:Math.round(coreGross),core_imbalance:coreImbalance,quality,direction,
-    future_1h_return:'',future_1d_return:''};
+    future_1h_return:'',future_1d_return:'',signal_version:'2',interval_price_return:priceReturn??'',price_response:response,condition_state:condition,source:currentRows[0].source||''};
   return Object.fromEntries(SIGNAL_FIELDS.map(f=>[f,row[f]??'']));
 }
 
@@ -59,8 +66,19 @@ export function resolveOneHourReturns(rows) {
   for(let i=0;i<ordered.length;i++){
     if(ordered[i].future_1h_return!==''&&ordered[i].future_1h_return!=null)continue;
     const start=Date.parse(ordered[i].timestamp),spot=n(ordered[i].spot);if(!Number.isFinite(start)||!spot)continue;
-    const later=ordered.slice(i+1).find(r=>Date.parse(r.timestamp)-start>=55*60000&&Date.parse(r.timestamp)-start<=90*60000&&n(r.spot));
+    const later=ordered.slice(i+1).find(r=>r.ticker===ordered[i].ticker&&r.asof===ordered[i].asof&&(r.source||'')===(ordered[i].source||'')&&Date.parse(r.timestamp)-start>=60*60000&&Date.parse(r.timestamp)-start<=90*60000&&n(r.spot));
     if(later)ordered[i].future_1h_return=n(later.spot)/spot-1;
+  }
+  for(const row of ordered){
+    if(row.future_1d_return!==''&&row.future_1d_return!=null)continue;
+    const start=Date.parse(row.timestamp),spot=n(row.spot);if(!Number.isFinite(start)||!spot)continue;
+    // Next regular trading session, same New York minute, with a 30m tolerance.
+    const s=optionSession(new Date(start));if(!s.open)continue;
+    let next=null;
+    for(let d=1;d<=7;d++){const probe=new Date(start+d*86400000),p=optionSession(probe);if(p.open){next=p.ymd;break;}}
+    if(!next)continue;
+    const later=ordered.find(r=>r.ticker===row.ticker&&(r.source||'')===(row.source||'')&&r.asof===next&&n(r.spot)&&(()=>{const p=optionSession(new Date(r.timestamp));return p.minute>=s.minute&&p.minute<=s.minute+30})());
+    if(later)row.future_1d_return=n(later.spot)/spot-1;
   }
   return ordered;
 }

@@ -42,6 +42,17 @@ function epsScen(eps) {
 }
 /* 估值分位必须为正:历史里有亏损年份时 P/E 会是负数,乘出来的"价格"没有意义 */
 const pePos = (pe, k) => isFinite(pe[k]) && pe[k] > 0;
+function impliedExpectations(co) {
+  const pe=peStats(co.ticker),e1=epsFor(co.ticker,'fy1'),e2=epsFor(co.ticker,'fy2');
+  const positive=x=>typeof x==='number'&&isFinite(x)&&x>0;
+  if(!positive(co.price))return null;
+  const required=pe&&positive(pe.p50)?co.price/pe.p50:null;
+  return {fy1:positive(e1?.mean)?co.price/e1.mean:null,fy2:positive(e2?.mean)?co.price/e2.mean:null,
+    required,gap:required&&positive(e1?.mean)?required/e1.mean-1:null,
+    growth:positive(e1?.mean)&&positive(e2?.mean)?e2.mean/e1.mean-1:null,
+    revision:state.overrides.has(co.ticker+'|fy1')?null:co.estimateMeta?.fy1?.revision??null,
+    epsDate:co.estimateMeta?.fy1?.date||'',peDate:pe?.series?.at(-1)?.date||'',manual:pe?.src==='manual'};
+}
 /* 口径自查:分位库最新一点 × 基准 EPS ≈ 现价。
  * 这两个数本该出自同一份 Estimate History 的同一行(P/E 和 Mean 并排摆着),
  * 乘回去就是那一行当天的股价。和现价差得离谱,说明分位库和 EPS 压根不是同一个口径。

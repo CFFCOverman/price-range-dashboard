@@ -91,7 +91,13 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
     ticker, name: ticker, currency: '', price: NaN, priceDate: '',
     eps: { fy1: { low: NaN, mean: NaN, high: NaN }, fy2: { low: NaN, mean: NaN, high: NaN } },
   };
-  if (!isFar) co.eps[isFY2 ? 'fy2' : 'fy1'] = { low: latest.low, mean: latest.mean, high: latest.high };
+  if (!isFar) {
+    const hz=isFY2 ? 'fy2' : 'fy1';
+    co.eps[hz] = { low: latest.low, mean: latest.mean, high: latest.high };
+    co.estimateMeta ||= {};
+    const prior=recs.filter(r=>r.date<=new Date(Date.parse(latest.date+'T00:00:00Z')-30*86400000).toISOString().slice(0,10)).at(-1);
+    co.estimateMeta[hz]={date:latest.date,label:String((aoa[sec]||[])[1]||''),priorDate:prior?.date||'',revision:prior&&prior.mean>0?latest.mean/prior.mean-1:null};
+  }
   if (fy === 1) {   /* 修正动量:最新一期上调/下调家数(方向信号) */
     co.rev = {
       n: latest.n,

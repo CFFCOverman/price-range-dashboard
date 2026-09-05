@@ -29,6 +29,16 @@ Click **载入演示数据 / Load demo data** to explore with sample companies, 
 
 ## Working on the code · 改代码
 
+### 现价隐含预期与观察条件
+
+主仪表盘公司详情新增：现价对应 FY1/FY2 PE、中位估值下所需 EPS、相对 FY1 盈利缺口、FY2/FY1 增长及约 30 日盈利修订。历史库维持原始导入口径，不冒充滚动 NTM。
+
+连接 Assets 并重新扫描可读入 `options-signals/* Options Signals.csv`。方向代理可用且同区间价格同向变化至少 0.10% 时显示条件成立；反向至少 0.10% 为判断失效，其余观察。超过两小时或旧版本记录不作为当前触发。该规则是待验证观察条件，不是买卖指令。
+
+版本 2 信号保存区间价格响应，并跟踪未来 1h（60–90 分钟首个可用点）和 1d（下一交易日相近时刻）。面板间隔选样，显示成熟/待观察数、命中率、有符号收益、始终看涨与仅按价格方向的基线；不把同区间响应算成预测成功。未计成本，未证明预测能力。`node fetcher/options-signals-backfill.mjs` 可重建保留期内的历史快照。
+
+新增验证：`node tests/test-decision.mjs`、`node tests/test-decision-ui.mjs`。
+
 The two HTML files at the repo root are **build artifacts — don't edit them**. The source lives in `src/`, split by feature area (valuation range / pressure tracks / direction probability / data ingest / rendering / i18n), and `tools/build.mjs` concatenates it back into the zero-dependency single file that makes "double-click to open" and GitHub Pages work. The build does no bundling or transpiling, so the artifact is byte-for-byte what the modules say it is.
 
 ```

@@ -15,6 +15,7 @@ function ingestCompanies(recs) {
       priceSrc: userPx ? 'user' : 'file',
       priceDate: userPx ? prev.priceDate : (r.price_date || ''),
       extra: prev ? prev.extra : undefined,
+      estimateMeta: prev ? prev.estimateMeta : undefined,
       eps: (() => {   /* 合并语义:CSV 里留空的 EPS 不覆盖已有值 */
         const keep = (k, pv) => { const v = num(k); return isFinite(v) ? v : (prev ? pv : NaN); };
         const pe1 = prev ? prev.eps.fy1 : {}, pe2 = prev ? prev.eps.fy2 : {};

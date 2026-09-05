@@ -12,6 +12,7 @@ const state = {
   shortInt: new Map(),    // ticker -> [{date,days,pct}] 空头持仓(fetcher 逐日累积)
   news: new Map(),        // ticker -> [{date,headline}] StreetAccount 新闻标题(fetcher 累积去重)
   options: new Map(),     // ticker -> [{asof,expiry,strike,callOI,putOI}] 期权链未平仓量(按到期日+行权价取最新 asof)
+  optionSignals: new Map(), // ticker -> interval observations; separate from daily OI
   roster: null,           // Set(ticker) 拉取清单(Assets/summary/roster.csv);null = 没有清单文件,不过滤
   showOffRoster: false,   // 表格下方那个开关:临时把不在清单里的也画出来
   selected: null,

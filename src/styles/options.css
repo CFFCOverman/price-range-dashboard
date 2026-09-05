@@ -1,4 +1,8 @@
 /* ---- options behavior timeline ---- */
+#decisionContext { margin:16px 0; padding:16px; border:1px solid var(--border); border-left:3px solid var(--series-1); border-radius:10px; background:var(--surface-1); }
+#decisionContext h3 { margin:0 0 12px; font-size:15px; }
+#decisionContext h3:not(:first-child) { margin-top:20px; padding-top:16px; border-top:1px solid var(--border); }
+#decisionContext p { color:var(--text-secondary); font-size:13px; line-height:1.7; margin:8px 0; }
 .optMeta { color:var(--text-secondary); font-size:12px; margin:7px 0 9px; }
 .optTimeline { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
 .optHorizon { border:1px solid var(--border); border-radius:10px; padding:12px; min-width:0; background:var(--surface-1); }

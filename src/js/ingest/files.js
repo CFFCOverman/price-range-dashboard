@@ -31,6 +31,11 @@ async function handleFiles(files) {
             msgs.push(f.name + t('mSiRows')(ingestShortInt(recs)));
           } else if (h.includes('headline')) {
             msgs.push(f.name + ingestNews(recs, f.name).text);
+          } else if (h.includes('net_delta_shares') && h.includes('timestamp')) {
+            const grouped = new Map();
+            for (const r of recs) { if (!r.ticker || !r.timestamp) continue; if (!grouped.has(r.ticker)) grouped.set(r.ticker, new Map()); grouped.get(r.ticker).set(r.timestamp, r); }
+            for (const [tk, rs] of grouped) state.optionSignals.set(tk, [...rs.values()].sort((a,b)=>a.timestamp.localeCompare(b.timestamp)));
+            msgs.push(f.name + ': ' + recs.length + ' observations');
           } else if (h.includes('strike') && (h.includes('call_oi') || h.includes('put_oi'))) {
             msgs.push(f.name + ingestOptions(recs, f.name).text);
           } else if (h.includes('pe_ntm') || (h.includes('eps_ntm') && h.includes('date'))) {
@@ -49,4 +54,3 @@ async function handleFiles(files) {
   if (vis.length && (!state.selected || !vis.some(c => c.ticker === state.selected))) state.selected = vis[0].ticker;
   renderAll(msgs.join(' · '));
 }
-
