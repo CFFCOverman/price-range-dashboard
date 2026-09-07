@@ -162,7 +162,7 @@ function main() {
   console.log('  \x1b[90m嵌套的理由:reachProb 运行期零拟合参数,一旦拿折结果挑 c,c 就成了拟合参数 ——\x1b[0m');
   console.log('  \x1b[90m在同一批折上挑、又在同一批折上报分,是样本内。所以配置只在训练折里挑,留出票不参与挑选。\x1b[0m');
 
-  const { cos } = loadDaily();
+  const { cos } = loadDaily(undefined, { requireDaily: true });
   if (!cos.size) { console.log('\n  Assets/charting 里没有日线,搜索无从谈起。'); process.exit(1); }
   console.log(`\n  盘上 ${cos.size} 只标的 —— 外层折数就是它,一只票一折。`);
 

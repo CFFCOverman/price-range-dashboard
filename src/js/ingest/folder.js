@@ -32,6 +32,7 @@ async function idbGet(k) {
 }
 async function collectDirFiles(handle, depth, out) {
   for await (const entry of handle.values()) {
+    if (!isImportArtifact(entry.name)) continue;
     if (entry.kind === 'file' && /\.(csv|xlsx|xls)$/i.test(entry.name)) out.push(await entry.getFile());
     else if (entry.kind === 'directory' && depth < 3) await collectDirFiles(entry, depth + 1, out);
   }

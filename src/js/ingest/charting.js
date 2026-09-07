@@ -22,7 +22,7 @@ const INGEST_MIN_BARS = 13;
 function ingestChartingSheet(sheetName, aoa, fileName) {
   const hdr = (aoa[0] || []).map(c => String(c || '').trim());
   const di = hdr.findIndex(h => /^date$/i.test(h));
-  const ci = hdr.findIndex(h => / - Close$/i.test(h));
+  const ci = hdr.findIndex(h => /(^| - )Close$/i.test(h));
   if (di < 0 || ci < 0) return null;
   const pi = hdr.findIndex(h => /P\/E/i.test(h));
   /* 成交量列(FactSet 导出为 "NVDA-US - Volume";也兼容裸 "Volume")→ 真实筹码分布;缺列时压力位退回停留时间口径 */
@@ -39,7 +39,7 @@ function ingestChartingSheet(sheetName, aoa, fileName) {
   let px = []; let lastPE = NaN;
   for (let i = 1; i < aoa.length; i++) {
     const r = aoa[i] || [];
-    const d = toISODate(r[di]); const p = parseFloat(r[ci]);
+    const d = toISODate(r[di]); const p = parseFloat(String(r[ci] ?? '').replace(/,/g, ''));
     if (!d || !isFinite(p) || p <= 0) continue;
     const rec = { date: d, price: p };
     if (vi >= 0) { const v = parseFloat(String(r[vi]).replace(/,/g, '')); if (isFinite(v) && v > 0) rec.vol = v; }

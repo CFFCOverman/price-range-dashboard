@@ -201,16 +201,16 @@ const BACKTEST_MIN_BARS = 40;
  *
  *  `dirArg`(可选,只给 `--selftest` 用)= 换一个目录读。缺省仍然是 `Assets/charting`,
  *  main() 和 tools/paramsearch.mjs 都不传 —— 默认路径这条线的行为与加这个参数之前逐字节相同。 */
-function loadDaily(dirArg) {
+function loadDaily(dirArg, { requireDaily = false } = {}) {
   const dir = dirArg || path.join(ASSETS, 'charting');
   const cos = new Map(), mkt = new Map();
   let ohlcFiles = 0;
   if (!fs.existsSync(dir)) return { cos, mkt, ohlcFiles };
-  for (const fn of fs.readdirSync(dir).filter(f => /\.xlsx?$/i.test(f))) {
+  for (const fn of fs.readdirSync(dir).filter(f => /\.xlsx?$/i.test(f) && !/\.pending\.|\.bak(?:\.|$)/i.test(f))) {
     const a = aoa(path.join(dir, fn));
     const hdr = (a[0] || []).map(c => String(c || '').trim());
     const di = hdr.findIndex(h => /^date$/i.test(h));
-    const ci = hdr.findIndex(h => / - Close$/i.test(h));
+    const ci = hdr.findIndex(h => /(^| - )Close$/i.test(h));
     const vi = hdr.findIndex(h => / - Volume$/i.test(h) || /^volume$/i.test(h));
     if (di < 0 || ci < 0) continue;
     /* 与 src/js/ingest/charting.js 和 fetcher/steps/charting.mjs 同一条列名正则:
@@ -218,7 +218,7 @@ function loadDaily(dirArg) {
     const oIdx = w => hdr.findIndex(h => new RegExp('(^| - )' + w + '$', 'i').test(h));
     const oi = oIdx('Open'), hi = oIdx('High'), li = oIdx('Low');
     const hasOHLCCols = oi >= 0 && hi >= 0 && li >= 0;
-    const px = [];
+    let px = [];
     for (let i = 1; i < a.length; i++) {
       const r = a[i] || [], d = serialISO(r[di]), p = num(r[ci]);
       if (!d || !(p > 0)) continue;
@@ -233,12 +233,30 @@ function loadDaily(dirArg) {
       }
       px.push(rec);
     }
+    px = [...new Map(px.map(r => [r.date, r])).values()];
     if (px.length < BACKTEST_MIN_BARS) continue;
     px.sort((x, y) => x.date < y.date ? -1 : 1);
+    if (requireDaily) {
+      const gaps = px.slice(1).map((r, i) => (Date.parse(r.date) - Date.parse(px[i].date)) / 86400000).sort((a,b)=>a-b);
+      if (!(gaps[Math.floor(gaps.length / 2)] <= 3)) {
+        console.warn(`跳过非日频序列：${fn}`);
+        continue;
+      }
+    }
     if (px.some(r => r.o > 0)) ohlcFiles++;
     const mm = /_MARKET-(BENCH|SECTOR|CREDIT|RATES)\s+([A-Z.]{1,6}-[A-Z]{2})/i.exec(fn);
     if (mm) mkt.set(mm[1].toUpperCase(), { sym: mm[2].toUpperCase(), px });
     else cos.set(fn.replace(/\s+Daily Charting\.xlsx?$/i, '').toUpperCase(), px);
+  }
+  // 正式研究与仪表盘使用同一份活跃清单，避免旧 ETF 文件冒充当前公司样本。
+  const rosterFile = path.join(dir, '..', 'summary', 'roster.csv');
+  if (requireDaily && fs.existsSync(rosterFile)) {
+    const active = new Set(fs.readFileSync(rosterFile, 'utf8').split(/\r?\n/).slice(1)
+      .map(line => line.split(',').map(x => x.trim())).filter(r => r[2] === '1')
+      .map(r => `${r[0].toUpperCase()}|${r[1].toLowerCase()}`));
+    for (const tk of cos.keys()) if (!active.has(`${tk}|company`)) cos.delete(tk);
+    for (const [role, value] of mkt) if (!active.has(`${value.sym}|${role.toLowerCase()}`)) mkt.delete(role);
+    ohlcFiles = [...cos.values(), ...[...mkt.values()].map(v => v.px)].filter(px => px.some(r => r.o > 0)).length;
   }
   return { cos, mkt, ohlcFiles };
 }
@@ -1863,7 +1881,7 @@ function main() {
   const runDate = new Date().toISOString().slice(0, 10);
 
   const ctx = loadDashboard();
-  const { cos, mkt, ohlcFiles } = loadDaily();
+  const { cos, mkt, ohlcFiles } = loadDaily(undefined, { requireDaily: true });
   const est = loadEstimates();
   const tgt = loadTargets();
   const news = loadNews();

@@ -21,3 +21,12 @@ export function factsetSessionValid(url) {
     return u.hostname === 'my.apps.factset.com' && !/login|auth|signin/i.test(u.href);
   } catch { return false; }
 }
+
+/** A closed transport cannot be repaired by continuing with the same Page. */
+export function browserClosedError(error) {
+  return /Target (?:page, context or browser|closed)|browser (?:has been )?(?:closed|disconnected)|page (?:has been )?closed|Session closed/i.test(String(error?.message || error || ''));
+}
+export function browserUsable(context, activePage) {
+  try { return !!context && !!activePage && !activePage.isClosed() && (context.browser()?.isConnected() ?? true); }
+  catch { return false; }
+}

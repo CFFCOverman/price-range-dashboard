@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { LOG_DIR } from './config.mjs';
+import { browserClosedError } from './browser-policy.mjs';
 import { log } from './log.mjs';
 
 /* ============ 源出台账 v2:Assets/_logs/sources.txt —— 不只是"从哪来",更是"哪一环断了" ============
@@ -14,6 +15,11 @@ import { log } from './log.mjs';
  * 于是 FactSet 改版时,看一眼台账就知道是"页面没打开"还是"表格选择器失效"。 */
 export const SOURCES_FILE = path.join(LOG_DIR, 'sources.txt');
 export const LED_COLS = 9;
+export const roundAttempts = new Set();
+export function beginRound() { roundAttempts.clear(); }
+export function roundFailures() {
+  return [...roundAttempts].map(file => ledger.get(file)).filter(r => r?.status === 'FAIL');
+}
 export const ledger = new Map();          // file -> {status, step, file, tab, desc, okAt, failAt, failPhase, url}
 export const clean = s => String(s ?? '').replace(/[|\r\n]+/g, ' / ').replace(/\s+/g, ' ').trim() || '-';
 export const stampUTC = () => new Date().toISOString().slice(0, 16).replace('T', ' ') + 'Z';
@@ -41,6 +47,7 @@ export const phase = p => { curPhase = p; };
 /** 包住一次抓取:成功/失败都写台账,失败落在哪个子阶段一目了然 */
 export async function step(meta, fn) {
   noteArtifact(meta);
+  roundAttempts.add(meta.file);
   phase('导航');
   let ok = false, err = null;
   try { ok = await fn(); } catch (e) { err = e; }
@@ -52,6 +59,7 @@ export async function step(meta, fn) {
     log(`  ⚠ ${meta.step} 失败 —— 断在【${rec.failPhase}】(详见 sources.txt,菜单输 chk 看体检)`);
   }
   ledger.set(meta.file, rec);
+  if (browserClosedError(err)) throw err;
   return ok;
 }
 export function writeSources() {

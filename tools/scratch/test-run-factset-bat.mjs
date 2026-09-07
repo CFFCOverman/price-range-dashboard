@@ -50,7 +50,7 @@ try {
         Path: `${bin};${system32};${process.env.Path || ''}`, PATH: `${bin};${system32};${process.env.Path || ''}` },
     });
     const out = (r.stdout || '') + (r.stderr || '');
-    ok(`${name}: exit ${code}`, r.status === code, `got ${r.status}\n${out}`);
+    ok(`${name}: exit ${code}`, r.status === code, `got ${r.status}; ${r.error?.message || ''}\n${out}`);
     ok(`${name}: success banner ${successBanner ? 'shown' : 'hidden'}`,
       out.includes('Next   -> open index.html') === successBanner, out);
   }

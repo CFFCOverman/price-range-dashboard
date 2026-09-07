@@ -3,6 +3,7 @@
  */
 
 import fs from 'node:fs';
+import { ledger } from './ledger.mjs';
 import { assetPath } from './config.mjs';
 
 // ================= 主流程 =================
@@ -31,7 +32,7 @@ export function freshHoursFor(fileOrMeta, override) {
 export function isFresh(fileOrMeta, override) {
   const file = typeof fileOrMeta === 'string' ? fileOrMeta : fileOrMeta && fileOrMeta.file;
   const hours = freshHoursFor(fileOrMeta, override);
-  if (!file || hours <= 0) return false;
+  if (!file || hours <= 0 || ledger.get(file)?.status === 'FAIL') return false;
   try { return (Date.now() - fs.statSync(assetPath(file)).mtimeMs) < hours * 3600e3; } catch { return false; }
 }
 /* companies.csv 增量维护:先载入已有行,拉到新价格才覆盖对应公司 */

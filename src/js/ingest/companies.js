@@ -1,18 +1,20 @@
 function ingestCompanies(recs) {
   let n = 0;
   for (const r of recs) {
-    const t = (r.ticker || '').toUpperCase();
+    const t = (r.ticker || '').trim().toUpperCase();
     if (!t || !r.price) continue;
-    const num = k => { const v = parseFloat(r[k]); return isFinite(v) ? v : NaN; };
+    const num = k => { const v = parseFloat(String(r[k] ?? '').replace(/,/g, '')); return isFinite(v) ? v : NaN; };
     const prev = state.companies.get(t);
-    const userPx = prev && prev.priceSrc === 'user';
+    const userPx = prev && (prev.priceSrc === 'user' || !(num('price') > 0) || (prev.priceDate && r.price_date && prev.priceDate > r.price_date));
+    if (!prev && !(num('price') > 0)) continue;
     state.companies.set(t, {
+      ...prev,
       ticker: t,
       name: r.name || t,
       fullName: prev ? prev.fullName : undefined,
       currency: (r.currency || '').toUpperCase(),
       price: userPx ? prev.price : num('price'),
-      priceSrc: userPx ? 'user' : 'file',
+      priceSrc: userPx ? prev.priceSrc : 'file',
       priceDate: userPx ? prev.priceDate : (r.price_date || ''),
       extra: prev ? prev.extra : undefined,
       estimateMeta: prev ? prev.estimateMeta : undefined,

@@ -50,10 +50,10 @@ export async function manageMenu() {
     const cmd = menuCommand(ans, input.eof);
     if (cmd === 'empty') { console.log('请输入 run 开始拉取，或 exit 退出。'); continue; }
     if (cmd === 'exit') return 'exit';
-    if (cmd === 'run') {
+    if (cmd === 'run' || cmd === 'force-run') {
       saveTickers(TICKERS);
       if (!TICKERS.length) { console.log('清单为空，请先添加代码。'); continue; }
-      return 'run';
+      return cmd;
     }
     if (cmd === 'dashboard') {
       const r = openDashboardAction({ platform: process.platform, appHtml: APP_HTML, exists: fs.existsSync, launch: launchSpec });

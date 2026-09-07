@@ -1,3 +1,4 @@
+import { dailyCadenceOK } from '../steps/charting.mjs';
 /* lib/selftest.mjs — --selftest:纯函数自检,不开浏览器
  * 由 factset-fetch.mjs 单文件版按功能拆出;改一个抓取步骤只需要动 steps/ 下对应的一个文件。
  */
@@ -11,7 +12,7 @@ import { IGNORE_LINE } from './tickers.mjs';
 import { RETAIN_DAYS, ROSTER_FILE, ROSTER_HEADER, pickOrphans, rosterCsv } from './roster.mjs';
 import { SELFTEST_SANDBOX } from './selftest-env.mjs';
 import { FETCHER_DIR, LIB_DIR, LOG_DIR, OUT_DIR, ROOT_DIR, assetPath, assetSubdir, envFlag } from './config.mjs';
-import { LED_COLS, SOURCES_FILE, clean } from './ledger.mjs';
+import { LED_COLS, SOURCES_FILE, clean, beginRound, roundFailures, ledger, step } from './ledger.mjs';
 import { LOG_FILE } from './log.mjs';
 import { CHART_DIAG_FILE, dumpChartDiag, formatChartDiag, scrubSecrets } from './chart-diag.mjs';
 import {
@@ -31,7 +32,7 @@ import { BT_SCRIPT, backtestDue, btExitNote, pickLastRunDate } from './backtest.
 import { parseShortInt, shortIntDiagnosis, shortIntSanity, siBlockTooWide } from '../steps/short-interest.mjs';
 import { FRESH_HOURS, freshHoursFor, hasPriceToday, marketDate, priceMap } from './companies.mjs';
 import { metaCharting, metaCompanies, metaEst, metaNews, metaOptions, metaShortInt, metaTargets } from './registry.mjs';
-import { factsetSessionValid, headlessMode, initialHeadless, loginFallback } from './browser-policy.mjs';
+import { browserClosedError, browserUsable, factsetSessionValid, headlessMode, initialHeadless, loginFallback } from './browser-policy.mjs';
 import { menuCommand, menuScreen, openDashboardAction, openPathSpec, runFetcherLoop } from './menu-actions.mjs';
 
 /* --selftest:不开浏览器,验证核心逻辑(财年判定/标签位移/xlsx 写读回)
@@ -44,6 +45,18 @@ export async function runSelftest() {
     if (got === want) console.log('  PASS', name, '=', got);
     else { console.log('  FAIL', name, 'got', got, 'want', want); fail++; }
   };
+
+  eq(dailyCadenceOK({ rows: 261, medianGapDays: 7 }), false, '五年周线不可当日线');
+  eq(dailyCadenceOK({ rows: 1250, medianGapDays: 1 }), true, '日频日期间隔通过');
+  eq(dailyCadenceOK(null), false, '日期未知不当日线');
+  beginRound();
+  ledger.set('OLD-TEST', { status: 'FAIL', file: 'OLD-TEST' });
+  eq(roundFailures().length, 0, '历史失败不进入本轮失败');
+  await step({ file: 'NEW-TEST', step: '测试' }, async () => false);
+  eq(roundFailures().length, 1, '本轮失败可见');
+  await step({ file: 'NEW-TEST', step: '测试' }, async () => true);
+  eq(roundFailures().length, 0, '本轮重试成功清除失败');
+  ledger.delete('OLD-TEST'); ledger.delete('NEW-TEST'); beginRound();
   eq(menuCommand(''), 'empty', '菜单空回车只留在菜单');
   eq(menuCommand('', true), 'exit', '菜单 EOF/终端关闭安全退出,不当成空回车');
   eq(menuCommand('run'), 'run', '菜单 run 明确开始拉取');
@@ -63,6 +76,26 @@ export async function runSelftest() {
   eq(menuCommand('tray'), 'options-flow-tray', '菜单 tray 别名 = 期权方向托盘监测');
   eq(menuCommand('0'), 'exit', '菜单数字 0 = 退出');
   eq(menuCommand('NVDA-US'), 'other', '代码仍交给清单增删逻辑');
+  eq(browserClosedError(new Error('download.saveAs: Target page, context or browser has been closed')), true, '下载关闭连接识别为全局中断');
+  eq(browserClosedError(new Error('页面证券身份不符')), false, '证券不符仍是普通步骤错误');
+  eq(browserUsable({browser:()=>({isConnected:()=>true})},{isClosed:()=>false}), true, '活跃浏览器可复用');
+  eq(browserUsable({browser:()=>({isConnected:()=>true})},{isClosed:()=>true}), false, 'ctx 非空但页面已关闭不得复用');
+  eq(browserUsable({browser:()=>({isConnected:()=>false})},{isClosed:()=>false}), false, '断开连接不得复用');
+  let interrupted = false;
+  try { await step({file:'CLOSED-TEST',step:'断连测试'}, async()=>{throw new Error('Target page, context or browser has been closed');}); }
+  catch { interrupted = true; }
+  eq(interrupted, true, 'step 保存台账后向上抛出连接中断');
+  eq(ledger.get('CLOSED-TEST').status, 'FAIL', '中断起点仍记录真实失败');
+  ledger.delete('CLOSED-TEST'); beginRound();
+  const stopActions=['run','run','exit']; let stopRuns=0, stopAfter=0;
+  await runFetcherLoop({interactive:true,menu:async()=>stopActions.shift(),runRound:async()=>({aborted:++stopRuns===1}),afterRound:async()=>{stopAfter++;}});
+  eq(`${stopRuns}/${stopAfter}`, '2/1', '中断后回菜单可再跑，且中断轮不触发后续回测');
+  eq(menuCommand('11'), 'force-run', '11 强制重跑');
+  eq(menuCommand('force'), 'force-run', 'force 强制重跑');
+  const forceActions = ['force-run', 'run', 'exit'], forceRuns = [];
+  await runFetcherLoop({ interactive: true, menu: async () => forceActions.shift(),
+    runRound: async options => forceRuns.push(options.force), afterRound: async () => {} });
+  eq(forceRuns.join(','), 'true,false', '强制仅作用当前轮，下一次普通拉取恢复新鲜度');
   const ms = menuScreen(['META-US', 'NVDA-US'], [['SPY-US', 'BENCH']]);
   eq(ms.includes('[10] 启动期权方向监测'), true, '菜单首页显示托盘监测入口');
   eq(ms.includes('公司  2 家') && ms.includes('META-US') && ms.includes('[1] 开始拉取'), true,

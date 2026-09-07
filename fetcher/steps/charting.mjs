@@ -5,7 +5,8 @@
 import * as XLSX from 'xlsx';
 import fs from 'node:fs';
 import path from 'node:path';
-import { clickTextInFrames, page } from '../lib/browser.mjs';
+import { clickTextInFrames, ensureBrowser, releaseBrowser, page } from '../lib/browser.mjs';
+import { browserClosedError } from '../lib/browser-policy.mjs';
 import { dumpChartDiag } from '../lib/chart-diag.mjs';
 import { BASE, WANT_5Y, WANT_OHLC, WANT_VOLUME, WANT_YEARS, assetPath, volState } from '../lib/config.mjs';
 import { phase } from '../lib/ledger.mjs';
@@ -93,14 +94,19 @@ export function xlsxDateSpan(file) {
         if (d) days.push(d);
       }
       if (days.length < 2) continue;
+      days.splice(0, days.length, ...new Set(days));
       days.sort();
       const first = days[0], last = days[days.length - 1];
       const years = (Date.parse(last) - Date.parse(first)) / (365.2425 * 86400000);
-      return { rows: days.length, first, last, years };
+      const gaps = days.slice(1).map((d, i) => (Date.parse(d) - Date.parse(days[i])) / 86400000).sort((a, b) => a - b);
+      const medianGapDays = gaps[Math.floor(gaps.length / 2)];
+      return { rows: days.length, first, last, years, medianGapDays };
     }
   } catch {}
   return null;
 }
+
+export function dailyCadenceOK(span) { return !!span && span.rows >= 13 && span.medianGapDays <= 3; }
 
 /** 跨度够不够。留半年余量:5Y 布局按自然日切出来通常是 4.98 年上下,卡死 5.0 会把成功判成失败 */
 export function spanOK(span) { return !!span && span.years >= WANT_YEARS - 0.5; }
@@ -312,7 +318,81 @@ export async function waitForFrameText(re, timeout = 6000) {
   return false;
 }
 
+/** Select the visible Charting frequency control; verify the export separately. */
+export async function trySetDaily(activePage = page) {
+  for (const frame of activePage.frames()) {
+    const button = frame.getByRole('button', { name: /^(?:Periodicity|[DWMQY](?:\s*\(A\))?)$/ }).filter({ visible: true }).first();
+    if (!await button.isVisible().catch(() => false)) continue;
+    try {
+      await button.click({ timeout: 5000 });
+      const daily = frame.getByText(/^(?:Daily|D)$/).filter({ visible: true }).first();
+      await daily.waitFor({ state: 'visible', timeout: 5000 });
+      await daily.click({ timeout: 5000 });
+      // Some charts keep the menu open; close it before opening Download.
+      await activePage.keyboard.press('Escape');
+      await activePage.waitForTimeout(1500);
+      return 'Periodicity:Daily';
+    } catch {
+      await activePage.keyboard.press('Escape').catch(() => {});
+    }
+  }
+  return null;
+}
+
+/** Capture the generated workbook Blob before Chrome's native download manager.
+ * Hooks exist only during this export and are restored in finally. */
+export async function captureChartExport(activePage, trigger, file) {
+  const frames = activePage.frames();
+  try {
+    for (const frame of frames) await frame.evaluate(() => {
+      const original = URL.createObjectURL;
+      const originalClick = HTMLAnchorElement.prototype.click;
+      const blobs = new Map();
+      window.__prdChartExport = { original, originalClick, blobs, blob: null };
+      URL.createObjectURL = function(blob) { const url=original.call(this,blob); blobs.set(url,blob); return url; };
+      HTMLAnchorElement.prototype.click = function() {
+        const blob=blobs.get(this.href);
+        if (blob && (this.download || this.href.startsWith('blob:'))) {
+          window.__prdChartExport.blob=blob;
+          return;
+        }
+        return originalClick.call(this);
+      };
+    }).catch(() => {});
+    if (!await trigger()) throw new Error('未找到 Excel 导出菜单');
+    const until=Date.now()+30000;
+    do {
+      for (const frame of frames) {
+        const encoded=await frame.evaluate(async () => {
+          const blob=window.__prdChartExport?.blob;
+          if(!blob) return null;
+          return await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});
+        }).catch(() => null);
+        if(encoded) { fs.writeFileSync(file,Buffer.from(encoded.slice(encoded.indexOf(',')+1),'base64')); return; }
+      }
+      await activePage.waitForTimeout(250);
+    } while(Date.now()<until);
+    throw new Error('30 秒内未收到页面生成的 Excel Blob；未覆盖正式文件');
+  } finally {
+    for (const frame of frames) await frame.evaluate(() => {
+      const saved=window.__prdChartExport;
+      if(saved) {URL.createObjectURL=saved.original;HTMLAnchorElement.prototype.click=saved.originalClick;delete window.__prdChartExport;}
+    }).catch(()=>{});
+  }
+}
+
 export async function fetchCharting(ticker, outName) {
+  try { return await fetchChartingOnce(ticker, outName); }
+  catch (error) {
+    if (!browserClosedError(error)) throw error;
+    log('    ⚠ 下载连接中断，重新打开浏览器并重试当前日线一次。');
+    await releaseBrowser();
+    await ensureBrowser({ visible: true });
+    return fetchChartingOnce(ticker, outName);
+  }
+}
+async function fetchChartingOnce(ticker, outName) {
+  await ensureBrowser({ visible: true });
   phase('导航');
   await page.goto(`${BASE}/workstation/charting/`, { waitUntil: 'domcontentloaded' });
   phase('等待页面');
@@ -348,6 +428,10 @@ export async function fetchCharting(ticker, outName) {
     viaVol = await tryEnableVolume().catch(() => null);
     if (viaVol) log(`    · 已尝试开启成交量序列(${viaVol})`);
   }
+  // Range/style changes may reset the frequency, so set Daily last.
+  const viaDaily = await trySetDaily();
+  log(viaDaily ? '    · 已选择 Periodicity → Daily；下载后核验实际日频'
+    : '    ⚠ 未能自动选择 Daily；仍会核验导出频率，周线不会覆盖正式日线');
   // 打开下载菜单(按 title/aria-label 全帧搜索)→ Download data to Excel
   let opened = false;
   for (const f of page.frames()) {
@@ -367,15 +451,18 @@ export async function fetchCharting(ticker, outName) {
   if (!opened) throw new Error('未找到下载按钮(Charting 工具栏改版)');
   await waitForFrameText(/Download data to Excel/i, 1500);
   phase('写文件');
-  const [download] = await Promise.all([
-    page.waitForEvent('download', { timeout: 30000 }),
-    clickTextInFrames('Download data to Excel', false),
-  ]);
   const f = assetPath(outName || `${ticker} Daily Charting.xlsx`);
-  // Validate the downloaded candidate before replacing a last-good history.
   const candidate=f+'.pending.xlsx';
-  await download.saveAs(candidate);
+  await captureChartExport(page, () => clickTextInFrames('Download data to Excel', false), candidate);
   if(!chartHasPrices(candidate))throw new Error(`走势图导出缺少至少 13 个有效收盘价，未覆盖原文件；待查文件：${candidate}`);
+  const candidateSpan = xlsxDateSpan(candidate);
+  if (!dailyCadenceOK(candidateSpan)) {
+    phase('解析行');
+    await dumpChartDiag({ ticker, file: path.basename(candidate), via: { Daily: viaDaily },
+      verdict: { Daily: `日期间隔中位数 ${candidateSpan?.medianGapDays ?? '未知'} 天` },
+      probes: [['日频菜单', ['Periodicity', 'Daily']]] });
+    throw new Error(`导出不是可验证的日频数据（日期间隔中位数 ${candidateSpan?.medianGapDays ?? '未知'} 天）；请在 Charting 的 Periodicity 选择 Daily 后重跑；未覆盖原文件，候选保留为 .pending.xlsx`);
+  }
   fs.renameSync(candidate,f);
   /* 三项一律以文件内容为准,不以"点击是否成功"为准 —— 上面那三个 try* 只会说自己点着了什么。 */
   const vol = xlsxHasVolume(f);
@@ -396,7 +483,7 @@ export async function fetchCharting(ticker, outName) {
   } else if (!spanOK(span) && WANT_5Y) {
     /* 措辞只有一处 —— 就是 spanNote。在这儿另写一句"仍然只有一年",迟早会和它说岔 */
     log(`    ℹ 自动切 5 年没有生效 —— ${spanNote(span)}(${span.rows} 行,${span.first} → ${span.last})。`);
-    log('       后果很实在:h=63 的回测只剩约 10 个独立样本,项目里每一个验收数字都被这一条卡着。');
+    log('       历史不足会减少回测样本；实际可用样本数以回测报告为准。');
     log('       想要 5 年:在 FactSet Charting 里把图表时间跨度手动改成 5Y,再保存布局(Layout → Save),下轮即自动带上。');
     if (span.years < 0.8) log('       (这一份短得不像布局问题,更像新上市 —— 那样的话再怎么设 5Y 也只有这么多,不必折腾。)');
   }

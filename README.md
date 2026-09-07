@@ -6,6 +6,10 @@ A single-file, offline-friendly dashboard that turns FactSet exports into **impl
 
 单文件股价区间测算仪表盘:导入 FactSet 导出文件,用 **EPS 预测区间 × 历史估值分位** 计算隐含价格区间,并与波动率统计区间、52 周实际区间、分析师目标价同轴对比。中英双语,亮暗双主题。
 
+拉取失败、台账与结果不一致、五年数据只有 261 行：参见 [FactSet 拉取故障审计与运行约定](docs/FETCH-AUDIT-2026-09-07.md)。
+
+项目整体目的、范围和分阶段规划：[PROJECT.md](PROJECT.md)。本次全项目检查结果：[项目审计](docs/PROJECT-AUDIT-2026-09-07.md)。
+
 ## Quick start · 快速开始
 
 - **New machine (Windows) · 新机器**: double-click **`setup.bat`** at the repo root. It finds (or offers to install) Node.js, then installs dependencies, runs the health check, verifies the build and runs the tests. It stops to ask you exactly twice — install Node with winget, and download chromium (~150MB) — and installs nothing behind your back. 双击根目录的 **`setup.bat`** 就行,只有那两处会停下来问你。
@@ -194,3 +198,8 @@ Belt and braces is the point here. `Assets/` alone would be enough if every file
 Implied price = EPS scenario × historical NTM PE percentile. Ranges combine earnings-forecast uncertainty with valuation volatility. Percentiles depend on the chosen history window — the window itself is an assumption. The volatility band is realized-vol based (`price × e^±σ`, ~68% one-year band under lognormal assumptions). **Not investment advice.**
 
 不构成投资建议。
+
+
+### 普通拉取与强制重跑
+
+主菜单 `[1] 开始拉取` 按新鲜度跳过有效数据；`[11] 强制重跑全部数据`（也可输入 `force`）重新尝试当前清单全部公司数据和市场日线，包括今日现价、空头和期权。强制只作用本轮，不删除历史、不绕过数据校验；下一轮选 1 恢复普通模式。正在运行的旧控制台需退出后重新打开，才能加载新菜单。

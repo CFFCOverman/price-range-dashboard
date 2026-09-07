@@ -3,6 +3,7 @@ export function menuCommand(raw, eof = false) {
   const s = String(raw || '').trim();
   if (!s) return 'empty';
   if (/^(1|run|fetch|go|start|开始|拉取)$/i.test(s)) return 'run';
+  if (/^(11|force|rerun|强制重跑|强制拉取)$/i.test(s)) return 'force-run';
   if (/^(0|exit|quit|q|退出)$/i.test(s)) return 'exit';
   if (/^(2|open|dashboard|dash|仪表盘|打开仪表盘)$/i.test(s)) return 'dashboard';
   if (/^(3|chk|check|health|体检)$/i.test(s)) return 'health';
@@ -27,7 +28,9 @@ export function menuScreen(tickers = [], markets = []) {
     `│ 公司 ${String(tickers.length).padStart(2)} 家  ${companies}`,
     `│ 市场 ${String(markets.length).padStart(2)} 个  ${marketText}`,
     '├─ 常用 ───────────────────────────────────────────────────',
-    '│ [1] 开始拉取      [2] 打开仪表盘      [3] 数据体检',
+    '│ [1] 开始拉取（跳过未过期数据）',
+    '│ [11] 强制重跑全部数据（忽略新鲜度）',
+    '│ [2] 打开仪表盘    [3] 数据体检',
     '├─ 清单与工具 ─────────────────────────────────────────────',
     '│ 输入 META-US 添加；输入 -META-US 删除',
     '│ [4] 编辑公司清单  [5] 编辑市场清单    [6] 数据对齐',
@@ -58,14 +61,15 @@ export function openDashboardAction({ platform, appHtml, exists, launch }) {
 }
 
 export async function runFetcherLoop({ interactive, menu, runRound, afterRound, pauseInput = () => {}, resumeInput = () => {} }) {
-  if (!interactive) { await runRound(); await afterRound(); return; }
+  if (!interactive) { const result = await runRound(); if (!result?.aborted) await afterRound(); return; }
   while (true) {
     resumeInput();
-    if (await menu() === 'exit') return;
+    const action = await menu();
+    if (action === 'exit') return;
     pauseInput();
     try {
-      await runRound();
-      await afterRound();
+      const result = await runRound({ force: action === 'force-run' });
+      if (!result?.aborted) await afterRound();
     } finally {
       resumeInput();
     }

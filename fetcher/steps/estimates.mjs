@@ -32,7 +32,12 @@ export async function openEstimateHistory(ticker) {
     const nav = page.frameLocator('iframe[src*="company-security"]');
     const tbl = nav.frameLocator('iframe[src*="estimate-reports"]');
     await tbl.locator('tr').nth(5).waitFor({ timeout: 45000 });   // 等表格渲染
-    if (await estimatePageIdentity(tbl, ticker)) return { nav, tbl };
+    // 表格与证券标题异步更新；给身份渲染留出有界等待，仍不接受错误证券。
+    const deadline = Date.now() + 15000;
+    do {
+      if (await estimatePageIdentity(tbl, ticker)) return { nav, tbl };
+      await page.waitForTimeout(500);
+    } while (Date.now() < deadline);
     if (attempt === 1) {
       log(`  ⚠ 页面表格已出现,但证券身份不是 ${ticker}；重新导航一次,不读取上一家公司残留内容`);
       await page.waitForTimeout(1200);
@@ -42,13 +47,12 @@ export async function openEstimateHistory(ticker) {
 }
 
 /** 从内层 iframe 抓表格 → 二维数组 */
-export function fyTag(label) {
-  const MONTHS = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
-  const m = label.match(/([A-Z][a-z]{2}) '(\d{2})E/);
-  if (!m) return null;
-  const end = new Date(2000 + +m[2], MONTHS[m[1]], 0);
-  const months = (end - Date.now()) / 86400000 / 30.44;
-  return months < 12 ? 'FY1' : months < 24 ? 'FY2' : 'FY3';
+export function fyTag(label, asOf = new Date()) {
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const m = String(label || '').match(/([A-Z][a-z]{2}) '(\d{2})E/);
+  if (!m || !months.includes(m[1])) return null;
+  const gap = (2000 + Number(m[2]) - asOf.getFullYear()) * 12 + months.indexOf(m[1]) - asOf.getMonth();
+  return `FY${Math.max(1, Math.floor(gap / 12) + 1)}`;
 }
 export function shiftLabel(label, years) {
   const m = label.match(/([A-Z][a-z]{2}) '(\d{2})E/);

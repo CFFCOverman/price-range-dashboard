@@ -4,11 +4,12 @@
 
 import { chromium } from 'playwright';
 import { BASE, HEADLESS_MODE, LOGIN_ONLY, PROFILE } from './config.mjs';
-import { factsetSessionValid, initialHeadless, loginFallback } from './browser-policy.mjs';
+import { browserUsable, factsetSessionValid, initialHeadless, loginFallback } from './browser-policy.mjs';
 import { log } from './log.mjs';
 
 /* ============ 浏览器按需启动:菜单先出现,按回车开始拉取时才弹 Chrome 窗口 ============ */
 export let ctx = null, page = null;
+let launchedHeadless = false;
 async function closeBrowser() {
   const old = ctx; ctx = null; page = null;
   if (old) await old.close().catch(() => {});
@@ -32,6 +33,7 @@ async function launchBrowser(headless) {
     }
     throw err;
   }
+  launchedHeadless = headless;
   page = ctx.pages()[0] || await ctx.newPage();
 }
 async function openAndCheck() {
@@ -39,9 +41,12 @@ async function openAndCheck() {
   await page.waitForTimeout(5000);
   return factsetSessionValid(page.url());
 }
-export async function ensureBrowser() {
-  if (ctx) return;
-  const firstHeadless = initialHeadless(HEADLESS_MODE);
+export async function ensureBrowser({ visible = false } = {}) {
+  const switchVisible = visible && HEADLESS_MODE === 'auto' && launchedHeadless;
+  if (browserUsable(ctx, page) && !switchVisible) return;
+  if (switchVisible) log('Charting 导出切换到可见 Chrome（后台下载曾重复中断）。');
+  await closeBrowser();
+  const firstHeadless = visible && HEADLESS_MODE === 'auto' ? false : initialHeadless(HEADLESS_MODE);
   log(firstHeadless ? '⏳ 正在后台启动 Chrome 并检查 FactSet 登录……'
     : '⏳ 正在启动可见 Chrome……拉取期间请不要关闭或操作它。');
   await launchBrowser(firstHeadless);

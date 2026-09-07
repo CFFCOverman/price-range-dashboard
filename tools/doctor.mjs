@@ -39,7 +39,7 @@ export function chartingStatus(root = ROOT) {
   if (!fs.existsSync(dir)) return { state: 'no-dir', dir, files: [], coFiles: [], mktFiles: [] };
   let files = [];
   try {
-    files = fs.readdirSync(dir).filter(f => /\.xlsx?$/i.test(f)).sort();
+    files = fs.readdirSync(dir).filter(f => /\.xlsx?$/i.test(f) && !/\.pending\.|\.bak(?:\.|$)/i.test(f)).sort();
   } catch (e) {
     return { state: 'empty', dir, files: [], coFiles: [], mktFiles: [], err: String(e.message || e) };
   }
@@ -331,6 +331,7 @@ function cmdSelftest() {
   fs.writeFileSync(path.join(okDir, 'Assets', 'charting', 'MSFT-US Daily Charting.xlsx'), 'x');
   fs.writeFileSync(path.join(okDir, 'Assets', 'charting', '_MARKET-BENCH SPY-US Daily Charting.xlsx'), 'x');
   fs.writeFileSync(path.join(okDir, 'Assets', 'charting', 'readme.txt'), 'x');   // 非 xlsx 不许被数进去
+  fs.writeFileSync(path.join(okDir, 'Assets', 'charting', 'REJECTED.xlsx.pending.xlsx'), 'x');
   const s = chartingStatus(okDir);
   ok("chartingStatus:有 xlsx → 'ok',公司/市场文件按 _MARKET- 前缀分开数,txt 不算",
     s.state === 'ok' && s.coFiles.length === 2 && s.mktFiles.length === 1 && s.files.length === 3);

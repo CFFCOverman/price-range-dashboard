@@ -7,7 +7,8 @@ import { hasPriceToday, isFresh, priceMap, today } from '../lib/companies.mjs';
 import { noteArtifact, phase, stampUTC, step } from '../lib/ledger.mjs';
 import { log } from '../lib/log.mjs';
 import { metaCharting, metaEst, metaNews, metaOptions, metaShortInt, metaTargets } from '../lib/registry.mjs';
-import { fetchCharting } from './charting.mjs';
+import { assetPath } from '../lib/config.mjs';
+import { dailyCadenceOK, xlsxDateSpan, fetchCharting } from './charting.mjs';
 import { currentPeriod, estimateRowsVerdict, fyTag, openEstimateHistory, rowsWithOneRetry, saveEstimateXlsx, shiftLabel, switchPeriod } from './estimates.mjs';
 import { fetchNews } from './news.mjs';
 import { fetchOptions } from './options.mjs';
@@ -15,16 +16,16 @@ import { scrapePrice } from './price.mjs';
 import { fetchShortInterest, hasShortIntToday } from './short-interest.mjs';
 import { fetchTargets } from './targets.mjs';
 
-export async function fetchTicker(ticker, R, adv) {
-  const freshFy1 = isFresh(metaEst(ticker, 'FY1'));
-  const freshFy2 = isFresh(metaEst(ticker, 'FY2'));
-  const freshCh  = isFresh(metaCharting(ticker));
-  const freshTg = isFresh(metaTargets(ticker));
-  const freshNw = isFresh(metaNews(ticker));
+export async function fetchTicker(ticker, R, adv, { force = false } = {}) {
+  const freshFy1 = !force && isFresh(metaEst(ticker, 'FY1'));
+  const freshFy2 = !force && isFresh(metaEst(ticker, 'FY2'));
+  const freshCh = !force && isFresh(metaCharting(ticker)) && dailyCadenceOK(xlsxDateSpan(assetPath(metaCharting(ticker).file)));
+  const freshTg = !force && isFresh(metaTargets(ticker));
+  const freshNw = !force && isFresh(metaNews(ticker));
   /* 字段升级或人工复核时可只强制重拉期权；其它数据仍按各自新鲜周期判断。 */
-  const freshOp = process.env.FS_FORCE_OPTIONS !== '1' && isFresh(metaOptions(ticker));
-  const freshSi = hasShortIntToday(ticker);
-  const freshPx = hasPriceToday(ticker);
+  const freshOp = !force && process.env.FS_FORCE_OPTIONS !== '1' && isFresh(metaOptions(ticker));
+  const freshSi = !force && hasShortIntToday(ticker);
+  const freshPx = !force && hasPriceToday(ticker);
   /* 跳过时也把元信息登记进台账,体检才认得出"这个产出应该存在" */
   for (const m of [metaEst(ticker, 'FY1'), metaEst(ticker, 'FY2'), metaTargets(ticker), metaCharting(ticker), metaNews(ticker), metaOptions(ticker), metaShortInt()]) noteArtifact(m);
   if (freshFy1 && freshFy2 && freshCh && freshTg && freshNw && freshOp && freshSi && freshPx) {
@@ -75,28 +76,35 @@ export async function fetchTicker(ticker, R, adv) {
         rows => estimateRowsVerdict(tag, rows),
         verdict => log(`  ⚠ ${ticker} ${tag} 首次数据异常: ${verdict.reason}；重新打开 FactSet 再拉一次`),
       );
-      phase('写文件');
-      return saveEstimateXlsx(ticker, tag, captured.rows,
+      phase(captured.verdict.ok ? '写文件' : '解析行');
+      const saved = saveEstimateXlsx(ticker, tag, captured.rows,
         `FactSet Estimate History ${period || tag} | ${stampUTC()}`,
         { quarantine: captured.attempts === 2 && !captured.verdict.ok });
+      if (!saved) throw new Error(captured.verdict.reason || '估值文件未保存');
+      return saved;
     };
-    R.FY1 = await step(metaEst(ticker, 'FY1'), async () => {
-      phase('导航'); ({ nav, tbl } = await openEstimateHistory(ticker));
-      phase('解析行');
+    let openingError = null;
+    try {
+      ({ nav, tbl } = await openEstimateHistory(ticker));
       price = await scrapePrice(tbl);
       p0 = await currentPeriod();
-      tag0 = (p0 ? fyTag(p0) : null) || 'FY1';
+      tag0 = p0 ? fyTag(p0) : null;
+      if (!['FY1', 'FY2'].includes(tag0)) throw new Error(`财年标签未确认：${p0 || '空'}；拒绝猜测 FY1`);
       log(`  当前财年: ${p0}(${tag0})  价格: ${price}`);
-      /* 标签空的时候上面那个 FY1 是**猜**的:FactSet 打开默认停在 FY1,绝大多数时候猜得对,
-       * 但猜错就是拿 FY2 的表覆盖掉 FY1 的文件,而文件名看不出任何异常。说一声,别闷着。 */
-      if (!p0) log(`  ⚠ 财年标签没读出来,这份表按 FY1 存了(默认页就是 FY1);要是 P/E 明显不对,删掉 ${ticker} FY1 Estimate History.xlsx 重拉一轮`);
-      const okNow = await captureEstimate(p0, tag0, tbl);
-      if (tag0 !== 'FY1') { R[tag0] = okNow; return okNow; }   /* 极少见:页面停在 FY2 */
-      return okNow;
-    });
+    } catch (e) { openingError = e; }
+    if (openingError) {
+      for (const tag of ['FY1', 'FY2']) {
+        R[tag] = await step(metaEst(ticker, tag), async () => {
+          phase('导航');
+          throw new Error(`估值页初始化失败，未抓取 ${tag}：${openingError.message}`);
+        });
+      }
+    } else {
+      R[tag0] = await step(metaEst(ticker, tag0), () => captureEstimate(p0, tag0, tbl));
+    }
     adv(1, `${ticker} · ${tag0} 完成`);
     /* 切到"另一个"财年:当前是 FY1 → +1 年;当前是 FY2 → −1 年 */
-    if (p0 && (tag0 === 'FY1' || tag0 === 'FY2')) {
+    if (!openingError && p0 && (tag0 === 'FY1' || tag0 === 'FY2')) {
       const other = shiftLabel(p0, tag0 === 'FY1' ? 1 : -1);
       const otherTag = fyTag(other);
       adv(0, `${ticker} · 切换财年 → ${other}…`);
@@ -107,17 +115,6 @@ export async function fetchTicker(ticker, R, adv) {
         const tblO = nav.frameLocator('iframe[src*="estimate-reports"]');
         await page.waitForTimeout(1500);
         return captureEstimate(other, otherTag, tblO);
-      });
-    } else {
-      /* 标签读不出来(或认不出是 FY1/FY2)就没法切财年 —— 但**必须显式记一笔失败**。
-       * 原来这里是干脆 if 掉:汇总表打 ✖FY2、提示"详见 sources.txt",
-       * 而 sources.txt 里躺的还是上一轮那行 OK。让人去查一份写着"一切正常"的台账,
-       * 比不报错更耗时间。走 step() 就会写 FAIL 行,失败环节也点得出名。 */
-      R.FY2 = await step(metaEst(ticker, 'FY2'), async () => {
-        phase('解析行');
-        throw new Error(p0
-          ? `财年标签「${p0}」认不出是 FY1 还是 FY2,没法切到另一个财年`
-          : '页面上读不到财年标签(那一格 Jul \'26E),重试 3 次仍为空 —— 这轮拿不到 FY2');
       });
     }
     adv(1, `${ticker} · 财年数据完成`);

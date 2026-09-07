@@ -1,9 +1,12 @@
 /* ================= file handling(顺序导入,保证"新文件覆盖旧文件"确定性) ================= */
+function isImportArtifact(name) {
+  return !/(?:^|[/\\])(?:_logs|_to_delete|rejected-estimates|last-good-estimates)(?:[/\\]|$)|\.pending\.|\.bak(?:\.|$)/i.test(String(name || ''));
+}
 async function handleFiles(files) {
   const msgs = [];
   /* 归属类文件(Charting / Price Summary)排到主数据文件之后,保证公司先建立再归属 */
   const isSecondary = f => /price\s*summary|charting|targets|news/i.test(f.name);
-  files = [...files].sort((a, b) => (isSecondary(a) ? 1 : 0) - (isSecondary(b) ? 1 : 0));
+  files = [...files].filter(f => isImportArtifact(f.webkitRelativePath || f.name)).sort((a, b) => (isSecondary(a) ? 1 : 0) - (isSecondary(b) ? 1 : 0));
   for (const f of files) {
     try {
       if (/\.xlsx?$/i.test(f.name)) {

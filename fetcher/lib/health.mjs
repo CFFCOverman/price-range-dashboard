@@ -4,9 +4,10 @@
 
 import fs from 'node:fs';
 import { assetPath } from './config.mjs';
+import { FRESH_HOURS, freshHoursFor } from './companies.mjs';
 import { ledger } from './ledger.mjs';
 import { expectedArtifacts } from './registry.mjs';
-import { spanNote, spanOK, xlsxDateSpan, xlsxHasOHLC, xlsxHasVolume } from '../steps/charting.mjs';
+import { dailyCadenceOK, spanNote, spanOK, xlsxDateSpan, xlsxHasOHLC, xlsxHasVolume } from '../steps/charting.mjs';
 
 export const STALE_HOURS = 96;
 export function healthReport() {
@@ -18,12 +19,12 @@ export function healthReport() {
     try { ageH = (Date.now() - fs.statSync(p).mtimeMs) / 3600e3; } catch {}
     if (r && r.status === 'FAIL') fail.push([m, r, ageH]);
     else if (!isFinite(ageH)) never.push([m, r, ageH]);
-    else if (ageH > STALE_HOURS) stale.push([m, r, ageH]);
+    else if (ageH > (freshHoursFor(m) || FRESH_HOURS)) stale.push([m, r, ageH]);
     else ok.push([m, r, ageH]);
   }
   const age = h => isFinite(h) ? (h < 48 ? Math.round(h) + ' 小时前' : Math.round(h / 24) + ' 天前') : '文件不存在';
   console.log('\n========== 数据体检(sources.txt 台账 + 本地文件时间)==========');
-  console.log(`  正常 ${ok.length} · 失败 ${fail.length} · 陈旧 ${stale.length} · 从未拉取 ${never.length}   (陈旧阈值 ${STALE_HOURS}h)`);
+  console.log(`  正常 ${ok.length} · 失败 ${fail.length} · 陈旧 ${stale.length} · 从未拉取 ${never.length}   (按各类数据更新周期判断)`);
   if (fail.length) {
     console.log('\n  ✖ 最近一次拉取失败 —— 括号内就是断掉的环节:');
     for (const [m, r, h] of fail) {
@@ -44,16 +45,17 @@ export function healthReport() {
     console.log('\n  ⚠ 台账没报错,但文件已陈旧(说明那一步"静默地"没更新——最值得警惕):');
     for (const [m, r, h] of stale) console.log(`     ${m.step}  文件 ${age(h)}  台账最近成功 ${r ? r.okAt : '-'}`);
   }
-  if (!fail.length && !stale.length && !never.length) console.log('\n  全部正常 ✔');
+  if (!fail.length && !stale.length && !never.length) console.log('\n  台账与文件时间检查通过；字段与频率检查见下方。');
   /* 成交量 / 跨度 / OHLC:直接读磁盘上的 Charting 文件,不依赖本轮是否跑过。
    * 三件事都是"账号里那张保存好的图表布局"的属性,不是脚本能一次点定的,所以体检要一直盯着。 */
   const chart = expectedArtifacts().filter(m => /Daily Charting\.xlsx$/i.test(m.file));
-  const withVol = [], noVol = [], shortSpan = [], noSpan = [], noOhlc = [];
+  const withVol = [], noVol = [], shortSpan = [], noSpan = [], noOhlc = [], nonDaily = [];
   for (const m of chart) {
     const p = assetPath(m.file);
     if (!fs.existsSync(p)) continue;
     (xlsxHasVolume(p) ? withVol : noVol).push(m.file);
     const sp = xlsxDateSpan(p);
+    if (!dailyCadenceOK(sp)) nonDaily.push(m.file);
     if (!sp) noSpan.push(m.file);                       // 读不出 ≠ 跨度不够,单独一栏
     else if (!spanOK(sp)) shortSpan.push(`${m.file}(${spanNote(sp)})`);
     if (!xlsxHasOHLC(p)) noOhlc.push(m.file);
@@ -63,6 +65,8 @@ export function healthReport() {
     if (list.length > 6) console.log(`     …… 另有 ${list.length - 6} 个`);
   };
   if (chart.length) {
+    console.log(`\n  非日频或频率未知：${nonDaily.length}（不能用于日频回测）`);
+    few(nonDaily, '需检查 Periodicity: ');
     console.log(`\n  成交量列(决定压力位用真实筹码分布还是停留时间):含量 ${withVol.length} · 无量 ${noVol.length}`);
     if (noVol.length) {
       few(noVol, '无量: ');
