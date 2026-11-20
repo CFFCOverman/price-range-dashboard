@@ -21,3 +21,4 @@
 {"ts":"20261120T003853Z","file":"fetcher/steps/valuation.mjs","why":"fetchValuationHistory 可指定目标文件,供 collect 写 raw/valuation"}
 {"ts":"20261120T003947Z","file":"README.md","why":"接入 collect/ 采集层"}
 {"ts":"20261120T003947Z","file":"package.json","why":"接入 collect/ 采集层"}
+{"ts":"20261120T134256Z","file":".gitignore","why":"config/universe.csv 是标的清单不是 FactSet 数据,放行进仓库"}
