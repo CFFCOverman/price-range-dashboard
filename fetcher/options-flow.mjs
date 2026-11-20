@@ -2,10 +2,11 @@
  * 盘中期权方向代理采集器。
  * 默认抓一次 NVDA：node fetcher/options-flow.mjs
  * 指定标的：node fetcher/options-flow.mjs NVDA-US SPY-US QQQ-US
- * 连续监测：node fetcher/options-flow.mjs --watch --interval=300 NVDA-US SPY-US
+ * 连续监测（正常每轮完成后等待15分钟）：node fetcher/options-flow.mjs --watch NVDA-US SPY-US
  * 注意：这是“成交方向代理”，不是交易所逐笔客户/Dealer 分类。
  */
 import fs from 'node:fs';
+import { atomicText } from './lib/atomic-csv.mjs';
 import { ensureAssetDirs, assetPath } from './lib/config.mjs';
 import * as browser from './lib/browser.mjs';
 import { csvCell, splitCsvLine } from './steps/news.mjs';
@@ -39,13 +40,13 @@ function save(ticker, snapshot) {
   const prior = priorTime ? old.filter(r=>r.timestamp===priorTime) : [];
   const signal = buildOptionSignal(ticker, prior, fresh);
   const rows = [...old, ...fresh];
-  fs.writeFileSync(file, FLOW_FIELDS.join(',') + '\n' + rows.map(r => FLOW_FIELDS.map(k => csvCell(r[k])).join(',')).join('\n') + '\n');
+  atomicText(file, FLOW_FIELDS.join(',') + '\n' + rows.map(r => FLOW_FIELDS.map(k => csvCell(r[k])).join(',')).join('\n') + '\n');
   let signalFile='';
   if(signal){
     signalFile=assetPath(`${ticker} Options Signals.csv`);
     const byTime=new Map(readCsv(signalFile).map(r=>[r.timestamp,r]));byTime.set(signal.timestamp,signal);
-    const signals=resolveOneHourReturns([...byTime.values()]).slice(-100000);
-    fs.writeFileSync(signalFile,SIGNAL_FIELDS.join(',')+'\n'+signals.map(r=>SIGNAL_FIELDS.map(k=>csvCell(r[k])).join(',')).join('\n')+'\n');
+    const signals=resolveOneHourReturns([...byTime.values()]);
+    atomicText(signalFile,SIGNAL_FIELDS.join(',')+'\n'+signals.map(r=>SIGNAL_FIELDS.map(k=>csvCell(r[k])).join(',')).join('\n')+'\n');
   }
   return { file, signalFile, signal, rows: fresh.length, snapshots: new Set(rows.map(r => r.timestamp)).size };
 }
@@ -78,7 +79,7 @@ try {
     }
     await browser.ensureBrowser();
     const result = await round();
-    if (!watch) break;
+    if (!watch) { if (result.succeeded !== tickers.length) process.exitCode = 1; break; }
     if (result.succeeded === tickers.length && previousTotal !== null && result.totalVolume <= previousTotal) idleRounds++;
     else idleRounds = 0;
     if (result.succeeded === tickers.length) previousTotal = result.totalVolume;

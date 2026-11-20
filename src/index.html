@@ -27,7 +27,7 @@
   <div class="drop" id="drop">
     <span class="lz">将 <strong>companies.csv</strong> / <strong>history.csv</strong> / FactSet <strong>.xlsx</strong>(模型 / Estimate History / Snapshot)拖到这里,或</span>
     <span class="le">Drop <strong>companies.csv</strong> / <strong>history.csv</strong> / FactSet <strong>.xlsx</strong> (model / Estimate History / Snapshot) here, or</span>
-    <label style="color:var(--series-1);cursor:pointer;text-decoration:underline"><span class="lz">点击选择文件</span><span class="le">browse files</span><input type="file" id="fileInput" accept=".csv,.xlsx,.xls,text/csv" multiple></label>
+    <label style="color:var(--series-1);cursor:pointer;text-decoration:underline"><span class="lz">点击选择文件</span><span class="le">browse files</span><input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.json,text/csv" multiple></label>
   </div>
   <div class="loadrow">
     <button class="primary" id="dirBtn"><span class="lz">连接文件夹</span><span class="le">Connect folder</span></button>
@@ -44,7 +44,8 @@
       <p><strong>companies.csv</strong> (one row per company): <code>ticker, name, currency, price, price_date, eps_fy1_low/_mean/_high, eps_fy2_low/_mean/_high</code>. FactSet: <code>FG_PRICE</code>, <code>FE_ESTIMATE("EPS","LOW|MEAN|HIGH",…)</code>.</p>
       <p><strong>history.csv</strong> (one row per month, 5–10y recommended): <code>ticker, date, pe_ntm</code> (or <code>price</code> + <code>eps_ntm</code>; a <code>price</code> column also feeds the volatility band). FactSet: <code>FG_PE_NTM</code>.</p>
       <p><strong>FactSet model .xlsx</strong> ("Earnings Per Share" block): reads FY1/FY2 annual EPS means; derives price from the Valuation block's FY1 forward PE.</p>
-      <p><strong>Estimate History .xlsx</strong>: reads latest consensus EPS low/mean/high and the monthly P/E series. It tracks a <strong>fixed fiscal year</strong>, so only the most recent 24 months are used for percentiles — for a true 5–10y valuation band export an NTM PE monthly series. The full price series (P/E × mean) still feeds the volatility band.</p>
+      <p><strong>NTM Valuation History.csv</strong>: independent rolling NTM P/E history, fetched for the past 10 years on the first run. Each historical price uses the EPS forecast as of that date. This series takes priority over fixed fiscal-year multiples. Actual coverage depends on available data.</p>
+      <p><strong>Estimate History .xlsx</strong>: reads consensus EPS low/mean/high. Its fixed fiscal-year P/E series is a fallback, limited to the latest 24 observations. The default NTM view uses the latest eps_ntm mean at all endpoints; no low/high forecasts are inferred. FY1/FY2 remain separate fiscal scenarios. Compare 3/5/10-year windows and their actual coverage.</p>
       <p><strong>Snapshot .xlsx</strong> ("Previous Close"): real closing price, 52-week range, analyst target/rating, annual PE references. Price precedence: manual &gt; snapshot/CSV &gt; model-derived.</p>
       <p><strong>Other methods not computed here:</strong> DCF + sensitivity (needs cash-flow assumptions; unstable when near-term FCF is depressed by heavy capex), option-implied volatility bands (needs option IV data), technical support/resistance (needs daily price history). The statistical volatility band in the comparison panel uses realized monthly volatility: price × e<sup>±σ</sup> over one year, a 68% band under a lognormal assumption.</p>
     </div>
@@ -66,16 +67,23 @@
     </table>
     <p>没有历史序列时,可以在公司详情里手动输入估值分位(P25/P50/P75)。</p>
     <p><strong>FactSet 公司模型 .xlsx</strong>(含 "Earnings Per Share" 区块):自动读取 FY1/FY2 年度 EPS 预测均值,并用 Valuation 区块的 FY1 PE 反推现价。</p>
-    <p><strong>FactSet Estimate History .xlsx</strong>(含 "Estimate History" 表格):自动读取最新一致预期的 EPS 低/均/高,以及月度 P/E 序列并计算分位。注意:Estimate History 跟踪的是<strong>固定财年</strong>,窗口拉太长时早期 P/E 是"当时股价 ÷ 多年后盈利",口径与近期不可比,因此 app 最多采用最近 24 个月;真正的 5–10 年估值带请导出 <strong>NTM PE 月度序列</strong>(history.csv 格式)。</p>
+    <p><strong>NTM Valuation History.csv</strong>：首次回补近10年滚动 NTM P/E，各历史日期使用当时对应的盈利预测。优先用这份独立序列计算分位，实际覆盖范围以取得的数据为准。</p>
+    <p><strong>FactSet Estimate History .xlsx</strong>：读取 EPS 低／均／高。固定财年 P/E 仅作后备，最多采用最近24个点。默认 NTM 使用最新 eps_ntm 平均预测，未提供盈利上下限时以同一 EPS 计算倍数区间。FY1/FY2 保留为单独财年情景。支持近3/5/10年窗口及实际覆盖对照。</p>
     <p><strong>FactSet Snapshot .xlsx</strong>(含 "Previous Close" 的快照页):自动读取真实收盘价、52 周区间、分析师目标价/评级和年度 PE 参考。现价来源优先级:手动输入 &gt; 快照/CSV 实价 &gt; 模型反推。所有文件可以同时拖入,互相补全同一家公司。首次解析 xlsx 需联网加载解析库。</p>
-    <p><strong>本工具未计算的其他测算方法:</strong>DCF + 敏感性矩阵(需现金流假设;近期 FCF 被大额资本开支压低的公司结果极不稳定)、期权隐含波动率区间(需期权 IV 数据)、技术面支撑/阻力(需日线价格)。方法对比面板里的"波动率统计区间"用已实现月度波动率计算:现价 × e<sup>±σ</sup>(一年期),对数正态假设下约 68% 概率带。history.csv 若含 <code>price</code> 列,也会用于波动率计算。</p>
+    <p><strong>合理价值：</strong>导入 <code>*Fair Value Inputs.json</code> 中已复核的每股股东现金流、稀释、折现率及稳定期假设后计算。缺失时显示待建模，盈利修订或重大事件出现时显示待复核。历史倍数区间单独保留作对照。方法对比面板的波动率统计区间不属于合理价值估计。</p>
     </div>
   </details>
 </section>
 
+<section class="card" id="fairOverview" hidden></section>
 <section class="card" id="ovCard" hidden>
-  <h2><span class="lz">公司总览 · 隐含上行/下行空间</span><span class="le">Overview · implied upside / downside</span></h2>
-  <p class="hint"><span class="lz">核心区间 = 悲观 EPS × PE 25 分位 ~ 乐观 EPS × PE 75 分位;中枢 = 基准 EPS × PE 中位数。点击行查看详情,点击表头排序。</span><span class="le">Core range = low EPS × P25 PE ~ high EPS × P75 PE; mid = mean EPS × median PE. Click a row for detail, click headers to sort.</span></p>
+  <h2><span class="lz">历史倍数对照 · 条件价格区间</span><span class="le">Historical multiples · conditional price ranges</span></h2>
+  <div class="formrow">
+    <div><label for="valuationBasis"><span class="lz">盈利口径</span><span class="le">Earnings basis</span></label><select id="valuationBasis"><option value="ntm">NTM · 未来十二个月 / next 12 months</option><option value="fy1">FY1 · 财年情景 / fiscal scenario</option><option value="fy2">FY2 · 财年情景 / fiscal scenario</option></select></div>
+    <div><label for="peWindow"><span class="lz">历史 PE 窗口</span><span class="le">Historical P/E window</span></label><select id="peWindow"><option value="3">3年 / years</option><option value="5">5年 / years</option><option value="10" selected>10年 / years</option></select></div>
+  </div>
+  <p class="hint" id="valuationMethod"></p>
+  <p class="hint"><span class="lz">当前 PE 使用最新已导入现价 ÷ 最新 NTM EPS，价格或预测更新后立即重算。数据文件不是实时行情；拉取后点击“重新扫描”。历史区间是独立估值参照。</span><span class="le">Current P/E recalculates from the latest imported price / NTM EPS. Files are not a live feed; rescan after fetching. Historical ranges are separate valuation references.</span></p>
   <div id="ovTableWrap"></div>
   <div class="chartbox" id="ovChartBox">
     <div id="ovChart"></div>
@@ -95,7 +103,7 @@
     <div><label for="pxInput"><span class="lz">现价</span><span class="le">Price</span></label><input type="number" min="0.00000001" step="0.01" id="pxInput" aria-describedby="pxError" placeholder="必填"></div>
     <div><label><span class="lz">预测期</span><span class="le">Horizon</span></label>
       <span class="tabs" id="hzTabs">
-        <button data-h="fy1" class="on">FY1</button><button data-h="fy2">FY2</button>
+        <button data-h="ntm" class="on">NTM</button><button data-h="fy1">FY1</button><button data-h="fy2">FY2</button>
       </span>
     </div>
     <div><label for="epsLow"><span class="lz">EPS 悲观</span><span class="le">EPS low</span></label><input type="number" step="0.01" id="epsLow"></div>
@@ -113,7 +121,10 @@
   </div>
 
   <div class="dethead" id="detHead"></div>
+  <section id="fairDetail"></section>
+  <section id="latestValuation"></section>
   <div class="kpis" id="detKpis"></div>
+  <section id="valuationWindows"></section>
 
   <div class="detrow">
     <div class="detcol">
@@ -243,7 +254,7 @@
   </div>
 
   <div id="peBandSec">
-    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">NTM 市盈率历史带(分位为水平参考线)</span><span class="le">NTM P/E history band (percentiles as reference lines)</span></h2>
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">市盈率历史带（来源与口径见下方）</span><span class="le">P/E history band (source and basis below)</span></h2>
     <div class="chartbox" id="peBandBox">
       <div id="peBandChart"></div>
       <div class="tip" id="peTip"></div>

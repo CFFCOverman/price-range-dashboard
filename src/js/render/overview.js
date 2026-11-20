@@ -9,8 +9,8 @@ function overviewRows() {
   const k = state.sortKey, d = state.sortDir;
   rows.sort((a, b) => {
     if (k === 'name') return d * a.co.name.localeCompare(b.co.name, 'zh');
-    let va = a.r ? (k === 'price' ? a.co.price : a.r[k]) : -Infinity;
-    let vb = b.r ? (k === 'price' ? b.co.price : b.r[k]) : -Infinity;
+    const value = row => k === 'price' ? row.co.price : k === 'currentPE' ? latestValuation(row.co).current ?? -Infinity : row.r?.[k] ?? -Infinity;
+    let va = value(a), vb = value(b);
     if (!isFinite(va)) va = -Infinity;
     if (!isFinite(vb)) vb = -Infinity;
     return d * (va - vb);
@@ -18,10 +18,15 @@ function overviewRows() {
   return rows;
 }
 const OV_COLS = [
-  ['name', 'colCompany'], ['price', 'colPrice'], ['downPct', 'colLow'], ['upPct', 'colHigh'],
+  ['name', 'colCompany'], ['price', 'colPrice'], ['currentPE', 'colCurrentPE'], ['downPct', 'colLow'], ['upPct', 'colHigh'],
   ['midPct', 'colMid'], ['pos', 'colPos'],
 ];
 function renderOvTable(rows) {
+  $('valuationBasis').value = state.horizon;
+  $('peWindow').value = state.peYears;
+  $('valuationMethod').textContent = LANG === 'en'
+    ? `${state.horizon.toUpperCase()} × ${state.peYears}y historical P/E. NTM uses the same mean EPS at P25/P50/P75 unless manually overridden; FY1/FY2 use fiscal EPS scenarios. These are conditional ranges, not probability intervals. Click a company for dates and 3/5/10y comparison.`
+    : `${state.horizon === 'ntm' ? '未来十二个月 NTM' : state.horizon.toUpperCase() + ' 财年情景'} × 近${state.peYears}年历史 PE。NTM 默认用同一平均 EPS 乘 PE 第25／50／75分位，只反映倍数变化；手工修改 EPS 后为自设情景。FY1／FY2 使用财年盈利上下限。区间不代表概率；点击公司查看日期和3／5／10年对照。`;
   const wrap = $('ovTableWrap'); wrap.replaceChildren();
   const tb = el('table', 'ov'), thead = el('thead'), trh = el('tr');
   for (const [key, labelKey] of OV_COLS) {
@@ -39,6 +44,9 @@ function renderOvTable(rows) {
     const td0 = el('td'); td0.appendChild(el('span', 'nm', co.name)); td0.appendChild(el('span', 'tk', co.ticker));
     tr.appendChild(td0);
     tr.appendChild(el('td', '', fmtN(co.price)));
+    const latest = latestValuation(co), peCell = el('td', '', latest.current === null ? '—' : fmtX(latest.current));
+    peCell.title = (LANG === 'en' ? 'Price date / NTM EPS date: ' : '价格日 / NTM EPS 日：') + (co.priceDate || '—') + ' / ' + (latest.point?.date || '—');
+    tr.appendChild(peCell);
     if (r) {
       const pc = v => isFinite(v) ? (v >= 0 ? 'pos' : 'neg') : '';
       const cLow = el('td', pc(r.downPct), fmtN(r.coreLow) + ' (' + fmtPct(r.downPct) + ')');
@@ -65,7 +73,7 @@ function renderOvTable(rows) {
       }
       tr.appendChild(tdm);
     } else {
-      const td = el('td', '', t('rowNoCalc')); td.colSpan = 4; td.style.color = 'var(--text-muted)';
+      const td = el('td', '', noRangeReason(co, state.horizon)); td.colSpan = 4; td.style.color = 'var(--text-muted)';
       tr.appendChild(td);
     }
     tr.addEventListener('click', () => { state.selected = co.ticker; renderAll(); $('detCard').scrollIntoView({ behavior: 'smooth' }); });

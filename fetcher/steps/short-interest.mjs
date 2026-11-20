@@ -95,6 +95,8 @@ const first = (text, res, ok) => {
  *   - `wide: true`(整页文本兜底)—— **只认快路径**。松正则在整页文本上必然读到隔壁那一格,
  *     而错的数字比没有数字危险得多,所以这里宁可返回 null。
  */
+/** 格子里两项都是 "--":数据源当天没有,不是改版 */
+export const NO_SHORTINT_DATA = /SHORT\s+INTEREST\s*--\s*DAYS\s*\/\s*--\s*%/i;
 export function parseShortInt(text, { wide = false } = {}) {
   const s = String(text || '');
   const both = RE_ADJ.exec(s);
@@ -181,11 +183,17 @@ export async function fetchShortInterest(ticker) {
     /* 只有整页文本时也试一下,但走的是 wide 模式:只认紧挨标签的严格写法 */
     if ((!si || !okPct(si.pct)) && text) si = parseShortInt(text, { wide: true }) || si;
     if (si && okPct(si.pct)) break;
+    /* FactSet 当天就没有这只的空头数据(格子写 "-- DAYS / --% FLOAT",11/19 RKLB 实测):等 8 秒确认后就走,不空等 45 秒 */
+    if (block && NO_SHORTINT_DATA.test(block) && Date.now() - t0 >= 8000) break;
     if (Date.now() - t0 >= SHORTINT_WAIT_MS) break;
     await page.waitForTimeout(POLL_MS);
   }
 
   phase('解析行');
+  if ((!si || !okPct(si.pct)) && block && NO_SHORTINT_DATA.test(block)) {
+    log(`  ℹ ${ticker} 空头持仓:FactSet 当前无数据(页面显示 --),本轮不记一行,也不算失败`);
+    return true;
+  }
   if (!si || !okPct(si.pct)) {
     if (block) log(`  ⓘ 收窄到的那一格是:「${block}」`);
     log(shortIntDiagnosis(text));

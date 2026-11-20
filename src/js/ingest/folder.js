@@ -1,5 +1,6 @@
 /* ================= 文件夹连接(File System Access API;记忆通过 IndexedDB,不可用时静默降级) ================= */
 let dirHandle = null;
+let folderScanning = false, folderSignature = '';
 function idbOpen() {
   return new Promise((res, rej) => {
     try {
@@ -33,22 +34,30 @@ async function idbGet(k) {
 async function collectDirFiles(handle, depth, out) {
   for await (const entry of handle.values()) {
     if (!isImportArtifact(entry.name)) continue;
-    if (entry.kind === 'file' && /\.(csv|xlsx|xls)$/i.test(entry.name)) out.push(await entry.getFile());
+    if (entry.kind === 'file' && (/\.(csv|xlsx|xls)$/i.test(entry.name) || /Fair Value Inputs\.json$/i.test(entry.name))) out.push(await entry.getFile());
     else if (entry.kind === 'directory' && depth < 3) await collectDirFiles(entry, depth + 1, out);
   }
 }
-async function scanFolder() {
-  if (!dirHandle) return;
+async function scanFolder(automatic = false) {
+  if (!dirHandle || folderScanning) return;
+  folderScanning = true;
+  try {
   const files = [];
-  try { await collectDirFiles(dirHandle, 0, files); } catch (e) { renderAll(t('fsDenied')); return; }
+  try { await collectDirFiles(dirHandle, 0, files); } catch (e) { state.fairImportErrors=[...new Set([...state.fairImportErrors,'文件夹读取失败'])]; renderAll(t('fsDenied')); return; }
+  state.fairImportErrors=state.fairImportErrors.filter(e=>e!=='文件夹读取失败');
   if (!files.length) { renderAll(t('fsNoFiles')(dirHandle.name)); return; }
   files.sort((a, b) => a.lastModified - b.lastModified);   /* 旧→新:最新文件最后导入、覆盖生效 */
+  const signature=JSON.stringify(files.map(f=>[f.name,f.size,f.lastModified]));
+  if(automatic === true && signature===folderSignature) {recordFairSnapshots();renderAll();return;}
   await handleFiles(files);
+  folderSignature=signature;
   const st = $('status');
   st.insertBefore(el('span', 'ok', t('fsScanned')(dirHandle.name, files.length) + ' '), st.firstChild);
   $('rescanBtn').hidden = false;
   $('reconnectBtn').hidden = true;
+  } finally { folderScanning=false; }
 }
+setInterval(()=>{ if(dirHandle) scanFolder(true); else if(state.fairImportedAt) {recordFairSnapshots();renderAll();} },60000);
 $('dirBtn').addEventListener('click', async () => {
   if (!window.showDirectoryPicker) { renderAll(t('fsUnsupported')); return; }
   try { dirHandle = await window.showDirectoryPicker({ mode: 'read' }); } catch (e) { return; /* 用户取消 */ }

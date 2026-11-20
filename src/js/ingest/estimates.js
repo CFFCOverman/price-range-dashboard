@@ -93,12 +93,18 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
   };
   if (!isFar) {
     const hz=isFY2 ? 'fy2' : 'fy1';
-    co.eps[hz] = { low: latest.low, mean: latest.mean, high: latest.high };
     co.estimateMeta ||= {};
+    const newer = !co.estimateMeta[hz]?.date || latest.date >= co.estimateMeta[hz].date;
     const prior=recs.filter(r=>r.date<=new Date(Date.parse(latest.date+'T00:00:00Z')-30*86400000).toISOString().slice(0,10)).at(-1);
-    co.estimateMeta[hz]={date:latest.date,label:String((aoa[sec]||[])[1]||''),priorDate:prior?.date||'',revision:prior&&prior.mean>0?latest.mean/prior.mean-1:null};
+    const previous = recs.at(-2);
+    if (newer) {
+      co.eps[hz] = { low: latest.low, mean: latest.mean, high: latest.high };
+      co.estimateMeta[hz]={date:latest.date,label:String((aoa[sec]||[])[1]||''),priorDate:prior?.date||'',revision:prior&&prior.mean>0?latest.mean/prior.mean-1:null,
+        previousDate:previous?.date||'',previousMean:previous?.mean,latestMean:latest.mean,
+        recentRevision:previous&&previous.mean>0?latest.mean/previous.mean-1:null};
+    }
   }
-  if (fy === 1) {   /* 修正动量:最新一期上调/下调家数(方向信号) */
+  if (fy === 1 && (!co.rev?.date || latest.date >= co.rev.date)) {   /* 修正动量:最新一期上调/下调家数(方向信号) */
     co.rev = {
       n: latest.n,
       up: latest.up,
@@ -121,7 +127,10 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
   let peNote = '';
   if (fy !== 1) {
     peNote = isFar ? t('estFarSkip')(fy) : '';   /* 非第一财年:PE 分位一律不收,口径以 FY1/NTM 为准 */
+  } else if (existing[0]?.basis === 'ntm' && existing.length >= 12) {
+    peNote = t('keepNtm')(existing.length);
   } else if (peSeries.length > existing.length || (peSeries.length === existing.length && peSeries.length && peSeries.at(-1).date >= existing.at(-1).date)) {
+    peSeries = peSeries.map(r => ({ ...r, basis: 'fixed_fy1' }));
     state.history.set(ticker, peSeries);
     peNote = t('peSeries')(peSeries.length, peSeries[0].date.slice(0, 7), peSeries[peSeries.length - 1].date.slice(0, 7)) + truncNote
       + (peSeries.length < 36 ? t('shortWin') : '');

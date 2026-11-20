@@ -12,7 +12,9 @@ import { log } from '../lib/log.mjs';
  * 页面是虚拟化的自定义 tf-grid:没有 <tr>,scrollTop 也不吃程序赋值。
  * 解法:抓取前把视口临时拉高到 2400px,让虚拟列表一次性渲染完;
  *       再用单元格 bounding-rect 的 top/left 把"格子"还原成"行"。 */
-export const NEWS_MAX_ROWS = 500;
+/* 原为 500:活跃标的一轮就有上百条,500 条只够留几天(11/19 AMD/TSM/RKLB 都已顶格),
+ * 与"近一年标题供情绪打分"的用途不符;5000 条约 0.5MB/家 */
+export const NEWS_MAX_ROWS = 5000;
 /* 下面几个纯函数用 function 声明(会提升),--selftest 在文件靠前处就能调用 */
 export function pad2(n) { return String(n).padStart(2, '0'); }
 export function newsMonth(abbr) {

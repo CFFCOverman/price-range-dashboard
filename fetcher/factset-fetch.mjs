@@ -8,6 +8,10 @@
  *   4. Ownership 空头持仓(回补天数/占流通盘%)→ short-interest.csv(逐日累积)
  *   5. StreetAccount 新闻标题(近一年)→ "{ticker} News.csv"(逐轮累积去重)
  *   6. 期权链未平仓量 OI(尽力而为;账号无期权权限就跳过)→ "{ticker} Options.csv"(逐轮累积)
+ *   8. 业绩事件史(同源 JSON 接口,不刮屏):Guidance History 近5年 + Surprise History 近12季 EPS/营收
+ *      → "{ticker} Guidance History.csv" / "{ticker} Surprise History.csv"(Assets/earnings/,每次整份覆盖)
+ *   9. 公司情报(信用/CDS、机构增减持、分部门、GeoRev、供应链)→ Assets/company-intel/,清单见 steps/company-intel.mjs § INTEL_REPORTS
+ *  10. 每轮末尾:给 Research OS 的数据包 → Assets/research-feed/,字段见 steps/research-feed.mjs 文件头
  *   7. Charting 日线数据导出(尽力而为;失败会提示手动)→ xlsx
  *      顺带尽力开启成交量序列 → 仪表盘压力位用真实筹码分布(拿不到就退回停留时间口径,不阻断)
  * 输出全部写入仓库根的 Assets/ —— 按数据类型分子目录(estimates / charting / targets /

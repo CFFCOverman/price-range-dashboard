@@ -9,24 +9,33 @@ Author: Xuhao Chao · License: MIT
 ```
 npm install                      装 playwright 和 xlsx
 npx playwright install chrome    让 playwright 认到本机 Chrome
-npm run login                    弹出浏览器,手动登录 FactSet 一次,登完关窗口即可
+npm run login                    弹出浏览器,手动登录 FactSet 一次,成功后自动关闭窗口
 ```
 
 登录状态会保存下来,之后不用再登。
 
-日常抓取默认采用 `FS_HEADLESS=auto`：先在后台启动 Chrome；登录仍有效时全程不显示窗口。
-如果检测到登录已失效，脚本会先关闭后台浏览器（释放同一个持久化 profile），再打开可见
-Chrome 等你登录，完成后自动继续。`npm run login` / `--login` 始终打开可见窗口。
+日常抓取（包括菜单 1）默认后台运行，日线导出也不会弹出 FactSet 窗口。
+如果检测到登录已失效，脚本会弹出 FactSet 窗口等你登录；登录完成后自动关闭窗口，切回后台继续拉取。菜单 10 和直接启动 Option Flow 使用相同登录流程。
+`npm run login` / `--login` 始终打开可见窗口。
 
-需要固定行为时可设置环境变量：`FS_HEADLESS=0` 始终显示 Chrome；`FS_HEADLESS=1` 始终后台运行。
+需要覆盖默认行为时可设置环境变量：`FS_HEADLESS=0` 始终显示 Chrome；`FS_HEADLESS=1` 始终后台运行；默认 `FS_HEADLESS=auto` 仅在登录失效时开窗，登录后回到后台。
 强制后台时若登录失效，脚本会停止并提示先运行 `npm run login`，不会在后台无限等待一个无法完成的登录。
 
 ## 日常使用
 
 ```
-npm run fetch        跑一轮抓取(每家公司 8 步:估值 / 价格 / 走势 / 目标价 / 空头 / 新闻 / 期权 / 汇总)
+npm run fetch        跑一轮抓取(每家公司9项，含独立 NTM 历史及 FY1/FY2 预测)
 npm run selftest     纯函数自检,不开浏览器、不碰网络(条数以命令自己打印的为准,当前约 298 项)
 ```
+
+独立滚动估值保存在 `Assets/valuation/<ticker> NTM Valuation History.csv`。
+首次运行即请求近10年月末及最新日期；后续每轮复用已校验历史，只请求缺失日期、最新日期和用于比较的上个月末。比较点一并刷新，以保持拆股调整口径一致。不再等待96小时；强制完整轮次会重取历史。FY1/FY2 盈利也每轮更新。
+每个历史价格配当时的 NTM 盈利预测，保留日期、EPS、倍数、公式来源和抓取时间。
+少于12个有效正倍数、覆盖率不足、接口或身份错误时记为失败，保留旧文件。
+固定财年的 Estimate History 继续提供 FY1/FY2 EPS，P/E 缺失不再连带丢弃有效盈利预测。
+
+仅补拉估值历史，在仓库根目录执行 `npm run fetch:valuation -- NFLX-US`；
+`npm run fetch:valuation -- --all` 补拉当前公司清单。运行前退出其它使用 FactSet 专用浏览器的程序。
 
 Windows 上更省事的做法是直接双击**仓库根目录**的 `run-factset.bat`——它会自己 `cd` 进来,
 依赖缺失或与 `package-lock.json` 不一致时才会用 `npm ci` 修复，Chrome 不在标准安装位置时才会安装。
@@ -266,6 +275,6 @@ set FS_OPT_URL=https://my.apps.factset.com/workstation/<那一段>/{ticker}
 
 真实频率按钮显示 `W (A)`，菜单日频选项为 `D`；已同时兼容旧 `Periodicity / Daily` 写法。导出前选择 D，导出后验证日期频率。Chrome 原生下载在本机重复退出 0xC0000005，现改为接收同一个页面生成的 Excel Blob，仍写候选文件并通过价格、频率检查后替换正式文件。临时拦截在 finally 恢复，不修改 FactSet 保存布局。
 
-auto 模式下 Charting 使用可见 Chrome；显式 FS_HEADLESS=1 仍保持后台。连接中断最多重开并重试当前日线一次。可单独运行 `node tools/repair-charting.mjs` 更新当前公司和市场日线及台账；它不重拉估值等其他数据。
+auto 模式下 Charting 使用后台 Chrome，仅登录失效时开窗，登录后回到后台。连接中断最多重开并重试当前日线一次。可单独运行 `node tools/repair-charting.mjs` 更新当前公司和市场日线及台账；它不重拉估值等其他数据。
 
 `node tests/test-chart-daily.mjs` 覆盖真实菜单形状、Blob 字节接收、未触发原生下载及钩子恢复。真实 NVDA、AVGO、GOOGL 已下载并通过日频检查，完整批量结果见项目审计补充。OHLC 尚未验证成功，不能把日频收盘价称为完整 K 线。

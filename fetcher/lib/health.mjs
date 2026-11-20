@@ -8,6 +8,7 @@ import { FRESH_HOURS, freshHoursFor } from './companies.mjs';
 import { ledger } from './ledger.mjs';
 import { expectedArtifacts } from './registry.mjs';
 import { dailyCadenceOK, spanNote, spanOK, xlsxDateSpan, xlsxHasOHLC, xlsxHasVolume } from '../steps/charting.mjs';
+import { splitCsvLine } from '../steps/news.mjs';
 
 export const STALE_HOURS = 96;
 export function healthReport() {
@@ -46,6 +47,15 @@ export function healthReport() {
     for (const [m, r, h] of stale) console.log(`     ${m.step}  文件 ${age(h)}  台账最近成功 ${r ? r.okAt : '-'}`);
   }
   if (!fail.length && !stale.length && !never.length) console.log('\n  台账与文件时间检查通过；字段与频率检查见下方。');
+  console.log('\n  独立 NTM P/E 历史覆盖（不使用固定财年表冒充滚动历史）：');
+  for (const m of expectedArtifacts().filter(m => m.kind === 'valuation')) {
+    try {
+      const lines = fs.readFileSync(assetPath(m.file), 'utf8').trim().split(/\r?\n/);
+      const head = splitCsvLine(lines.shift()), di=head.indexOf('date'), pi=head.indexOf('pe_ntm');
+      const valid=lines.map(splitCsvLine).filter(r=>Number(r[pi])>0).sort((a,b)=>a[di].localeCompare(b[di]));
+      console.log(`     ${m.file}: ${valid.length} 个有效点，${valid[0]?.[di]||'—'} ~ ${valid.at(-1)?.[di]||'—'}`);
+    } catch { console.log(`     ${m.file}: 未取得`); }
+  }
   /* 成交量 / 跨度 / OHLC:直接读磁盘上的 Charting 文件,不依赖本轮是否跑过。
    * 三件事都是"账号里那张保存好的图表布局"的属性,不是脚本能一次点定的,所以体检要一直盯着。 */
   const chart = expectedArtifacts().filter(m => /Daily Charting\.xlsx$/i.test(m.file));

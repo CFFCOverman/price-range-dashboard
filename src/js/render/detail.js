@@ -47,7 +47,10 @@ function renderHead(co) {
   head.appendChild(el('span', 'cur', (co.currency || '—') + (pd ? ' · ' + pd : '') + ' · ' + co.name + ' ' + co.ticker));
 }
 function renderKpis(co, r) {
+  renderFairDetail(co);
+  renderLatestValuation(co);
   renderDecisionContext(co);
+  renderValuationWindows(co);
   const pe = peStats(co.ticker);
   const kp = $('detKpis'); kp.replaceChildren();
   const tile = (lb, vl, dt, cls) => {
@@ -59,7 +62,7 @@ function renderKpis(co, r) {
     tile(t('tMid'), fmtN(r.mid), fmtPct(r.midPct) + t('vsPrice'), isFinite(r.midPct) && r.midPct >= 0 ? 'pos' : isFinite(r.midPct) ? 'neg' : '');
     tile(t('tCore'), fmtN(r.coreLow) + ' ~ ' + fmtN(r.coreHigh), fmtPct(r.downPct) + ' ~ ' + fmtPct(r.upPct), '');
     if (isFinite(r.extLow)) tile(t('tExt'), fmtN(r.extLow) + ' ~ ' + fmtN(r.extHigh), fmtPct((r.extLow / co.price - 1) * 100) + ' ~ ' + fmtPct((r.extHigh / co.price - 1) * 100), '');
-    if (pe && isFinite(pe.current)) tile(t('tPe'), fmtX(pe.current), t('histPct')(rankPct(pe.sorted, pe.current)), '');
+    if (pe && isFinite(pe.current)) tile(LANG === 'en' ? 'Last historical P/E' : '历史文件末点 PE', fmtX(pe.current), t('histPct')(rankPct(pe.sorted, pe.current)), '');
     const ex = co.extra;
     if (ex && isFinite(ex.target)) {
       const d = isFinite(co.price) ? (ex.target / co.price - 1) * 100 : NaN;
@@ -67,15 +70,69 @@ function renderKpis(co, r) {
     }
   } else {
     const manual = !state.history.has(co.ticker) || (state.history.get(co.ticker) || []).length < 12;
-    kp.appendChild(el('div', 'empty', manual && !peStats(co.ticker) ? t('needPct') : t('needEps')));
+    kp.appendChild(el('div', 'empty', state.horizon === 'ntm' ? noRangeReason(co, state.horizon) : manual && !peStats(co.ticker) ? t('needPct') : t('needEps')));
   }
+}
+function renderLatestValuation(co) {
+  const panel = $('latestValuation'); panel.replaceChildren();
+  const say = (cn, en) => LANG === 'en' ? en : cn;
+  const x = latestValuation(co), point = x.point;
+  const pct = v => v === null || v === undefined ? '—' : fmtPct(v * 100);
+  const add = text => panel.appendChild(el('p', 'hint', text));
+  panel.appendChild(el('h3', '', say('最新 PE 与盈利变化', 'Latest P/E and earnings changes')));
+  panel.appendChild(el('strong', '', say('当前 NTM PE：', 'Current NTM P/E: ') + (x.current === null ? '—' : fmtX(x.current))));
+  const priceDate = PRICE_DATE_KEYS[co.priceDate] ? t(PRICE_DATE_KEYS[co.priceDate]) : co.priceDate || '—';
+  add(`${say('当前价格', 'Current price')} ${fmtN(co.price)} ÷ NTM EPS ${fmtN(point?.mean)} · ${say('价格日', 'Price date')} ${priceDate} · ${say('盈利日', 'EPS date')} ${point?.date || '—'}`);
+  add(say('本栏只使用原始 NTM 共识，手工情景不改变这里的当前 PE。', 'This panel uses imported NTM consensus; manual scenarios do not change current P/E.'));
+  if (point?.retrievedAt) add(say('数据取得时间：', 'Retrieved: ') + point.retrievedAt);
+  if (x.current === null) add(say('缺少有效价格或 NTM 盈利非正／缺失，不能计算 PE；不会退回 FY1 或旧正盈利。', 'Price or positive NTM EPS unavailable; no FY1 or old positive earnings substitution.'));
+  if (x.change !== null) {
+    add(`${say('相对历史观测', 'Versus historical observation')} ${x.prior.date}：PE ${pct(x.change)} · ${say('价格', 'Price')} ${pct(x.priceChange)} · NTM EPS ${pct(x.epsChange)}`);
+    add(`${say('先只更新价格', 'Update price first')}：${fmtX(x.prior.pe)} → ${fmtX(x.priceOnly)}；${say('再更新盈利', 'then earnings')}：${fmtX(x.priceOnly)} → ${fmtX(x.current)} (${pct(x.earningsEffect)})`);
+  }
+  add(say('比较按上方实际日期进行，不称作日变化。NTM 盈利变化包含时间滚动，不能全部解释成分析师上调／下调。', 'Changes span the dates shown, not necessarily one day. NTM earnings changes include time roll and are not pure analyst revisions.'));
+  for (const hz of ['fy1', 'fy2']) {
+    const m = co.estimateMeta?.[hz];
+    add(`${hz.toUpperCase()} ${say('固定财年盈利修订', 'fixed-fiscal-year earnings revision')}：${FY_LABEL.exec(m?.label || '')?.[0] || '—'} · ${m?.previousDate || '—'} → ${m?.date || '—'} · EPS ${fmtN(m?.previousMean)} → ${fmtN(m?.latestMean)} (${pct(m?.recentRevision)})`);
+  }
+  add(say('价格下跌会降低 PE，盈利下修会抬高 PE；当前 PE 不是合理目标倍数。数据延迟取决于 FactSet 更新及本地拉取、扫描时间。', 'A price drop lowers P/E; an earnings cut raises it. Current P/E is not a fair-value target multiple. Latency depends on FactSet, fetching and folder rescanning.'));
+}
+function renderValuationWindows(co) {
+  const panel = $('valuationWindows'); panel.replaceChildren();
+  const say = (cn, en) => LANG === 'en' ? en : cn;
+  const ntm = state.horizon === 'ntm', manual = state.overrides.has(co.ticker + '|' + state.horizon);
+  const point = state.ntmEstimates.get(co.ticker);
+  const meta = co.estimateMeta?.[state.horizon];
+  const eps = epsFor(co.ticker, state.horizon);
+  panel.appendChild(el('h3', '', say('历史窗口对照 · 同一盈利假设', 'History windows · same earnings assumption')));
+  panel.appendChild(el('p', 'hint', `${state.horizon.toUpperCase()} EPS ${fmtN(eps?.mean)} · ${say('盈利数据日', 'EPS date')} ${manual ? say('手工假设', 'Manual assumption') : (ntm ? point?.date : meta?.date) || '—'} · ${say('价格日', 'Price date')} ${PRICE_DATE_KEYS[co.priceDate] ? t(PRICE_DATE_KEYS[co.priceDate]) : co.priceDate || '—'}`));
+  panel.appendChild(el('p', 'hint', manual
+    ? say('已手工修改盈利；下面各窗口均使用当前自设 EPS 情景。', 'Earnings overridden; all windows use the current manual EPS scenarios.')
+    : ntm
+      ? say('来源：NTM 历史文件最新 EPS。当前仅有平均预测，没有 NTM 悲观／乐观预测；上下沿均使用同一个 EPS，只改变 PE。缺失时不使用 FY1 补齐。', 'Source: latest EPS in the NTM history file. Only mean EPS is available; both endpoints use that same EPS and vary P/E only. Missing NTM EPS is never filled with FY1.')
+      : say('财年情景：将历史倍数应用于指定财年的盈利，并非未来十二个月估值。', 'Fiscal scenario: historical multiples applied to the selected fiscal year, not a next-12-month valuation.')));
+  if (ntm && point?.date && co.priceDate && /^\d{4}-/.test(co.priceDate) && point.date !== co.priceDate)
+    panel.appendChild(el('p', 'hint', say('价格与盈利快照日期不同；这里使用最新已导入数据，并非实时预测。', 'Price and earnings snapshots have different dates; these are the latest imported data, not live estimates.')));
+  const table = el('table', 'ov'), head = el('tr');
+  for (const label of [say('窗口', 'Window'), say('实际样本', 'Actual coverage'), 'PE P25 / P50 / P75', say('下沿 / 中枢 / 上沿', 'Low / Mid / High'), say('中枢空间', 'Mid vs price')]) head.appendChild(el('th', '', label));
+  table.appendChild(head);
+  for (const years of [3, 5, 10]) {
+    const pe = peStats(co.ticker, years), r = calcRange(co, state.horizon, years), row = el('tr', years === state.peYears ? 'sel' : '');
+    const h = pe?.series;
+    const coverage = pe?.src === 'manual' ? say('手工倍数（不随窗口变化）', 'Manual multiples (unchanged across windows)')
+      : h ? `${peBasisLabel(pe)} · ${h[0].date} ~ ${h.at(-1).date} · ${h.length}${say('点', ' observations')}` : say('不足12个有效点', 'Fewer than 12 usable points');
+    for (const value of [`${years}${say('年', 'y')}`, coverage, pe ? ['p25','p50','p75'].map(k=>fmtX(pe[k])).join(' / ') : '—', r ? [r.coreLow,r.mid,r.coreHigh].map(v=>fmtN(v)).join(' / ') : '—', r ? fmtPct(r.midPct) : '—']) row.appendChild(el('td', '', value));
+    table.appendChild(row);
+  }
+  const wrap = el('div'); wrap.style.overflowX = 'auto'; wrap.appendChild(table); panel.appendChild(wrap);
+  panel.appendChild(el('p', 'hint', say('窗口按历史文件最新日期回看，实际覆盖可能短于所选年数。历史分位不是目标价保证，也不代表股价落在区间内的概率。', 'Windows look back from the latest history date; coverage may be shorter than requested. Percentiles are conditional references, not guaranteed targets or price probabilities.')));
 }
 function signalOutcomeSummary(rows, field) {
   // Non-overlapping observations per horizon; selection never uses outcomes.
   const gap=field==='future_1h_return'?90*60000:2*86400000;
   let last=-Infinity;const chosen=[];
   for(const r of rows){const stamp=Date.parse(r.timestamp);
-    if(r.signal_version!=='2'||r.quality!=='usable'||!['bullish','bearish'].includes(r.direction)||stamp-last<gap)continue;
+    if(r.signal_version!=='3'||r.quality!=='usable'||!['bullish','bearish'].includes(r.direction)||stamp-last<gap)continue;
     last=stamp;chosen.push(r);
   }
   const matured=chosen.filter(r=>r[field]!==''&&r[field]!=null&&isFinite(+r[field]));
@@ -91,26 +148,30 @@ function renderDecisionContext(co) {
   if(!panel){panel=el('section','');panel.id='decisionContext';$('detKpis').insertAdjacentElement('afterend',panel);}
   panel.replaceChildren();
   const en=LANG==='en',say=(cn,eng)=>en?eng:cn;
+  const basis=state.horizon.toUpperCase();
   const add=(label,value)=>panel.appendChild(el('p','hint',label+' '+value));
   panel.appendChild(el('h3','',say('现价隐含预期与观察条件','Implied expectations and observation conditions')));
   const x=impliedExpectations(co),pct=x=>x===null?'—':fmtPct(x*100);
   if(x){
     add(say('现价对应 PE：','Current-price PE:'),`FY1 ${x.fy1===null?'—':fmtX(x.fy1)} · FY2 ${x.fy2===null?'—':fmtX(x.fy2)}`);
-    add(say('历史中位估值下所需 EPS：','EPS required at median valuation:'),`${x.required===null?'—':fmtN(x.required)} · ${say('相对 FY1 共识','vs FY1 consensus')} ${pct(x.gap)}`);
+    add(say('历史中位估值下所需 EPS：','EPS required at median valuation:'),`${x.required===null?'—':fmtN(x.required)} · ${say('相对当前盈利假设','vs selected earnings assumption')} (${basis}) ${pct(x.gap)}`);
     add(say('盈利增长与修订：','Earnings growth and revisions:'),`FY2/FY1 ${pct(x.growth)} · ${say('FY1 约30日前至最新修订','FY1 revision from ~30d prior')} ${pct(x.revision)}`);
     add(say('估值观察：','Valuation observation:'),x.gap===null?say('盈利或估值不足，暂不判断。','Insufficient earnings or valuation data.'):
-      x.gap>0?say('现价需要高于 FY1 共识的盈利，或高于历史中位数的估值支撑。','Price requires earnings above FY1 consensus or a multiple above the historical median.'):
-      say('FY1 共识在中位估值下可覆盖现价；仍需观察盈利是否下修。','FY1 consensus supports price at the median multiple; monitor downward revisions.'));
-    add(say('时点与口径：','Dates and basis:'),`${say('价格','Price')} ${co.priceDate||'—'} · EPS ${x.epsDate||'—'} · PE ${x.peDate||'—'} · ${say('固定财年/所导入历史，非严格滚动 NTM；手工覆盖改变假设。','Fixed fiscal year / imported history, not necessarily rolling NTM; overrides change assumptions.')}`);
+      x.gap>0?say('现价需要高于当前盈利假设的盈利，或高于历史中位数的估值支撑。','Price requires earnings above the selected assumption or a multiple above the historical median.'):
+      say('当前盈利假设在中位估值下可覆盖现价；仍需观察盈利是否下修。','Selected earnings support price at the median multiple; monitor downward revisions.'));
+    add(say('时点与口径：','Dates and basis:'),`${say('价格','Price')} ${co.priceDate||'—'} · ${basis} EPS ${state.overrides.has(co.ticker+'|'+state.horizon)?say('手工','Manual'):x.epsDate||'—'} · PE ${x.peDate||'—'} · ${peBasisLabel(peStats(co.ticker))}`);
   }
   const rows=state.optionSignals.get(co.ticker)||[],latest=rows.at(-1);
   panel.appendChild(el('h3','',say('期权方向 × 价格响应','Options direction × price response')));
   if(!latest){add('',say('尚无信号文件：连接 Assets 文件夹并重新扫描，读入 Options Signals.csv。','No signals: rescan Assets to import Options Signals.csv.'));return;}
   const stale=Date.now()-Date.parse(latest.timestamp)>2*3600000;
-  const status=stale||latest.signal_version!=='2'?'watch':latest.condition_state||'watch';
+  const status=stale||latest.signal_version!=='3'?'watch':latest.condition_state||'watch';
   add(say('状态：','State:'),({watch:say('观察','Watch'),confirmed:say('条件成立：同向响应','Condition met: aligned response'),invalidated:say('判断失效：价格反向','Invalidated: opposing price')})[status]);
   add(say('数据时点：','Observation:'),`${latest.timestamp} · ${stale?say('历史记录，不能作当前触发','Historical observation, not a current trigger'):say('最近快照','Latest snapshot')}`);
   add('Net Delta Flow',`${latest.net_delta_shares} ${say('股','shares')} · ${latest.direction} · ${latest.quality}`);
+  add(say('计算范围：','Scope:'),`${latest.sampled_rows||'—'} ${say('行；匹配','rows; matched')} ${latest.matched_rows||'—'} · ${latest.expiry_count||'—'} ${say('个到期日','expiries')} (${latest.expiry_from||'—'} → ${latest.expiry_to||'—'})`);
+  add(say('质量与排除：','Quality and exclusions:'),`${say('匹配覆盖','match coverage')} ${latest.match_coverage==null||latest.match_coverage===''?'—':pct(+latest.match_coverage)} · ${say('有效成交覆盖','usable volume coverage')} ${latest.usable_coverage==null||latest.usable_coverage===''?'—':pct(+latest.usable_coverage)} · Spread ${latest.spread_suspect_contracts||0} · ${say('无法分类','unclassified')} ${latest.unclassified_contracts??'—'} · ${say('缺失/无效Delta','missing/invalid delta')} ${latest.missing_delta_contracts??'—'}`);
+  add('',say('匹配覆盖低于80%或有效成交覆盖低于35%不输出可用方向。标准合约乘数暂按100；调整合约尚未支持。所有合约仅指采集范围，Spread识别为启发式。','Direction withheld below 80% match or 35% usable-volume coverage. Standard multiplier assumed 100; adjusted contracts unsupported. Scope is sampled contracts only; spread detection is heuristic.'));
   add(say('区间价格变化：','Interval price return:'),latest.interval_price_return===''||latest.interval_price_return==null?'—':pct(+latest.interval_price_return));
   add(say('预设条件：','Rule:'),say('可用方向代理且价格同向变化至少 0.10% → 条件成立；反向至少 0.10% → 判断失效；其余观察。阈值为待验证规则，不是买卖指令。','Usable directional proxy and aligned price move ≥0.10%: condition met; opposing move ≥0.10%: invalidated; otherwise watch. Experimental rule, not an order.'));
   for(const [field,label] of [['future_1h_return','1h'],['future_1d_return','1d']]){

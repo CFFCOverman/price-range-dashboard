@@ -4,12 +4,16 @@ function isImportArtifact(name) {
 }
 async function handleFiles(files) {
   const msgs = [];
+  const importErrors = new Set(state.fairImportErrors);
   /* 归属类文件(Charting / Price Summary)排到主数据文件之后,保证公司先建立再归属 */
   const isSecondary = f => /price\s*summary|charting|targets|news/i.test(f.name);
   files = [...files].filter(f => isImportArtifact(f.webkitRelativePath || f.name)).sort((a, b) => (isSecondary(a) ? 1 : 0) - (isSecondary(b) ? 1 : 0));
   for (const f of files) {
     try {
-      if (/\.xlsx?$/i.test(f.name)) {
+      if (/\.json$/i.test(f.name)) {
+        if (!/Fair Value Inputs\.json$/i.test(f.name)) continue;
+        msgs.push(f.name+': '+ingestFairDocument(JSON.parse(await f.text())));
+      } else if (/\.xlsx?$/i.test(f.name)) {
         await ensureXLSX();
         const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
         const got = [];
@@ -50,10 +54,14 @@ async function handleFiles(files) {
           }
         }
       }
-    } catch (e) { msgs.push(f.name + t('mParseFail') + ((e && e.message) || e)); }
+      importErrors.delete(f.name);
+    } catch (e) { importErrors.add(f.name); msgs.push(f.name + t('mParseFail') + ((e && e.message) || e)); }
   }
   /* 默认选中的那家必须是**画得出来的**那批里的一家,否则详情卡片会指着一家表格里根本没有的公司 */
   const vis = visibleCompanies();
   if (vis.length && (!state.selected || !vis.some(c => c.ticker === state.selected))) state.selected = vis[0].ticker;
+  state.fairImportedAt = new Date().toISOString();
+  state.fairImportErrors = [...importErrors];
+  recordFairSnapshots();
   renderAll(msgs.join(' · '));
 }

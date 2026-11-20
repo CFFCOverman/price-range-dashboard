@@ -403,8 +403,8 @@ export function readOptionsCsv(f) {
 
 /** 按 asof **追加**写入 "{ticker} Options.csv" —— 每天一层,一年内的都留着。
  *  合并/滚存的规矩全在 lib/opt-store.mjs 里(纯函数,自检覆盖得到),这里只负责读盘写盘。 */
-export function saveOptionsCsv(ticker, recs, asof) {
-  const f = assetPath(`${ticker} Options.csv`);
+export function saveOptionsCsv(ticker, recs, asof, f = assetPath(`${ticker} Options.csv`)) {
+  fs.mkdirSync(path.dirname(f), { recursive: true });
   const stamp = asof || today;
   const fetched_at = new Date().toISOString();
   const enriched = (recs || []).map(r => ({ ...r, fetched_at: r.fetched_at || fetched_at }));

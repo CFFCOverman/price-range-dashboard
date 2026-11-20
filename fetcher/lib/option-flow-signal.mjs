@@ -6,6 +6,8 @@ export const SIGNAL_FIELDS = [
   'delta_imbalance','delta_notional','core_net_delta_shares','core_gross_delta_shares','core_imbalance',
   'quality','direction','future_1h_return','future_1d_return',
   'signal_version','interval_price_return','price_response','condition_state','source',
+  'previous_timestamp','sampled_rows','matched_rows','match_coverage','expiry_count','expiry_from','expiry_to',
+  'usable_contracts','usable_coverage','unclassified_contracts','missing_delta_contracts','reset_legs','multiplier_basis',
 ];
 
 const n = x => x === '' || x == null ? null : Number.isFinite(+x) ? +x : null;
@@ -13,23 +15,27 @@ const key = r => `${r.expiry}|${r.strike}`;
 const dte = (asof, expiry) => Math.round((Date.parse(expiry+'T00:00:00Z')-Date.parse(asof+'T00:00:00Z'))/86400000);
 function leg(prev, cur, kind) {
   const volume=n(cur[`${kind}_volume`]), oldVolume=n(prev[`${kind}_volume`]);
-  const dv=volume===null||oldVolume===null?0:Math.max(0,volume-oldVolume),delta=n(cur[`${kind}_delta`]);
+  const reset=volume!==null&&oldVolume!==null&&volume<oldVolume;
+  const dv=volume===null||oldVolume===null?0:Math.max(0,volume-oldVolume),rawDelta=n(cur[`${kind}_delta`]);
+  const delta=rawDelta!==null&&(kind==='call'?rawDelta>=0&&rawDelta<=1:rawDelta<=0&&rawDelta>=-1)?rawDelta:null;
   const last=n(cur[`${kind}_last`]),bid=n(cur[`${kind}_bid`]),ask=n(cur[`${kind}_ask`]);
   let action='unknown',position=null,reason=dv?'unclassified':'no-volume';
   if(dv>0&&bid!==null&&ask!==null&&last!==null&&bid>=0&&ask>bid){
     const width=ask-bid,mid=(ask+bid)/2;position=(last-bid)/width;
     if(position<-.2||position>1.2)reason='stale-last';
-    else if(mid>.1&&width/mid>.35)reason='wide-spread';
+    else if(width/mid>.35)reason='wide-spread';
     else if(position>=.8){action='buy';reason='ask-side'}
     else if(position<=.2){action='sell';reason='bid-side'}
     else reason='mid-market';
   }
   const q=action==='buy'?1:action==='sell'?-1:0;
-  return {kind,dv,delta,action,position,reason,spread:false,flow:q*dv*100*(delta??0)};
+  return {kind,dv,reset,delta,action,position,reason,spread:false,flow:q*dv*100*(delta??0)};
 }
 
 export function buildOptionSignal(ticker, previousRows, currentRows) {
   if(!previousRows?.length||!currentRows?.length)return null;
+  // Reject mixed batches rather than silently assigning another ticker's flow.
+  for(const batch of [previousRows,currentRows])if(batch.some(r=>(r.ticker&&r.ticker!==ticker)||r.timestamp!==batch[0].timestamp||r.asof!==batch[0].asof||(r.source||'')!==(batch[0].source||''))||new Set(batch.map(key)).size!==batch.length)return null;
   if(previousRows[0].asof!==currentRows[0].asof || (previousRows[0].source||'')!==(currentRows[0].source||''))return null;
   const timestamp=currentRows[0].timestamp,priorTimestamp=previousRows[0].timestamp;
   const seconds=Math.round((Date.parse(timestamp)-Date.parse(priorTimestamp))/1000);
@@ -44,7 +50,9 @@ export function buildOptionSignal(ticker, previousRows, currentRows) {
   const core=usable.filter(x=>dte(asof,x.cur.expiry)>=0&&dte(asof,x.cur.expiry)<=7&&spot>0&&Math.abs(+x.cur.strike/spot-1)<=.02);
   const coreNet=core.reduce((s,x)=>s+x.flow,0),coreGross=core.reduce((s,x)=>s+Math.abs(x.flow),0);
   const coverage=total?classified/total:0,imbalance=gross?net/gross:0,coreImbalance=coreGross?coreNet/coreGross:0;
-  const quality=total===0?'no-new-volume':coverage<.35?'low-coverage':spread/classified>.5?'spread-heavy':gross===0?'missing-delta':'usable';
+  const usableCoverage=total?usable.reduce((s,x)=>s+x.dv,0)/total:0;
+  const matched=items.length/2,matchCoverage=matched/Math.max(previousRows.length,currentRows.length),expiries=[...new Set(currentRows.map(r=>r.expiry))].sort();
+  const quality=items.some(x=>x.reset)?'volume-reset':matchCoverage<.8?'low-match-coverage':total===0?'no-new-volume':coverage<.35?'low-coverage':spread/classified>.5?'spread-heavy':gross===0?'missing-delta':usableCoverage<.35?'low-coverage':gross<1?'insufficient-exposure':'usable';
   const direction=quality!=='usable'||gross===0?'unavailable':imbalance>=.2?'bullish':imbalance<=-.2?'bearish':'mixed';
   const priorSpot=n(previousRows[0].spot),priceReturn=spot>0&&priorSpot>0?spot/priorSpot-1:null;
   // This is contemporaneous agreement, NOT a forward prediction result.
@@ -56,11 +64,14 @@ export function buildOptionSignal(ticker, previousRows, currentRows) {
     net_delta_shares:Math.round(net),gross_delta_shares:Math.round(gross),delta_imbalance:imbalance,
     delta_notional:spot===null?'':Math.round(net*spot),core_net_delta_shares:Math.round(coreNet),
     core_gross_delta_shares:Math.round(coreGross),core_imbalance:coreImbalance,quality,direction,
-    future_1h_return:'',future_1d_return:'',signal_version:'2',interval_price_return:priceReturn??'',price_response:response,condition_state:condition,source:currentRows[0].source||''};
+    future_1h_return:'',future_1d_return:'',signal_version:'3',interval_price_return:priceReturn??'',price_response:response,condition_state:condition,source:currentRows[0].source||'',
+    previous_timestamp:priorTimestamp,sampled_rows:currentRows.length,matched_rows:matched,match_coverage:matchCoverage,
+    expiry_count:expiries.length,expiry_from:expiries[0],expiry_to:expiries.at(-1),usable_contracts:usable.reduce((s,x)=>s+x.dv,0),usable_coverage:usableCoverage,
+    unclassified_contracts:total-classified,missing_delta_contracts:active.filter(x=>!x.spread&&x.delta===null).reduce((s,x)=>s+x.dv,0),reset_legs:items.filter(x=>x.reset).length,multiplier_basis:'standard-100-assumed'};
   return Object.fromEntries(SIGNAL_FIELDS.map(f=>[f,row[f]??'']));
 }
 
-/* Label matured 1h observations using the first later signal at or after +55 minutes. */
+/* Label matured 1h observations using the first later signal at or after +60 minutes. */
 export function resolveOneHourReturns(rows) {
   const ordered=[...(rows||[])].sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));
   for(let i=0;i<ordered.length;i++){

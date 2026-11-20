@@ -6,12 +6,13 @@ import fs from 'node:fs';
 import { exec, execFile } from 'node:child_process';
 import { browserClosedError } from './browser-policy.mjs';
 import { ensureBrowser } from './browser.mjs';
-import { COMPANIES_CSV, CSV_HEADER, FRESH_HOURS, isFresh, priceMap } from './companies.mjs';
+import { COMPANIES_CSV, CSV_HEADER, FRESH_HOURS, isFresh, priceMap, refreshToday } from './companies.mjs';
 import { assetPath, APP_HTML, OPEN_DASHBOARD } from './config.mjs';
 import { SOURCES_FILE, beginRound, roundFailures, ledger, noteArtifact, stampUTC, step, writeSources } from './ledger.mjs';
 import { bar, barEnd, log } from './log.mjs';
 import { MARKETS, marketFile } from './markets.mjs';
-import { metaCharting, metaCompanies } from './registry.mjs';
+import { metaCharting, metaCompanies, metaResearchFeed } from './registry.mjs';
+import { fetchResearchFeed } from '../steps/research-feed.mjs';
 import { writeRoster } from './roster.mjs';
 import { TICKERS } from './tickers.mjs';
 import { openDashboardAction } from './menu-actions.mjs';
@@ -20,6 +21,7 @@ import { fetchTicker } from '../steps/ticker.mjs';
 
 export let appOpened = false;
 export async function runRound({ force = false } = {}) {
+  refreshToday();
   beginRound();
   if (force) log('强制重跑：本轮忽略全部数据的新鲜度；仍校验证券、财年和数据质量。');
   /* 菜单允许在进程启动后增删 ticker / market。启动时写过的 roster 此时已经过期，
@@ -27,13 +29,13 @@ export async function runRound({ force = false } = {}) {
   if (!writeRoster(TICKERS, MARKETS)) log('  ⚠ roster.csv 刷新失败；仪表盘可能暂时隐藏新加入的标的。');
   await ensureBrowser();
   const results = {}, mktResults = {};
-  const STEPS = 8;   /* 每家 8 步:两财年 / 价格 / 目标价 / 空头 / 新闻 / 期权链 / 日线;市场序列各 1 步 */
+  const STEPS = 11;   /* 独立 NTM 历史 + 业绩事件史 + 公司情报 + 两财年 / 价格 / 目标价 / 空头 / 新闻 / 期权链 / 日线 */
   const TOTAL = TICKERS.length * STEPS + MARKETS.length;
   log(`⏳ 开始拉取 ${TICKERS.length} 家公司(每家最多 ${STEPS} 项)` + (MARKETS.length ? ` + ${MARKETS.length} 个市场序列` : '') + `,请稍等……${force ? '本轮强制重新拉取全部项目。' : '各类数据会按自己的新鲜周期自动跳过。'}`);
   let done = 0, aborted = false;
   const adv = (n, label) => { done = Math.min(done + n, TOTAL); bar(done, TOTAL, label); };
   for (const ticker of TICKERS) {
-    const R = results[ticker] = { FY1: false, FY2: false, 价格: false, 目标价: false, 空头: false, 新闻: false, 期权: false, 日线: false };
+    const R = results[ticker] = { NTM: false, 业绩: false, 情报: false, FY1: false, FY2: false, 价格: false, 目标价: false, 空头: false, 新闻: false, 期权: false, 日线: false };
     const base = done;
     try { await fetchTicker(ticker, R, adv, { force }); }
     catch (e) {
@@ -58,6 +60,13 @@ export async function runRound({ force = false } = {}) {
   }
   barEnd();
   if (aborted) log('浏览器连接已关闭，本轮中止；后续项目未尝试，不记为各自抓取失败。重新选择 1 或 11 时会重建浏览器。');
+  /* 每轮都重取:几次 FQL 请求、几秒钟;Research OS 读的是最近一个收盘日的读数 */
+  let feedOk = false;
+  if (!aborted) {
+    log('Research OS 数据包…');
+    try { feedOk = await step(metaResearchFeed(), () => fetchResearchFeed()); }
+    catch (e) { if (!browserClosedError(e)) throw e; }
+  }
   const cm = metaCompanies();
   noteArtifact(cm);
   const cRec = ledger.get(cm.file);
@@ -88,8 +97,9 @@ export async function runRound({ force = false } = {}) {
   for (const [sym, m] of Object.entries(mktResults)) {
     console.log('  ' + sym.padEnd(10) + (m.ok ? ' ✔' : ' ✖') + '日线(' + m.role + ')' + (m.fresh ? '  (本地最新,未重拉)' : ''));
   }
-  const misses = Object.values(results).reduce((a, R) => a + ['FY1', 'FY2', '价格', '目标价', '空头', '新闻', '期权', '日线'].filter(k => !R[k]).length, 0)
-    + Object.values(mktResults).filter(m => !m.ok).length;
+  const misses = Object.values(results).reduce((a, R) => a + ['NTM', '业绩', '情报', 'FY1', 'FY2', '价格', '目标价', '空头', '新闻', '期权', '日线'].filter(k => !R[k]).length, 0)
+    + Object.values(mktResults).filter(m => !m.ok).length + (aborted || feedOk ? 0 : 1);
+  console.log('  ' + 'Research OS'.padEnd(10) + (feedOk ? ' ✔' : ' ✖') + '数据包');
   if (aborted) console.log(`本轮已中止：另有 ${TICKERS.length - Object.keys(results).length} 家公司、${MARKETS.length - Object.keys(mktResults).length} 个市场序列未尝试。`);
   console.log(aborted ? '未全部完成：浏览器中断。请重新开始本轮。' : misses === 0 ? '全部完成 ✔' : `有 ${misses} 项未完成(✖),可重跑或按提示手动补。`);
   console.log('==========================================');

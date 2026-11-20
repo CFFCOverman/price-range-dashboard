@@ -35,8 +35,15 @@ function ingestHistory(recs) {
   let n = 0;
   const buf = new Map(), pbuf = new Map();
   for (const r of recs) {
-    const tk = (r.ticker || '').toUpperCase();
+    const tk = (r.ticker || '').trim().toUpperCase();
     if (!tk || !r.date) continue;
+    if ((!r.valuation_basis || r.valuation_basis === 'ntm') && (Object.hasOwn(r, 'eps_ntm') || Object.hasOwn(r, 'pe_ntm'))) {
+      const old = state.ntmEstimates.get(tk);
+      if (!old || r.date > old.date || (r.date === old.date && (!old.retrievedAt || !r.retrieved_at || r.retrieved_at >= old.retrievedAt))) state.ntmEstimates.set(tk, {
+        date: r.date, mean: parseFloat(r.eps_ntm), price: parseFloat(r.price),
+        source: r.source || '', retrievedAt: r.retrieved_at || '',
+      });
+    }
     const px = parseFloat(r.price);
     if (isFinite(px) && px > 0) {
       if (!pbuf.has(tk)) pbuf.set(tk, []);
@@ -48,13 +55,18 @@ function ingestHistory(recs) {
       if (isFinite(px) && isFinite(e) && e > 0) pe = px / e;
     }
     if (!isFinite(pe) || pe <= 0) continue;
+    // A pe_ntm/eps_ntm CSV is an independent rolling series, never a fixed FY.
+    if (r.valuation_basis && r.valuation_basis !== 'ntm') continue;
     if (!buf.has(tk)) buf.set(tk, []);
-    buf.get(tk).push({ date: r.date, pe });
+    buf.get(tk).push({ date: r.date, pe, basis: 'ntm', eps: parseFloat(r.eps_ntm), source: r.source || '' });
     n++;
   }
   for (const [tk, arr] of buf) {
-    arr.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
-    state.history.set(tk, arr);   // replace whole series for that ticker
+    const next = normalizePriceHist(arr), old = state.history.get(tk) || [];
+    // Do not erase a usable library with an incomplete import or an older snapshot.
+    if (next.length < 12 && old.length >= 12) continue;
+    if (old[0]?.basis === 'ntm' && old.at(-1).date > next.at(-1)?.date) continue;
+    if (next.length) state.history.set(tk, next);
   }
   for (const [tk, arr] of pbuf) {
     arr.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);

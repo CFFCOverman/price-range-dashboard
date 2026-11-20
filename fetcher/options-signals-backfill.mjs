@@ -1,5 +1,6 @@
 /* Rebuild compact long-lived signal rows from retained Options Flow snapshots. */
 import fs from 'node:fs';
+import { atomicText } from './lib/atomic-csv.mjs';
 import path from 'node:path';
 import { OUT_DIR, assetPath, ensureAssetDirs } from './lib/config.mjs';
 import { SIGNAL_FIELDS, buildOptionSignal, resolveOneHourReturns } from './lib/option-flow-signal.mjs';
@@ -31,7 +32,7 @@ for(const file of filesUnder(OUT_DIR)){
   const target=assetPath(`${ticker} Options Signals.csv`),merged=new Map();
   if(fs.existsSync(target))for(const r of readCsv(target))merged.set(r.timestamp,r);
   for(const r of built)merged.set(r.timestamp,r);
-  const signals=resolveOneHourReturns([...merged.values()]).slice(-100000);
-  fs.writeFileSync(target,SIGNAL_FIELDS.join(',')+'\n'+signals.map(r=>SIGNAL_FIELDS.map(k=>csvCell(r[k])).join(',')).join('\n')+'\n');
+  const signals=resolveOneHourReturns([...merged.values()]);
+  atomicText(target,SIGNAL_FIELDS.join(',')+'\n'+signals.map(r=>SIGNAL_FIELDS.map(k=>csvCell(r[k])).join(',')).join('\n')+'\n');
   console.log(`✔ ${ticker}: ${built.length} 个历史区间 → ${target}`);
 }

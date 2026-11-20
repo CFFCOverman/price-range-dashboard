@@ -189,7 +189,7 @@ function renderPEBand(co, pe) {
   svg.appendChild(hit);
   box.appendChild(svg);
   const s = $('peStatsLine');
-  s.textContent = t('peStats')(h.length, h[0].date.slice(0, 7), h[li].date.slice(0, 7)) + '· P10 ' + fmtX(pe.p10)
+  s.textContent = peBasisLabel(pe) + ' · ' + t('peStats')(h.length, h[0].date.slice(0, 7), h[li].date.slice(0, 7)) + '· P10 ' + fmtX(pe.p10)
     + ' · P25 ' + fmtX(pe.p25) + ' · ' + t('peMedianShort') + ' ' + fmtX(pe.p50) + ' · P75 ' + fmtX(pe.p75) + ' · P90 ' + fmtX(pe.p90)
     + ' · ' + t('peCur') + fmtX(pe.current) + t('pctOf')(rankPct(pe.sorted, pe.current))
     + (h.length < 36 ? t('peShortWin') : '');

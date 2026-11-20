@@ -40,8 +40,8 @@ echo.
 
 :run
 echo.
-echo [run] Starting. A browser window will open by itself - please do not touch it.
-echo       If it stops on the login page, log in once and the script continues.
+echo [run] Starting. Fetch runs in the background by default.
+echo       If login expires, sign in in the popup; fetching resumes in the background.
 echo.
 node factset-fetch.mjs %*
 set "RC=%ERRORLEVEL%"

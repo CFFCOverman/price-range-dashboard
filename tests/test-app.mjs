@@ -815,6 +815,9 @@ await section('[8] 期权轨:未平仓量(OI)墙', async () =>
    *                                    正好是这种没人参与的周度链;选谁要看 OI,不看远近
    *   2026-08-21 / 09-18  月度链    → OI 真正堆着的地方,必须被选中
    *   2026-12-18  远月              → 超出 PX_OPT_MAX_DTE = 60 天视野 */
+  // The fixture is an as-of July 29 chain. Rendering otherwise uses today's
+  // clock and loses every expired contract once the real calendar advances.
+  await page.clock.setFixedTime(new Date('2026-07-29T12:00:00Z'));
   const O = await page.evaluate(() => {
     const start = Date.UTC(2024, 6, 1);
     let seed = 20260806;
@@ -903,6 +906,7 @@ await section('[8] 期权轨:未平仓量(OI)墙', async () =>
     };
   });
 
+  await page.clock.setFixedTime(new Date());
   /* ---------- SPEC 3.7 表里点名的 6 条 ---------- */
   ok('walls 里不再有 strength 字段(旧的 55/20/25 加权分已删)',
     O.walls.length > 0 && O.walls.every(w => !('strength' in w))

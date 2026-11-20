@@ -413,7 +413,7 @@ svg text { font-family: inherit; }
   <div class="drop" id="drop">
     <span class="lz">将 <strong>companies.csv</strong> / <strong>history.csv</strong> / FactSet <strong>.xlsx</strong>(模型 / Estimate History / Snapshot)拖到这里,或</span>
     <span class="le">Drop <strong>companies.csv</strong> / <strong>history.csv</strong> / FactSet <strong>.xlsx</strong> (model / Estimate History / Snapshot) here, or</span>
-    <label style="color:var(--series-1);cursor:pointer;text-decoration:underline"><span class="lz">点击选择文件</span><span class="le">browse files</span><input type="file" id="fileInput" accept=".csv,.xlsx,.xls,text/csv" multiple></label>
+    <label style="color:var(--series-1);cursor:pointer;text-decoration:underline"><span class="lz">点击选择文件</span><span class="le">browse files</span><input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.json,text/csv" multiple></label>
   </div>
   <div class="loadrow">
     <button class="primary" id="dirBtn"><span class="lz">连接文件夹</span><span class="le">Connect folder</span></button>
@@ -430,7 +430,8 @@ svg text { font-family: inherit; }
       <p><strong>companies.csv</strong> (one row per company): <code>ticker, name, currency, price, price_date, eps_fy1_low/_mean/_high, eps_fy2_low/_mean/_high</code>. FactSet: <code>FG_PRICE</code>, <code>FE_ESTIMATE("EPS","LOW|MEAN|HIGH",…)</code>.</p>
       <p><strong>history.csv</strong> (one row per month, 5–10y recommended): <code>ticker, date, pe_ntm</code> (or <code>price</code> + <code>eps_ntm</code>; a <code>price</code> column also feeds the volatility band). FactSet: <code>FG_PE_NTM</code>.</p>
       <p><strong>FactSet model .xlsx</strong> ("Earnings Per Share" block): reads FY1/FY2 annual EPS means; derives price from the Valuation block's FY1 forward PE.</p>
-      <p><strong>Estimate History .xlsx</strong>: reads latest consensus EPS low/mean/high and the monthly P/E series. It tracks a <strong>fixed fiscal year</strong>, so only the most recent 24 months are used for percentiles — for a true 5–10y valuation band export an NTM PE monthly series. The full price series (P/E × mean) still feeds the volatility band.</p>
+      <p><strong>NTM Valuation History.csv</strong>: independent rolling NTM P/E history, fetched for the past 10 years on the first run. Each historical price uses the EPS forecast as of that date. This series takes priority over fixed fiscal-year multiples. Actual coverage depends on available data.</p>
+      <p><strong>Estimate History .xlsx</strong>: reads consensus EPS low/mean/high. Its fixed fiscal-year P/E series is a fallback, limited to the latest 24 observations. The default NTM view uses the latest eps_ntm mean at all endpoints; no low/high forecasts are inferred. FY1/FY2 remain separate fiscal scenarios. Compare 3/5/10-year windows and their actual coverage.</p>
       <p><strong>Snapshot .xlsx</strong> ("Previous Close"): real closing price, 52-week range, analyst target/rating, annual PE references. Price precedence: manual &gt; snapshot/CSV &gt; model-derived.</p>
       <p><strong>Other methods not computed here:</strong> DCF + sensitivity (needs cash-flow assumptions; unstable when near-term FCF is depressed by heavy capex), option-implied volatility bands (needs option IV data), technical support/resistance (needs daily price history). The statistical volatility band in the comparison panel uses realized monthly volatility: price × e<sup>±σ</sup> over one year, a 68% band under a lognormal assumption.</p>
     </div>
@@ -452,16 +453,23 @@ svg text { font-family: inherit; }
     </table>
     <p>没有历史序列时,可以在公司详情里手动输入估值分位(P25/P50/P75)。</p>
     <p><strong>FactSet 公司模型 .xlsx</strong>(含 "Earnings Per Share" 区块):自动读取 FY1/FY2 年度 EPS 预测均值,并用 Valuation 区块的 FY1 PE 反推现价。</p>
-    <p><strong>FactSet Estimate History .xlsx</strong>(含 "Estimate History" 表格):自动读取最新一致预期的 EPS 低/均/高,以及月度 P/E 序列并计算分位。注意:Estimate History 跟踪的是<strong>固定财年</strong>,窗口拉太长时早期 P/E 是"当时股价 ÷ 多年后盈利",口径与近期不可比,因此 app 最多采用最近 24 个月;真正的 5–10 年估值带请导出 <strong>NTM PE 月度序列</strong>(history.csv 格式)。</p>
+    <p><strong>NTM Valuation History.csv</strong>：首次回补近10年滚动 NTM P/E，各历史日期使用当时对应的盈利预测。优先用这份独立序列计算分位，实际覆盖范围以取得的数据为准。</p>
+    <p><strong>FactSet Estimate History .xlsx</strong>：读取 EPS 低／均／高。固定财年 P/E 仅作后备，最多采用最近24个点。默认 NTM 使用最新 eps_ntm 平均预测，未提供盈利上下限时以同一 EPS 计算倍数区间。FY1/FY2 保留为单独财年情景。支持近3/5/10年窗口及实际覆盖对照。</p>
     <p><strong>FactSet Snapshot .xlsx</strong>(含 "Previous Close" 的快照页):自动读取真实收盘价、52 周区间、分析师目标价/评级和年度 PE 参考。现价来源优先级:手动输入 &gt; 快照/CSV 实价 &gt; 模型反推。所有文件可以同时拖入,互相补全同一家公司。首次解析 xlsx 需联网加载解析库。</p>
-    <p><strong>本工具未计算的其他测算方法:</strong>DCF + 敏感性矩阵(需现金流假设;近期 FCF 被大额资本开支压低的公司结果极不稳定)、期权隐含波动率区间(需期权 IV 数据)、技术面支撑/阻力(需日线价格)。方法对比面板里的"波动率统计区间"用已实现月度波动率计算:现价 × e<sup>±σ</sup>(一年期),对数正态假设下约 68% 概率带。history.csv 若含 <code>price</code> 列,也会用于波动率计算。</p>
+    <p><strong>合理价值：</strong>导入 <code>*Fair Value Inputs.json</code> 中已复核的每股股东现金流、稀释、折现率及稳定期假设后计算。缺失时显示待建模，盈利修订或重大事件出现时显示待复核。历史倍数区间单独保留作对照。方法对比面板的波动率统计区间不属于合理价值估计。</p>
     </div>
   </details>
 </section>
 
+<section class="card" id="fairOverview" hidden></section>
 <section class="card" id="ovCard" hidden>
-  <h2><span class="lz">公司总览 · 隐含上行/下行空间</span><span class="le">Overview · implied upside / downside</span></h2>
-  <p class="hint"><span class="lz">核心区间 = 悲观 EPS × PE 25 分位 ~ 乐观 EPS × PE 75 分位;中枢 = 基准 EPS × PE 中位数。点击行查看详情,点击表头排序。</span><span class="le">Core range = low EPS × P25 PE ~ high EPS × P75 PE; mid = mean EPS × median PE. Click a row for detail, click headers to sort.</span></p>
+  <h2><span class="lz">历史倍数对照 · 条件价格区间</span><span class="le">Historical multiples · conditional price ranges</span></h2>
+  <div class="formrow">
+    <div><label for="valuationBasis"><span class="lz">盈利口径</span><span class="le">Earnings basis</span></label><select id="valuationBasis"><option value="ntm">NTM · 未来十二个月 / next 12 months</option><option value="fy1">FY1 · 财年情景 / fiscal scenario</option><option value="fy2">FY2 · 财年情景 / fiscal scenario</option></select></div>
+    <div><label for="peWindow"><span class="lz">历史 PE 窗口</span><span class="le">Historical P/E window</span></label><select id="peWindow"><option value="3">3年 / years</option><option value="5">5年 / years</option><option value="10" selected>10年 / years</option></select></div>
+  </div>
+  <p class="hint" id="valuationMethod"></p>
+  <p class="hint"><span class="lz">当前 PE 使用最新已导入现价 ÷ 最新 NTM EPS，价格或预测更新后立即重算。数据文件不是实时行情；拉取后点击“重新扫描”。历史区间是独立估值参照。</span><span class="le">Current P/E recalculates from the latest imported price / NTM EPS. Files are not a live feed; rescan after fetching. Historical ranges are separate valuation references.</span></p>
   <div id="ovTableWrap"></div>
   <div class="chartbox" id="ovChartBox">
     <div id="ovChart"></div>
@@ -481,7 +489,7 @@ svg text { font-family: inherit; }
     <div><label for="pxInput"><span class="lz">现价</span><span class="le">Price</span></label><input type="number" min="0.00000001" step="0.01" id="pxInput" aria-describedby="pxError" placeholder="必填"></div>
     <div><label><span class="lz">预测期</span><span class="le">Horizon</span></label>
       <span class="tabs" id="hzTabs">
-        <button data-h="fy1" class="on">FY1</button><button data-h="fy2">FY2</button>
+        <button data-h="ntm" class="on">NTM</button><button data-h="fy1">FY1</button><button data-h="fy2">FY2</button>
       </span>
     </div>
     <div><label for="epsLow"><span class="lz">EPS 悲观</span><span class="le">EPS low</span></label><input type="number" step="0.01" id="epsLow"></div>
@@ -499,7 +507,10 @@ svg text { font-family: inherit; }
   </div>
 
   <div class="dethead" id="detHead"></div>
+  <section id="fairDetail"></section>
+  <section id="latestValuation"></section>
   <div class="kpis" id="detKpis"></div>
+  <section id="valuationWindows"></section>
 
   <div class="detrow">
     <div class="detcol">
@@ -629,7 +640,7 @@ svg text { font-family: inherit; }
   </div>
 
   <div id="peBandSec">
-    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">NTM 市盈率历史带(分位为水平参考线)</span><span class="le">NTM P/E history band (percentiles as reference lines)</span></h2>
+    <h2 style="font-size:13.5px;margin-top:18px"><span class="lz">市盈率历史带（来源与口径见下方）</span><span class="le">P/E history band (source and basis below)</span></h2>
     <div class="chartbox" id="peBandBox">
       <div id="peBandChart"></div>
       <div class="tip" id="peTip"></div>
@@ -710,6 +721,12 @@ const SRC_RANK = { user: 3, file: 2, derived: 1 };   /* 现价来源优先级:�
 const state = {
   companies: new Map(),   // ticker -> {ticker,name,currency,price,priceSrc,priceDate,eps,extra}
   history: new Map(),     // ticker -> [{date, pe}] sorted by date
+  ntmEstimates: new Map(), // Latest NTM observation, including missing/nonpositive EPS.
+  fairModels: new Map(), // ticker -> immutable model versions, imported from private JSON
+  fairObservations: new Map(), // ticker|fiscal period -> latest verified observation
+  fairEvents: new Map(), // immutable event id -> evidence requiring model review
+  fairImportedAt: null,
+  fairImportErrors: [],
   priceHist: new Map(),   // ticker -> [{date, price}] sorted by date(用于波动率区间)
   overrides: new Map(),   // `${ticker}|${hz}` -> {low,mean,high}
   peManual: new Map(),    // ticker -> {p25,p50,p75}
@@ -723,7 +740,8 @@ const state = {
   roster: null,           // Set(ticker) 拉取清单(Assets/summary/roster.csv);null = 没有清单文件,不过滤
   showOffRoster: false,   // 表格下方那个开关:临时把不在清单里的也画出来
   selected: null,
-  horizon: 'fy1',        // **财年**(fy1/fy2),不是持有期。绝不能喂给 pressureLevels 的第四参。
+  horizon: 'ntm',        // Earnings basis (ntm/fy1/fy2), never a holding period.
+  peYears: 10,           // Rolling NTM history window; independent of earnings basis.
   mxPick: { eps: 'base', pe: 'p50' }, // 情景矩阵当前选中的 EPS 情景 × PE 分位；跨公司保留便于比较
   plHold: 'mid',         // 压力位面板的**持有期**('short'|'mid'|'long' → h = 5/21/63),与 horizon 是两回事
   klWin: 'w120',         // 价格走势面板画多少根('w60'|'w120'|'all');纯显示窗口,不进任何计算
@@ -742,8 +760,11 @@ const state = {
 let LANG = 'zh';
 const I18N = {
   zh: {
-    colCompany: '公司', colPrice: '现价', colLow: '核心下沿', colHigh: '核心上沿', colMid: '中枢空间', colPos: '现价位置(核心区间)',
+    colCurrentPE: '当前 NTM PE', colCompany: '公司', colPrice: '现价', colLow: '核心下沿', colHigh: '核心上沿', colMid: '中枢空间', colPos: '现价位置(核心区间)',
     rowNoCalc: '缺少估值分位或 EPS ≤ 0 — 点击行补充', noPx: '缺现价', priceZero: '现价 0%',
+    keepNtm: n => ';优先采用独立滚动 NTM P/E 历史（' + n + ' 点）',
+    rowNoEps: '缺少有效 EPS 预测或 EPS ≤ 0 — 点击行查看',
+    rowNoPe: '历史 P/E 有效点不足12个 — 请补拉估值历史',
     tipCore: '核心区间 ', tipMid: '中枢 ', tipPrice: '现价 ',
     tMid: '中枢(基准 EPS × PE 中位)', tCore: '核心区间 P25–P75', tExt: '极端区间 P10–P90', tPe: '当前 NTM PE', tTgt: '分析师目标价(参考)',
     vsPrice: ' vs 现价', histPct: n => '历史 ' + n + '% 分位',
@@ -982,8 +1003,11 @@ const I18N = {
     modelEpsNote: '(EPS 高低值缺失时用均值代替,可在详情里补)',
   },
   en: {
-    colCompany: 'Company', colPrice: 'Price', colLow: 'Core low', colHigh: 'Core high', colMid: 'Mid upside', colPos: 'Position in core range',
+    colCurrentPE: 'Current NTM P/E', colCompany: 'Company', colPrice: 'Price', colLow: 'Core low', colHigh: 'Core high', colMid: 'Mid upside', colPos: 'Position in core range',
     rowNoCalc: 'Missing PE percentiles or EPS ≤ 0 — click row to fill in', noPx: 'no price', priceZero: 'Price 0%',
+    keepNtm: n => '; using independent rolling NTM P/E history (' + n + ' points)',
+    rowNoEps: 'EPS forecast missing or non-positive — click for details',
+    rowNoPe: 'Fewer than 12 valid P/E observations — fetch valuation history',
     tipCore: 'Core ', tipMid: 'Mid ', tipPrice: 'Price ',
     tMid: 'Mid (base EPS × median PE)', tCore: 'Core range P25–P75', tExt: 'Extreme range P10–P90', tPe: 'Current NTM P/E', tTgt: 'Analyst target (ref)',
     vsPrice: ' vs price', histPct: n => n + '% of history',
@@ -1247,8 +1271,15 @@ function ingestHistory(recs) {
   let n = 0;
   const buf = new Map(), pbuf = new Map();
   for (const r of recs) {
-    const tk = (r.ticker || '').toUpperCase();
+    const tk = (r.ticker || '').trim().toUpperCase();
     if (!tk || !r.date) continue;
+    if ((!r.valuation_basis || r.valuation_basis === 'ntm') && (Object.hasOwn(r, 'eps_ntm') || Object.hasOwn(r, 'pe_ntm'))) {
+      const old = state.ntmEstimates.get(tk);
+      if (!old || r.date > old.date || (r.date === old.date && (!old.retrievedAt || !r.retrieved_at || r.retrieved_at >= old.retrievedAt))) state.ntmEstimates.set(tk, {
+        date: r.date, mean: parseFloat(r.eps_ntm), price: parseFloat(r.price),
+        source: r.source || '', retrievedAt: r.retrieved_at || '',
+      });
+    }
     const px = parseFloat(r.price);
     if (isFinite(px) && px > 0) {
       if (!pbuf.has(tk)) pbuf.set(tk, []);
@@ -1260,13 +1291,18 @@ function ingestHistory(recs) {
       if (isFinite(px) && isFinite(e) && e > 0) pe = px / e;
     }
     if (!isFinite(pe) || pe <= 0) continue;
+    // A pe_ntm/eps_ntm CSV is an independent rolling series, never a fixed FY.
+    if (r.valuation_basis && r.valuation_basis !== 'ntm') continue;
     if (!buf.has(tk)) buf.set(tk, []);
-    buf.get(tk).push({ date: r.date, pe });
+    buf.get(tk).push({ date: r.date, pe, basis: 'ntm', eps: parseFloat(r.eps_ntm), source: r.source || '' });
     n++;
   }
   for (const [tk, arr] of buf) {
-    arr.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
-    state.history.set(tk, arr);   // replace whole series for that ticker
+    const next = normalizePriceHist(arr), old = state.history.get(tk) || [];
+    // Do not erase a usable library with an incomplete import or an older snapshot.
+    if (next.length < 12 && old.length >= 12) continue;
+    if (old[0]?.basis === 'ntm' && old.at(-1).date > next.at(-1)?.date) continue;
+    if (next.length) state.history.set(tk, next);
   }
   for (const [tk, arr] of pbuf) {
     arr.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
@@ -1295,12 +1331,16 @@ function setPriceHist(ticker, arr) {
   if (score(next) >= score(old)) state.priceHist.set(ticker, next);
 }
 /* ================= PE stats & core calc ================= */
-function peStats(ticker) {
-  const h = state.history.get(ticker);
+function peStats(ticker, years = state.peYears) {
+  const full = state.history.get(ticker);
+  const end = full?.at(-1)?.date;
+  // Anchor windows to the library date, not the machine clock or price date.
+  const cutoff = end && `${Number(end.slice(0, 4)) - years}${end.slice(4)}`;
+  const h = full?.[0]?.basis === 'ntm' ? full.filter(d => d.date >= cutoff) : full;
   if (h && h.length >= 12) {
     const sorted = h.map(d => d.pe).slice().sort((a, b) => a - b);
     return {
-      src: 'history', series: h, sorted,
+      src: 'history', series: h, sorted, basis: h[0].basis || 'unknown', currentEps: h.at(-1).eps, years,
       p10: percentile(sorted, .10), p25: percentile(sorted, .25), p50: percentile(sorted, .50),
       p75: percentile(sorted, .75), p90: percentile(sorted, .90),
       current: h[h.length - 1].pe,
@@ -1316,9 +1356,30 @@ function peManualValid(m) {
   return !!m && isFinite(m.p25) && isFinite(m.p50) && isFinite(m.p75)
     && m.p25 > 0 && m.p25 <= m.p50 && m.p50 <= m.p75;
 }
+function peBasisLabel(pe) {
+  if (pe?.basis === 'ntm') return LANG === 'en' ? 'Rolling NTM P/E' : '滚动 NTM P/E';
+  if (pe?.basis === 'fixed_fy1') return LANG === 'en' ? 'Fixed FY1 P/E (up to 24 months)' : '固定 FY1 P/E（最多24个月）';
+  return LANG === 'en' ? 'Imported / manual P/E' : '导入／手工 P/E';
+}
+function noRangeReason(co, hz) {
+  if (hz === 'ntm') {
+    if (!epsScen(epsFor(co.ticker, hz))) return LANG === 'en' ? 'Missing or nonpositive NTM EPS — no FY1 substitution' : '缺少有效 NTM EPS 或 EPS ≤ 0，不以 FY1 替代';
+    const pe = peStats(co.ticker);
+    if (!pe || (pe.basis !== 'ntm' && pe.src !== 'manual')) return LANG === 'en' ? 'Insufficient rolling NTM P/E history in this window' : '所选窗口内滚动 NTM PE 历史不足';
+  }
+  if (!epsScen(epsFor(co.ticker, hz))) return t('rowNoEps');
+  if (!peStats(co.ticker)) return t('rowNoPe');
+  return t('rowNoCalc');
+}
 function epsFor(ticker, hz) {
   const ov = state.overrides.get(ticker + '|' + hz);
   if (ov) return ov;
+  if (hz === 'ntm') {
+    const point = state.ntmEstimates.get(ticker);
+    // Never substitute FY1, or an older positive EPS for a missing/latest loss.
+    if (!point) return null;
+    return { low: point.mean, mean: point.mean, high: point.mean };
+  }
   const co = state.companies.get(ticker);
   return co ? co.eps[hz] : null;
 }
@@ -1338,16 +1399,36 @@ function epsScen(eps) {
 }
 /* 估值分位必须为正:历史里有亏损年份时 P/E 会是负数,乘出来的"价格"没有意义 */
 const pePos = (pe, k) => isFinite(pe[k]) && pe[k] > 0;
+// Current P/E reacts to every imported quote; it is NOT the historical median
+// and is never recycled into a price target (which would return the quote).
+function latestValuation(co) {
+  const point = state.ntmEstimates.get(co.ticker);
+  const positive = v => typeof v === 'number' && Number.isFinite(v) && v > 0;
+  const current = positive(co.price) && positive(point?.mean) ? co.price / point.mean : null;
+  const prior = (state.history.get(co.ticker) || []).filter(r => r.basis === 'ntm' && r.date < point?.date).at(-1);
+  const comparable = current !== null && positive(prior?.eps) && positive(prior?.pe);
+  const baselinePrice = comparable ? prior.pe * prior.eps : null;
+  return { point, current, prior,
+    change: comparable ? current / prior.pe - 1 : null,
+    epsChange: comparable ? point.mean / prior.eps - 1 : null,
+    priceChange: comparable ? co.price / baselinePrice - 1 : null,
+    priceOnly: comparable ? co.price / prior.eps : null,
+    earningsEffect: comparable ? prior.eps / point.mean - 1 : null,
+  };
+}
 function impliedExpectations(co) {
-  const pe=peStats(co.ticker),e1=epsFor(co.ticker,'fy1'),e2=epsFor(co.ticker,'fy2');
+  let pe=peStats(co.ticker);
+  if (state.horizon === 'ntm' && pe?.basis !== 'ntm' && pe?.src !== 'manual') pe=null;
+  const e1=epsFor(co.ticker,'fy1'),e2=epsFor(co.ticker,'fy2');
+  const selected=epsFor(co.ticker,state.horizon);
   const positive=x=>typeof x==='number'&&isFinite(x)&&x>0;
   if(!positive(co.price))return null;
   const required=pe&&positive(pe.p50)?co.price/pe.p50:null;
   return {fy1:positive(e1?.mean)?co.price/e1.mean:null,fy2:positive(e2?.mean)?co.price/e2.mean:null,
-    required,gap:required&&positive(e1?.mean)?required/e1.mean-1:null,
+    required,gap:required&&positive(selected?.mean)?required/selected.mean-1:null,
     growth:positive(e1?.mean)&&positive(e2?.mean)?e2.mean/e1.mean-1:null,
     revision:state.overrides.has(co.ticker+'|fy1')?null:co.estimateMeta?.fy1?.revision??null,
-    epsDate:co.estimateMeta?.fy1?.date||'',peDate:pe?.series?.at(-1)?.date||'',manual:pe?.src==='manual'};
+    epsDate:state.horizon==='ntm'?state.ntmEstimates.get(co.ticker)?.date||'':co.estimateMeta?.[state.horizon]?.date||'',peDate:pe?.series?.at(-1)?.date||'',manual:pe?.src==='manual'};
 }
 /* 口径自查:分位库最新一点 × 基准 EPS ≈ 现价。
  * 这两个数本该出自同一份 Estimate History 的同一行(P/E 和 Mean 并排摆着),
@@ -1358,14 +1439,17 @@ function impliedExpectations(co) {
  * 这条只报警不改数 —— 说不清是哪一边错的时候,不该替人做主。 */
 const BASE_GAP_TOL = 25;
 function baseGap(price, pe, eps) {
+  // NTM multiples must be checked against their own NTM earnings, not FY1.
+  if (pe?.basis === 'ntm') eps = { mean: pe.currentEps };
   if (!pe || !isFinite(pe.current) || pe.current <= 0) return null;
   if (!isFinite(price) || price <= 0 || !eps || !isFinite(eps.mean) || eps.mean <= 0) return null;
   const implied = pe.current * eps.mean, dev = (implied / price - 1) * 100;
   return Math.abs(dev) > BASE_GAP_TOL ? { implied, dev } : null;
 }
-function calcRange(co, hz) {
-  const pe = peStats(co.ticker), eps = epsScen(epsFor(co.ticker, hz));
+function calcRange(co, hz, years = state.peYears) {
+  const pe = peStats(co.ticker, years), eps = epsScen(epsFor(co.ticker, hz));
   if (!eps || !pe) return null;
+  if (hz === 'ntm' && pe.basis !== 'ntm' && pe.src !== 'manual') return null;
   if (!pePos(pe, 'p25') || !pePos(pe, 'p50') || !pePos(pe, 'p75')) return null;
   const r = {
     eps, pe, flags: eps.flags,
@@ -1374,12 +1458,213 @@ function calcRange(co, hz) {
     extLow: pePos(pe, 'p10') ? eps.low * pe.p10 : NaN,
     extHigh: pePos(pe, 'p90') ? eps.high * pe.p90 : NaN,
   };
-  // The historical series is FY1-based even when displaying a FY2 scenario.
+  // NTM identity uses its own earnings; fixed-FY fallback checks against FY1.
   r.baseGap = baseGap(co.price, pe, epsFor(co.ticker, 'fy1'));
   r.midPct = (r.mid / co.price - 1) * 100;
   r.downPct = (r.coreLow / co.price - 1) * 100;
   r.upPct = (r.coreHigh / co.price - 1) * 100;
   return r;
+}
+/* Pure, shared FCFE model. Market price never enters intrinsic value.
+ * Cash flows are per CURRENT diluted share, after reinvestment/financing and
+ * future dilution. Equity cash flows are discounted at cost of equity; no
+ * second net-debt deduction. Scenario bounds are not confidence intervals. */
+const FairValue = (() => {
+  const finite = n => typeof n === 'number' && Number.isFinite(n);
+  const date = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
+    && Number.isFinite(Date.parse(s + 'T00:00:00Z')) && new Date(s + 'T00:00:00Z').toISOString().slice(0,10) === s;
+  const years = (a,b) => (Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z')) / (365.25*86400000);
+  const text = v => typeof v === 'string' && v.trim().length > 0;
+  function validate(model) {
+    const errors=[];
+    if (!model || model.schema !== 'fcfe-v1') return ['需要 fcfe-v1 模型'];
+    for (const key of ['ticker','currency','model_id','source','equity_basis_note','normalization_note','cash_flow_timing_note'])
+      if (!text(model[key])) errors.push('缺少 '+key);
+    if (!date(model.as_of) || !date(model.review_due) || model.review_due < model.as_of) errors.push('模型日期／复核截止日无效');
+    if (model.status !== 'reviewed') errors.push('现金流假设尚未复核');
+    if (!text(model.reviewed_at) || !Number.isFinite(Date.parse(model.reviewed_at)) || model.reviewed_at.slice(0,10)<model.as_of) errors.push('缺少模型复核时间');
+    if (!(finite(model.eps_ntm) && model.eps_ntm>0) || !date(model.eps_date) || model.eps_date>model.as_of) errors.push('缺少同口径的模型基准 NTM EPS／日期');
+    if (!Number.isInteger(model.max_data_age_days) || model.max_data_age_days<0 || model.max_data_age_days>7) errors.push('数据有效期须明确为 0–7 个日历日');
+    if (model.reviewed_event_ids!==undefined && (!Array.isArray(model.reviewed_event_ids) || model.reviewed_event_ids.some(id=>!text(id)))) errors.push('已复核事件列表无效');
+    if (!Array.isArray(model.earnings_checks) || !model.earnings_checks.length) errors.push('缺少固定财年盈利修订基准');
+    for (const check of Array.isArray(model.earnings_checks) ? model.earnings_checks : []) {
+      if (!check || !/^\d{4}-(0[1-9]|1[0-2])$/.test(check.period) || !text(check.basis) || !finite(check.mean) || !date(check.date) || check.date > model.as_of) errors.push('盈利修订基准无效');
+    }
+    for (const name of ['bear','base','bull']) {
+      const s=model.scenarios?.[name];
+      if (!s) { errors.push('缺少 '+name+' 情景'); continue; }
+      if (!text(s.rationale)) errors.push(name+' 缺少情景依据');
+      if (!(finite(s.cost_of_equity) && s.cost_of_equity>0 && s.cost_of_equity<1)) errors.push(name+' 股权折现率无效');
+      if (!(finite(s.terminal_growth) && s.terminal_growth>=0 && s.terminal_growth<s.cost_of_equity)) errors.push(name+' 永续增长率必须低于股权折现率');
+      if (!(finite(s.terminal_fcfe_next) && s.terminal_fcfe_next>0)) errors.push(name+' 缺少正的稳定期下一年 FCFE');
+      if (!Array.isArray(s.cashflows) || s.cashflows.length<2) { errors.push(name+' 至少需要两期明确预测'); continue; }
+      let previous=model.as_of;
+      for (const cf of s.cashflows) {
+        if (!cf) { errors.push(name+' 现金流记录无效'); continue; }
+        if (!date(cf.date) || cf.date<=previous || !finite(cf.fcfe_per_share) || !text(cf.source)) errors.push(name+' 现金流日期／数值／来源无效');
+        previous=cf.date;
+      }
+    }
+    return errors;
+  }
+  function scenario(s, asOf) {
+    const discounted=s.cashflows.map(cf=>({...cf,years:years(asOf,cf.date),pv:cf.fcfe_per_share/(1+s.cost_of_equity)**years(asOf,cf.date)}));
+    const explicit=discounted.reduce((a,cf)=>a+cf.pv,0);
+    const terminal=s.terminal_fcfe_next/(s.cost_of_equity-s.terminal_growth)/(1+s.cost_of_equity)**discounted.at(-1).years;
+    const value=explicit+terminal;
+    return {value,explicit,terminal,terminalShare:value>0?terminal/value:null,discounted};
+  }
+  function calculate(model, asOf) {
+    const errors=validate(model);
+    if (!date(asOf)) errors.push('估值日期无效');
+    if (date(asOf) && model && asOf<model.as_of) errors.push('不得在模型信息可得日前估值');
+    if (errors.length) return {ok:false,errors};
+    if (['bear','base','bull'].some(k=>model.scenarios[k].cashflows.some(cf=>cf.date<=asOf))) return {ok:false,errors:['预测现金流日期已过，需要滚动模型后重估']};
+    const results=Object.fromEntries(['bear','base','bull'].map(k=>[k,scenario(model.scenarios[k],asOf)]));
+    const values=['bear','base','bull'].map(k=>results[k].value);
+    if (!values.every(v=>finite(v)&&v>0) || values[0]>values[1] || values[1]>values[2]) return {ok:false,errors:['情景估值非正或顺序不一致；不能自动交换掩盖输入问题']};
+    return {ok:true,asOf,scenarios:results,low:values[0],mid:values[1],high:values[2],fairPE:values[1]/model.eps_ntm};
+  }
+  function assess(model, observation) {
+    const reasons=[],asOf=observation.asOf;
+    if (!model) return {status:'missing',reasons:['尚无已复核的现金流、稀释和折现率模型'],result:null};
+    const result=calculate(model,asOf);
+    if (!result.ok) return {status:'invalid',reasons:result.errors,result:null};
+    if (model.currency !== observation.currency) reasons.push('价格与模型币种不一致');
+    if (asOf>model.review_due) reasons.push('已超过模型复核截止日');
+    if (!date(observation.checkedOn) || observation.checkedOn>asOf || years(observation.checkedOn,asOf)*365.25>model.max_data_age_days) reasons.push('缺少有效期内的数据核验记录');
+    for (const check of model.earnings_checks) {
+      const now=observation.earnings?.find(e=>e.period===check.period);
+      if (!now || !finite(now.mean) || !date(now.date) || now.date<check.date || now.date>asOf || years(now.date,asOf)*365.25>model.max_data_age_days) reasons.push(check.period+' 缺少足够新的同财年盈利核验');
+      else if (Math.abs(now.mean-check.mean)>1e-8*Math.max(1,Math.abs(check.mean))) reasons.push(check.period+' 盈利已从 '+check.mean+' 更新到 '+now.mean+'，现金流假设待复核');
+    }
+    for (const event of observation.events || []) {
+      if (event.ticker===model.ticker && event.requires_review && !(model.reviewed_event_ids||[]).includes(event.id)) reasons.push('未处理事件：'+event.title);
+    }
+    return {status:reasons.length?'review':'ready',reasons,result};
+  }
+  // Ordered replacement attribution; no causal claim. Timing is separated
+  // from new cash-flow and discount/terminal assumptions.
+  function attribution(oldModel,newModel,oldDate,newDate) {
+    const old=calculate(oldModel,oldDate),rolled=calculate(oldModel,newDate),next=calculate(newModel,newDate);
+    if (!old.ok||!rolled.ok||!next.ok||oldModel.ticker!==newModel.ticker||oldModel.currency!==newModel.currency) return null;
+    if (JSON.stringify(oldModel.scenarios.base.cashflows.map(c=>c.date))!==JSON.stringify(newModel.scenarios.base.cashflows.map(c=>c.date))) return null;
+    const mixed={...oldModel.scenarios.base,cashflows:newModel.scenarios.base.cashflows,terminal_fcfe_next:newModel.scenarios.base.terminal_fcfe_next};
+    const cash=scenario(mixed,newDate).value;
+    return {time:rolled.mid-old.mid,cashflow:cash-rolled.mid,riskAndGrowth:next.mid-cash,total:next.mid-old.mid};
+  }
+  return {validate,calculate,assess,attribution};
+})();
+/* Private model/evidence imports. Historical multiples never fill missing fair value. */
+function fairToday() {
+  return fairDateAt(new Date());
+}
+function fairDateAt(value) {
+  return new Intl.DateTimeFormat('en-CA', {timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
+}
+function fairPeriod(label) {
+  const m=FY_LABEL.exec(label||'');
+  return m ? (2000+Number(m[2]))+'-'+MONTHS[m[1].toLowerCase()] : null;
+}
+function fairCompanies() {
+  const companies=visibleCompanies();
+  for(const ticker of state.roster||[]) if(!state.companies.has(ticker)) companies.push({ticker,currency:'',price:NaN});
+  return companies;
+}
+function ingestFairDocument(doc) {
+  if (doc?.document_type!=='fair-value-inputs-v1') throw new Error('仅支持 fair-value-inputs-v1 估值输入文件');
+  for (const k of ['models','observations','events']) if (doc[k]!==undefined && !Array.isArray(doc[k])) throw new Error(k+' 必须为列表');
+  const models=new Map([...state.fairModels].map(([k,v])=>[k,[...v]])), observations=new Map(state.fairObservations), events=new Map(state.fairEvents);
+  for (const m of doc.models||[]) {
+    const errors=FairValue.validate(m); if(errors.length) throw new Error(errors.join('；'));
+    const versions=models.get(m.ticker)||[], old=versions.find(v=>v.model_id===m.model_id);
+    if(old && JSON.stringify(old)!==JSON.stringify(m)) throw new Error('模型版本号重复且内容不同：'+m.model_id);
+    if(!old) versions.push(m);
+    if(versions.some(v=>v.model_id!==m.model_id && v.reviewed_at===m.reviewed_at)) throw new Error('同一复核时间对应多个模型版本');
+    models.set(m.ticker,versions.sort((a,b)=>a.reviewed_at.localeCompare(b.reviewed_at)));
+  }
+  for (const o of doc.observations||[]) {
+    if(!o || !/^[A-Z0-9.-]+$/.test(o.ticker||'') || !/^\d{4}-(0[1-9]|1[0-2])$/.test(o.period||'') || !Number.isFinite(o.mean)
+      || !/^\d{4}-\d{2}-\d{2}$/.test(o.date||'') || !Number.isFinite(Date.parse(o.date)) || new Date(o.date).toISOString().slice(0,10)!==o.date
+      || !Number.isFinite(Date.parse(o.observed_at)) || o.date>fairDateAt(o.observed_at) || !o.source || !o.currency || !o.basis)
+      throw new Error('盈利核验记录缺少代码、财年、数值、口径、币种、来源或时间');
+    const key=o.ticker+'|'+o.period, old=observations.get(key);
+    if(!old || o.date>old.date || (o.date===old.date && o.observed_at>old.observed_at)) observations.set(key,o);
+  }
+  for(const e of doc.events||[]) {
+    if(!e?.id || !e.ticker || !e.title || !e.source || !Number.isFinite(Date.parse(e.observed_at)) || typeof e.requires_review!=='boolean') throw new Error('事件缺少标识、来源、时间或复核标志');
+    if(events.has(e.id) && JSON.stringify(events.get(e.id))!==JSON.stringify(e)) throw new Error('事件 ID 重复且内容不同：'+e.id);
+    events.set(e.id,e);
+  }
+  state.fairModels=models; state.fairObservations=observations; state.fairEvents=events;
+  return '估值模型／盈利核验／事件已导入（保留旧版本）';
+}
+function fairAssessment(co,asOf=fairToday()) {
+  const versions=(state.fairModels.get(co.ticker)||[]).filter(m=>m.as_of<=asOf && fairDateAt(m.reviewed_at)<=asOf), model=versions.at(-1);
+  const earnings=Object.values(co.estimateMeta||{}).map(m=>({period:fairPeriod(m.label),mean:m.latestMean,date:m.date,basis:'EPS majority',currency:co.currency})).filter(m=>m.period);
+  for(const o of state.fairObservations.values()) {
+    if(o.ticker!==co.ticker || o.date>asOf || fairDateAt(o.observed_at)>asOf) continue;
+    const i=earnings.findIndex(e=>e.period===o.period);
+    if(i<0) earnings.push(o); else if(o.date>=earnings[i].date) earnings[i]=o;
+  }
+  const events=[...state.fairEvents.values()].filter(e=>fairDateAt(e.observed_at)<=asOf);
+  const observation={asOf,currency:co.currency,earnings,events,checkedOn:state.fairImportedAt ? fairDateAt(state.fairImportedAt) : null};
+  const assessment=FairValue.assess(model,observation);
+  if(model && assessment.status!=='invalid') {
+    if(state.fairImportErrors.length) assessment.reasons.push('数据导入失败：'+state.fairImportErrors.join('、'));
+    for(const e of earnings.filter(e=>model.earnings_checks.some(c=>c.period===e.period))) {
+      if(e.currency!==model.currency) assessment.reasons.push(e.period+' 盈利币种不一致');
+      const check=model.earnings_checks.find(c=>c.period===e.period);
+      if(check.basis!==e.basis) assessment.reasons.push(e.period+' 盈利口径改变或未核实');
+    }
+    if(assessment.reasons.length) assessment.status='review';
+  }
+  return {...assessment,model,observation,versions,revisions:fairEarningsChanges(co.ticker,earnings)};
+}
+const FAIR_LEDGER_KEY='prd-fair-value-ledger-v1';
+let fairLedgerError='';
+let fairPendingLedger=null;
+function readFairLedger() {
+  if(fairPendingLedger) return fairPendingLedger;
+  try { const rows=JSON.parse(localStorage.getItem(FAIR_LEDGER_KEY)||'[]'); if(!Array.isArray(rows)) throw new Error('记录格式错误'); return rows; }
+  catch(e) { fairLedgerError='估值记录无法读取：'+e.message; return null; }
+}
+function fairEarningsChanges(ticker,earnings) {
+  const records=(readFairLedger()||[]).filter(r=>r.ticker===ticker).reverse(), changes=[];
+  for(const current of earnings) {
+    for(const record of records) {
+      const previous=record.earnings?.find(e=>e.period===current.period);
+      if(!previous) continue;
+      // A basis/currency change breaks comparability; do not search past it.
+      if(previous.basis!==current.basis || previous.currency!==current.currency || previous.date>current.date) break;
+      if(previous.mean===current.mean) continue;
+      changes.push({period:current.period,from:previous.mean,to:current.mean,from_date:previous.date,to_date:current.date,
+        change:previous.mean>0?current.mean/previous.mean-1:null});
+      break;
+    }
+  }
+  return changes;
+}
+function recordFairSnapshots() {
+  if(!state.fairImportedAt) return;
+  const rows=readFairLedger(); if(!rows) return;
+  for(const co of fairCompanies()) {
+    if(co.ticker.startsWith('DEMO-')) continue;
+    const a=fairAssessment(co), r=a.status==='ready'?a.result:null;
+    const snapshot={date:a.observation.asOf,ticker:co.ticker,currency:co.currency,model_id:a.model?.model_id||null,status:a.status,
+      reasons:a.reasons,low:r?.low??null,mid:r?.mid??null,high:r?.high??null,
+      price:co.price,price_date:co.priceDate,earnings:a.observation.earnings,
+      model:a.model||null,events:a.observation.events.filter(e=>e.ticker===co.ticker)};
+    const fingerprint=JSON.stringify(snapshot), last=rows.filter(x=>x.ticker===co.ticker).at(-1);
+    if(!last || last.fingerprint!==fingerprint) rows.push({...snapshot,fingerprint,recorded_at:new Date().toISOString()});
+  }
+  try { localStorage.setItem(FAIR_LEDGER_KEY,JSON.stringify(rows)); fairLedgerError=''; fairPendingLedger=null; }
+  catch(e) { fairPendingLedger=rows; fairLedgerError='估值记录未保存，请导出备份：'+e.message; }
+}
+function exportFairLedger() {
+  const rows=readFairLedger(); if(!rows) return;
+  const blob=new Blob([JSON.stringify({document_type:'fair-value-ledger-v1',exported_at:new Date().toISOString(),rows:rows.map(({fingerprint,...r})=>r)},null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download='fair-value-ledger-'+fairToday()+'.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 /* ================= demo data ================= */
 function loadDemo() {
@@ -1401,9 +1686,11 @@ function loadDemo() {
     });
     const series = months.map((d, i) => ({
       date: d,
+      basis: 'ntm', eps: f1[1],
       pe: +(base + trend * i + amp * Math.sin(i / 5.1 + ph) + amp * 0.55 * Math.sin(i / 2.3 + ph * 2.7)).toFixed(2),
     }));
     state.history.set(t, series);
+    state.ntmEstimates.set(t, { date: series.at(-1).date, mean: f1[1], source: 'Synthetic demo' });
     state.priceHist.set(t, series.map(s => ({ date: s.date, price: +(s.pe * f1[1]).toFixed(2) })));
   }
   state.selected = 'DEMO-TECH';
@@ -1608,12 +1895,18 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
   };
   if (!isFar) {
     const hz=isFY2 ? 'fy2' : 'fy1';
-    co.eps[hz] = { low: latest.low, mean: latest.mean, high: latest.high };
     co.estimateMeta ||= {};
+    const newer = !co.estimateMeta[hz]?.date || latest.date >= co.estimateMeta[hz].date;
     const prior=recs.filter(r=>r.date<=new Date(Date.parse(latest.date+'T00:00:00Z')-30*86400000).toISOString().slice(0,10)).at(-1);
-    co.estimateMeta[hz]={date:latest.date,label:String((aoa[sec]||[])[1]||''),priorDate:prior?.date||'',revision:prior&&prior.mean>0?latest.mean/prior.mean-1:null};
+    const previous = recs.at(-2);
+    if (newer) {
+      co.eps[hz] = { low: latest.low, mean: latest.mean, high: latest.high };
+      co.estimateMeta[hz]={date:latest.date,label:String((aoa[sec]||[])[1]||''),priorDate:prior?.date||'',revision:prior&&prior.mean>0?latest.mean/prior.mean-1:null,
+        previousDate:previous?.date||'',previousMean:previous?.mean,latestMean:latest.mean,
+        recentRevision:previous&&previous.mean>0?latest.mean/previous.mean-1:null};
+    }
   }
-  if (fy === 1) {   /* 修正动量:最新一期上调/下调家数(方向信号) */
+  if (fy === 1 && (!co.rev?.date || latest.date >= co.rev.date)) {   /* 修正动量:最新一期上调/下调家数(方向信号) */
     co.rev = {
       n: latest.n,
       up: latest.up,
@@ -1636,7 +1929,10 @@ function ingestEstimateSheet(sheetName, aoa, fileName) {
   let peNote = '';
   if (fy !== 1) {
     peNote = isFar ? t('estFarSkip')(fy) : '';   /* 非第一财年:PE 分位一律不收,口径以 FY1/NTM 为准 */
+  } else if (existing[0]?.basis === 'ntm' && existing.length >= 12) {
+    peNote = t('keepNtm')(existing.length);
   } else if (peSeries.length > existing.length || (peSeries.length === existing.length && peSeries.length && peSeries.at(-1).date >= existing.at(-1).date)) {
+    peSeries = peSeries.map(r => ({ ...r, basis: 'fixed_fy1' }));
     state.history.set(ticker, peSeries);
     peNote = t('peSeries')(peSeries.length, peSeries[0].date.slice(0, 7), peSeries[peSeries.length - 1].date.slice(0, 7)) + truncNote
       + (peSeries.length < 36 ? t('shortWin') : '');
@@ -2053,12 +2349,16 @@ function isImportArtifact(name) {
 }
 async function handleFiles(files) {
   const msgs = [];
+  const importErrors = new Set(state.fairImportErrors);
   /* 归属类文件(Charting / Price Summary)排到主数据文件之后,保证公司先建立再归属 */
   const isSecondary = f => /price\s*summary|charting|targets|news/i.test(f.name);
   files = [...files].filter(f => isImportArtifact(f.webkitRelativePath || f.name)).sort((a, b) => (isSecondary(a) ? 1 : 0) - (isSecondary(b) ? 1 : 0));
   for (const f of files) {
     try {
-      if (/\.xlsx?$/i.test(f.name)) {
+      if (/\.json$/i.test(f.name)) {
+        if (!/Fair Value Inputs\.json$/i.test(f.name)) continue;
+        msgs.push(f.name+': '+ingestFairDocument(JSON.parse(await f.text())));
+      } else if (/\.xlsx?$/i.test(f.name)) {
         await ensureXLSX();
         const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
         const got = [];
@@ -2099,15 +2399,20 @@ async function handleFiles(files) {
           }
         }
       }
-    } catch (e) { msgs.push(f.name + t('mParseFail') + ((e && e.message) || e)); }
+      importErrors.delete(f.name);
+    } catch (e) { importErrors.add(f.name); msgs.push(f.name + t('mParseFail') + ((e && e.message) || e)); }
   }
   /* 默认选中的那家必须是**画得出来的**那批里的一家,否则详情卡片会指着一家表格里根本没有的公司 */
   const vis = visibleCompanies();
   if (vis.length && (!state.selected || !vis.some(c => c.ticker === state.selected))) state.selected = vis[0].ticker;
+  state.fairImportedAt = new Date().toISOString();
+  state.fairImportErrors = [...importErrors];
+  recordFairSnapshots();
   renderAll(msgs.join(' · '));
 }
 /* ================= 文件夹连接(File System Access API;记忆通过 IndexedDB,不可用时静默降级) ================= */
 let dirHandle = null;
+let folderScanning = false, folderSignature = '';
 function idbOpen() {
   return new Promise((res, rej) => {
     try {
@@ -2141,22 +2446,30 @@ async function idbGet(k) {
 async function collectDirFiles(handle, depth, out) {
   for await (const entry of handle.values()) {
     if (!isImportArtifact(entry.name)) continue;
-    if (entry.kind === 'file' && /\.(csv|xlsx|xls)$/i.test(entry.name)) out.push(await entry.getFile());
+    if (entry.kind === 'file' && (/\.(csv|xlsx|xls)$/i.test(entry.name) || /Fair Value Inputs\.json$/i.test(entry.name))) out.push(await entry.getFile());
     else if (entry.kind === 'directory' && depth < 3) await collectDirFiles(entry, depth + 1, out);
   }
 }
-async function scanFolder() {
-  if (!dirHandle) return;
+async function scanFolder(automatic = false) {
+  if (!dirHandle || folderScanning) return;
+  folderScanning = true;
+  try {
   const files = [];
-  try { await collectDirFiles(dirHandle, 0, files); } catch (e) { renderAll(t('fsDenied')); return; }
+  try { await collectDirFiles(dirHandle, 0, files); } catch (e) { state.fairImportErrors=[...new Set([...state.fairImportErrors,'文件夹读取失败'])]; renderAll(t('fsDenied')); return; }
+  state.fairImportErrors=state.fairImportErrors.filter(e=>e!=='文件夹读取失败');
   if (!files.length) { renderAll(t('fsNoFiles')(dirHandle.name)); return; }
   files.sort((a, b) => a.lastModified - b.lastModified);   /* 旧→新:最新文件最后导入、覆盖生效 */
+  const signature=JSON.stringify(files.map(f=>[f.name,f.size,f.lastModified]));
+  if(automatic === true && signature===folderSignature) {recordFairSnapshots();renderAll();return;}
   await handleFiles(files);
+  folderSignature=signature;
   const st = $('status');
   st.insertBefore(el('span', 'ok', t('fsScanned')(dirHandle.name, files.length) + ' '), st.firstChild);
   $('rescanBtn').hidden = false;
   $('reconnectBtn').hidden = true;
+  } finally { folderScanning=false; }
 }
+setInterval(()=>{ if(dirHandle) scanFolder(true); else if(state.fairImportedAt) {recordFairSnapshots();renderAll();} },60000);
 $('dirBtn').addEventListener('click', async () => {
   if (!window.showDirectoryPicker) { renderAll(t('fsUnsupported')); return; }
   try { dirHandle = await window.showDirectoryPicker({ mode: 'read' }); } catch (e) { return; /* 用户取消 */ }
@@ -2185,8 +2498,8 @@ function overviewRows() {
   const k = state.sortKey, d = state.sortDir;
   rows.sort((a, b) => {
     if (k === 'name') return d * a.co.name.localeCompare(b.co.name, 'zh');
-    let va = a.r ? (k === 'price' ? a.co.price : a.r[k]) : -Infinity;
-    let vb = b.r ? (k === 'price' ? b.co.price : b.r[k]) : -Infinity;
+    const value = row => k === 'price' ? row.co.price : k === 'currentPE' ? latestValuation(row.co).current ?? -Infinity : row.r?.[k] ?? -Infinity;
+    let va = value(a), vb = value(b);
     if (!isFinite(va)) va = -Infinity;
     if (!isFinite(vb)) vb = -Infinity;
     return d * (va - vb);
@@ -2194,10 +2507,15 @@ function overviewRows() {
   return rows;
 }
 const OV_COLS = [
-  ['name', 'colCompany'], ['price', 'colPrice'], ['downPct', 'colLow'], ['upPct', 'colHigh'],
+  ['name', 'colCompany'], ['price', 'colPrice'], ['currentPE', 'colCurrentPE'], ['downPct', 'colLow'], ['upPct', 'colHigh'],
   ['midPct', 'colMid'], ['pos', 'colPos'],
 ];
 function renderOvTable(rows) {
+  $('valuationBasis').value = state.horizon;
+  $('peWindow').value = state.peYears;
+  $('valuationMethod').textContent = LANG === 'en'
+    ? `${state.horizon.toUpperCase()} × ${state.peYears}y historical P/E. NTM uses the same mean EPS at P25/P50/P75 unless manually overridden; FY1/FY2 use fiscal EPS scenarios. These are conditional ranges, not probability intervals. Click a company for dates and 3/5/10y comparison.`
+    : `${state.horizon === 'ntm' ? '未来十二个月 NTM' : state.horizon.toUpperCase() + ' 财年情景'} × 近${state.peYears}年历史 PE。NTM 默认用同一平均 EPS 乘 PE 第25／50／75分位，只反映倍数变化；手工修改 EPS 后为自设情景。FY1／FY2 使用财年盈利上下限。区间不代表概率；点击公司查看日期和3／5／10年对照。`;
   const wrap = $('ovTableWrap'); wrap.replaceChildren();
   const tb = el('table', 'ov'), thead = el('thead'), trh = el('tr');
   for (const [key, labelKey] of OV_COLS) {
@@ -2215,6 +2533,9 @@ function renderOvTable(rows) {
     const td0 = el('td'); td0.appendChild(el('span', 'nm', co.name)); td0.appendChild(el('span', 'tk', co.ticker));
     tr.appendChild(td0);
     tr.appendChild(el('td', '', fmtN(co.price)));
+    const latest = latestValuation(co), peCell = el('td', '', latest.current === null ? '—' : fmtX(latest.current));
+    peCell.title = (LANG === 'en' ? 'Price date / NTM EPS date: ' : '价格日 / NTM EPS 日：') + (co.priceDate || '—') + ' / ' + (latest.point?.date || '—');
+    tr.appendChild(peCell);
     if (r) {
       const pc = v => isFinite(v) ? (v >= 0 ? 'pos' : 'neg') : '';
       const cLow = el('td', pc(r.downPct), fmtN(r.coreLow) + ' (' + fmtPct(r.downPct) + ')');
@@ -2241,7 +2562,7 @@ function renderOvTable(rows) {
       }
       tr.appendChild(tdm);
     } else {
-      const td = el('td', '', t('rowNoCalc')); td.colSpan = 4; td.style.color = 'var(--text-muted)';
+      const td = el('td', '', noRangeReason(co, state.horizon)); td.colSpan = 4; td.style.color = 'var(--text-muted)';
       tr.appendChild(td);
     }
     tr.addEventListener('click', () => { state.selected = co.ticker; renderAll(); $('detCard').scrollIntoView({ behavior: 'smooth' }); });
@@ -2352,7 +2673,10 @@ function renderHead(co) {
   head.appendChild(el('span', 'cur', (co.currency || '—') + (pd ? ' · ' + pd : '') + ' · ' + co.name + ' ' + co.ticker));
 }
 function renderKpis(co, r) {
+  renderFairDetail(co);
+  renderLatestValuation(co);
   renderDecisionContext(co);
+  renderValuationWindows(co);
   const pe = peStats(co.ticker);
   const kp = $('detKpis'); kp.replaceChildren();
   const tile = (lb, vl, dt, cls) => {
@@ -2364,7 +2688,7 @@ function renderKpis(co, r) {
     tile(t('tMid'), fmtN(r.mid), fmtPct(r.midPct) + t('vsPrice'), isFinite(r.midPct) && r.midPct >= 0 ? 'pos' : isFinite(r.midPct) ? 'neg' : '');
     tile(t('tCore'), fmtN(r.coreLow) + ' ~ ' + fmtN(r.coreHigh), fmtPct(r.downPct) + ' ~ ' + fmtPct(r.upPct), '');
     if (isFinite(r.extLow)) tile(t('tExt'), fmtN(r.extLow) + ' ~ ' + fmtN(r.extHigh), fmtPct((r.extLow / co.price - 1) * 100) + ' ~ ' + fmtPct((r.extHigh / co.price - 1) * 100), '');
-    if (pe && isFinite(pe.current)) tile(t('tPe'), fmtX(pe.current), t('histPct')(rankPct(pe.sorted, pe.current)), '');
+    if (pe && isFinite(pe.current)) tile(LANG === 'en' ? 'Last historical P/E' : '历史文件末点 PE', fmtX(pe.current), t('histPct')(rankPct(pe.sorted, pe.current)), '');
     const ex = co.extra;
     if (ex && isFinite(ex.target)) {
       const d = isFinite(co.price) ? (ex.target / co.price - 1) * 100 : NaN;
@@ -2372,15 +2696,69 @@ function renderKpis(co, r) {
     }
   } else {
     const manual = !state.history.has(co.ticker) || (state.history.get(co.ticker) || []).length < 12;
-    kp.appendChild(el('div', 'empty', manual && !peStats(co.ticker) ? t('needPct') : t('needEps')));
+    kp.appendChild(el('div', 'empty', state.horizon === 'ntm' ? noRangeReason(co, state.horizon) : manual && !peStats(co.ticker) ? t('needPct') : t('needEps')));
   }
+}
+function renderLatestValuation(co) {
+  const panel = $('latestValuation'); panel.replaceChildren();
+  const say = (cn, en) => LANG === 'en' ? en : cn;
+  const x = latestValuation(co), point = x.point;
+  const pct = v => v === null || v === undefined ? '—' : fmtPct(v * 100);
+  const add = text => panel.appendChild(el('p', 'hint', text));
+  panel.appendChild(el('h3', '', say('最新 PE 与盈利变化', 'Latest P/E and earnings changes')));
+  panel.appendChild(el('strong', '', say('当前 NTM PE：', 'Current NTM P/E: ') + (x.current === null ? '—' : fmtX(x.current))));
+  const priceDate = PRICE_DATE_KEYS[co.priceDate] ? t(PRICE_DATE_KEYS[co.priceDate]) : co.priceDate || '—';
+  add(`${say('当前价格', 'Current price')} ${fmtN(co.price)} ÷ NTM EPS ${fmtN(point?.mean)} · ${say('价格日', 'Price date')} ${priceDate} · ${say('盈利日', 'EPS date')} ${point?.date || '—'}`);
+  add(say('本栏只使用原始 NTM 共识，手工情景不改变这里的当前 PE。', 'This panel uses imported NTM consensus; manual scenarios do not change current P/E.'));
+  if (point?.retrievedAt) add(say('数据取得时间：', 'Retrieved: ') + point.retrievedAt);
+  if (x.current === null) add(say('缺少有效价格或 NTM 盈利非正／缺失，不能计算 PE；不会退回 FY1 或旧正盈利。', 'Price or positive NTM EPS unavailable; no FY1 or old positive earnings substitution.'));
+  if (x.change !== null) {
+    add(`${say('相对历史观测', 'Versus historical observation')} ${x.prior.date}：PE ${pct(x.change)} · ${say('价格', 'Price')} ${pct(x.priceChange)} · NTM EPS ${pct(x.epsChange)}`);
+    add(`${say('先只更新价格', 'Update price first')}：${fmtX(x.prior.pe)} → ${fmtX(x.priceOnly)}；${say('再更新盈利', 'then earnings')}：${fmtX(x.priceOnly)} → ${fmtX(x.current)} (${pct(x.earningsEffect)})`);
+  }
+  add(say('比较按上方实际日期进行，不称作日变化。NTM 盈利变化包含时间滚动，不能全部解释成分析师上调／下调。', 'Changes span the dates shown, not necessarily one day. NTM earnings changes include time roll and are not pure analyst revisions.'));
+  for (const hz of ['fy1', 'fy2']) {
+    const m = co.estimateMeta?.[hz];
+    add(`${hz.toUpperCase()} ${say('固定财年盈利修订', 'fixed-fiscal-year earnings revision')}：${FY_LABEL.exec(m?.label || '')?.[0] || '—'} · ${m?.previousDate || '—'} → ${m?.date || '—'} · EPS ${fmtN(m?.previousMean)} → ${fmtN(m?.latestMean)} (${pct(m?.recentRevision)})`);
+  }
+  add(say('价格下跌会降低 PE，盈利下修会抬高 PE；当前 PE 不是合理目标倍数。数据延迟取决于 FactSet 更新及本地拉取、扫描时间。', 'A price drop lowers P/E; an earnings cut raises it. Current P/E is not a fair-value target multiple. Latency depends on FactSet, fetching and folder rescanning.'));
+}
+function renderValuationWindows(co) {
+  const panel = $('valuationWindows'); panel.replaceChildren();
+  const say = (cn, en) => LANG === 'en' ? en : cn;
+  const ntm = state.horizon === 'ntm', manual = state.overrides.has(co.ticker + '|' + state.horizon);
+  const point = state.ntmEstimates.get(co.ticker);
+  const meta = co.estimateMeta?.[state.horizon];
+  const eps = epsFor(co.ticker, state.horizon);
+  panel.appendChild(el('h3', '', say('历史窗口对照 · 同一盈利假设', 'History windows · same earnings assumption')));
+  panel.appendChild(el('p', 'hint', `${state.horizon.toUpperCase()} EPS ${fmtN(eps?.mean)} · ${say('盈利数据日', 'EPS date')} ${manual ? say('手工假设', 'Manual assumption') : (ntm ? point?.date : meta?.date) || '—'} · ${say('价格日', 'Price date')} ${PRICE_DATE_KEYS[co.priceDate] ? t(PRICE_DATE_KEYS[co.priceDate]) : co.priceDate || '—'}`));
+  panel.appendChild(el('p', 'hint', manual
+    ? say('已手工修改盈利；下面各窗口均使用当前自设 EPS 情景。', 'Earnings overridden; all windows use the current manual EPS scenarios.')
+    : ntm
+      ? say('来源：NTM 历史文件最新 EPS。当前仅有平均预测，没有 NTM 悲观／乐观预测；上下沿均使用同一个 EPS，只改变 PE。缺失时不使用 FY1 补齐。', 'Source: latest EPS in the NTM history file. Only mean EPS is available; both endpoints use that same EPS and vary P/E only. Missing NTM EPS is never filled with FY1.')
+      : say('财年情景：将历史倍数应用于指定财年的盈利，并非未来十二个月估值。', 'Fiscal scenario: historical multiples applied to the selected fiscal year, not a next-12-month valuation.')));
+  if (ntm && point?.date && co.priceDate && /^\d{4}-/.test(co.priceDate) && point.date !== co.priceDate)
+    panel.appendChild(el('p', 'hint', say('价格与盈利快照日期不同；这里使用最新已导入数据，并非实时预测。', 'Price and earnings snapshots have different dates; these are the latest imported data, not live estimates.')));
+  const table = el('table', 'ov'), head = el('tr');
+  for (const label of [say('窗口', 'Window'), say('实际样本', 'Actual coverage'), 'PE P25 / P50 / P75', say('下沿 / 中枢 / 上沿', 'Low / Mid / High'), say('中枢空间', 'Mid vs price')]) head.appendChild(el('th', '', label));
+  table.appendChild(head);
+  for (const years of [3, 5, 10]) {
+    const pe = peStats(co.ticker, years), r = calcRange(co, state.horizon, years), row = el('tr', years === state.peYears ? 'sel' : '');
+    const h = pe?.series;
+    const coverage = pe?.src === 'manual' ? say('手工倍数（不随窗口变化）', 'Manual multiples (unchanged across windows)')
+      : h ? `${peBasisLabel(pe)} · ${h[0].date} ~ ${h.at(-1).date} · ${h.length}${say('点', ' observations')}` : say('不足12个有效点', 'Fewer than 12 usable points');
+    for (const value of [`${years}${say('年', 'y')}`, coverage, pe ? ['p25','p50','p75'].map(k=>fmtX(pe[k])).join(' / ') : '—', r ? [r.coreLow,r.mid,r.coreHigh].map(v=>fmtN(v)).join(' / ') : '—', r ? fmtPct(r.midPct) : '—']) row.appendChild(el('td', '', value));
+    table.appendChild(row);
+  }
+  const wrap = el('div'); wrap.style.overflowX = 'auto'; wrap.appendChild(table); panel.appendChild(wrap);
+  panel.appendChild(el('p', 'hint', say('窗口按历史文件最新日期回看，实际覆盖可能短于所选年数。历史分位不是目标价保证，也不代表股价落在区间内的概率。', 'Windows look back from the latest history date; coverage may be shorter than requested. Percentiles are conditional references, not guaranteed targets or price probabilities.')));
 }
 function signalOutcomeSummary(rows, field) {
   // Non-overlapping observations per horizon; selection never uses outcomes.
   const gap=field==='future_1h_return'?90*60000:2*86400000;
   let last=-Infinity;const chosen=[];
   for(const r of rows){const stamp=Date.parse(r.timestamp);
-    if(r.signal_version!=='2'||r.quality!=='usable'||!['bullish','bearish'].includes(r.direction)||stamp-last<gap)continue;
+    if(r.signal_version!=='3'||r.quality!=='usable'||!['bullish','bearish'].includes(r.direction)||stamp-last<gap)continue;
     last=stamp;chosen.push(r);
   }
   const matured=chosen.filter(r=>r[field]!==''&&r[field]!=null&&isFinite(+r[field]));
@@ -2396,26 +2774,30 @@ function renderDecisionContext(co) {
   if(!panel){panel=el('section','');panel.id='decisionContext';$('detKpis').insertAdjacentElement('afterend',panel);}
   panel.replaceChildren();
   const en=LANG==='en',say=(cn,eng)=>en?eng:cn;
+  const basis=state.horizon.toUpperCase();
   const add=(label,value)=>panel.appendChild(el('p','hint',label+' '+value));
   panel.appendChild(el('h3','',say('现价隐含预期与观察条件','Implied expectations and observation conditions')));
   const x=impliedExpectations(co),pct=x=>x===null?'—':fmtPct(x*100);
   if(x){
     add(say('现价对应 PE：','Current-price PE:'),`FY1 ${x.fy1===null?'—':fmtX(x.fy1)} · FY2 ${x.fy2===null?'—':fmtX(x.fy2)}`);
-    add(say('历史中位估值下所需 EPS：','EPS required at median valuation:'),`${x.required===null?'—':fmtN(x.required)} · ${say('相对 FY1 共识','vs FY1 consensus')} ${pct(x.gap)}`);
+    add(say('历史中位估值下所需 EPS：','EPS required at median valuation:'),`${x.required===null?'—':fmtN(x.required)} · ${say('相对当前盈利假设','vs selected earnings assumption')} (${basis}) ${pct(x.gap)}`);
     add(say('盈利增长与修订：','Earnings growth and revisions:'),`FY2/FY1 ${pct(x.growth)} · ${say('FY1 约30日前至最新修订','FY1 revision from ~30d prior')} ${pct(x.revision)}`);
     add(say('估值观察：','Valuation observation:'),x.gap===null?say('盈利或估值不足，暂不判断。','Insufficient earnings or valuation data.'):
-      x.gap>0?say('现价需要高于 FY1 共识的盈利，或高于历史中位数的估值支撑。','Price requires earnings above FY1 consensus or a multiple above the historical median.'):
-      say('FY1 共识在中位估值下可覆盖现价；仍需观察盈利是否下修。','FY1 consensus supports price at the median multiple; monitor downward revisions.'));
-    add(say('时点与口径：','Dates and basis:'),`${say('价格','Price')} ${co.priceDate||'—'} · EPS ${x.epsDate||'—'} · PE ${x.peDate||'—'} · ${say('固定财年/所导入历史，非严格滚动 NTM；手工覆盖改变假设。','Fixed fiscal year / imported history, not necessarily rolling NTM; overrides change assumptions.')}`);
+      x.gap>0?say('现价需要高于当前盈利假设的盈利，或高于历史中位数的估值支撑。','Price requires earnings above the selected assumption or a multiple above the historical median.'):
+      say('当前盈利假设在中位估值下可覆盖现价；仍需观察盈利是否下修。','Selected earnings support price at the median multiple; monitor downward revisions.'));
+    add(say('时点与口径：','Dates and basis:'),`${say('价格','Price')} ${co.priceDate||'—'} · ${basis} EPS ${state.overrides.has(co.ticker+'|'+state.horizon)?say('手工','Manual'):x.epsDate||'—'} · PE ${x.peDate||'—'} · ${peBasisLabel(peStats(co.ticker))}`);
   }
   const rows=state.optionSignals.get(co.ticker)||[],latest=rows.at(-1);
   panel.appendChild(el('h3','',say('期权方向 × 价格响应','Options direction × price response')));
   if(!latest){add('',say('尚无信号文件：连接 Assets 文件夹并重新扫描，读入 Options Signals.csv。','No signals: rescan Assets to import Options Signals.csv.'));return;}
   const stale=Date.now()-Date.parse(latest.timestamp)>2*3600000;
-  const status=stale||latest.signal_version!=='2'?'watch':latest.condition_state||'watch';
+  const status=stale||latest.signal_version!=='3'?'watch':latest.condition_state||'watch';
   add(say('状态：','State:'),({watch:say('观察','Watch'),confirmed:say('条件成立：同向响应','Condition met: aligned response'),invalidated:say('判断失效：价格反向','Invalidated: opposing price')})[status]);
   add(say('数据时点：','Observation:'),`${latest.timestamp} · ${stale?say('历史记录，不能作当前触发','Historical observation, not a current trigger'):say('最近快照','Latest snapshot')}`);
   add('Net Delta Flow',`${latest.net_delta_shares} ${say('股','shares')} · ${latest.direction} · ${latest.quality}`);
+  add(say('计算范围：','Scope:'),`${latest.sampled_rows||'—'} ${say('行；匹配','rows; matched')} ${latest.matched_rows||'—'} · ${latest.expiry_count||'—'} ${say('个到期日','expiries')} (${latest.expiry_from||'—'} → ${latest.expiry_to||'—'})`);
+  add(say('质量与排除：','Quality and exclusions:'),`${say('匹配覆盖','match coverage')} ${latest.match_coverage==null||latest.match_coverage===''?'—':pct(+latest.match_coverage)} · ${say('有效成交覆盖','usable volume coverage')} ${latest.usable_coverage==null||latest.usable_coverage===''?'—':pct(+latest.usable_coverage)} · Spread ${latest.spread_suspect_contracts||0} · ${say('无法分类','unclassified')} ${latest.unclassified_contracts??'—'} · ${say('缺失/无效Delta','missing/invalid delta')} ${latest.missing_delta_contracts??'—'}`);
+  add('',say('匹配覆盖低于80%或有效成交覆盖低于35%不输出可用方向。标准合约乘数暂按100；调整合约尚未支持。所有合约仅指采集范围，Spread识别为启发式。','Direction withheld below 80% match or 35% usable-volume coverage. Standard multiplier assumed 100; adjusted contracts unsupported. Scope is sampled contracts only; spread detection is heuristic.'));
   add(say('区间价格变化：','Interval price return:'),latest.interval_price_return===''||latest.interval_price_return==null?'—':pct(+latest.interval_price_return));
   add(say('预设条件：','Rule:'),say('可用方向代理且价格同向变化至少 0.10% → 条件成立；反向至少 0.10% → 判断失效；其余观察。阈值为待验证规则，不是买卖指令。','Usable directional proxy and aligned price move ≥0.10%: condition met; opposing move ≥0.10%: invalidated; otherwise watch. Experimental rule, not an order.'));
   for(const [field,label] of [['future_1h_return','1h'],['future_1d_return','1d']]){
@@ -2535,6 +2917,48 @@ function renderBullet(co, r) {
     svg.appendChild(svgEl('text', { x: x(co.price), y: yc + 34, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 650, fill: 'var(--text-primary)' }, t('blPrice') + fmtN(co.price)));
   }
   box.appendChild(svg);
+}
+function renderFairOverview() {
+  const panel=$('fairOverview'); panel.replaceChildren();
+  const say=(cn,en)=>LANG==='en'?en:cn;
+  panel.appendChild(el('h2','',say('今日合理估值 · 股东现金流折现','Daily fair value · discounted equity cash flows')));
+  panel.appendChild(el('p','hint',say('合理价值由现金流、稀释和风险假设决定。盈利修订或重大事件出现后，旧模型进入待复核状态；不会用历史 PE 区间自动补成新合理价值。','Fair value depends on cash flows, dilution and risk. Earnings revisions or material events flag the old model for review; historical multiples never substitute for a missing fair value.')));
+  const table=el('table','ov'), head=el('tr');
+  for(const label of [say('公司','Company'),say('状态','Status'),say('悲观 / 基准 / 乐观','Bear / Base / Bull'),say('模型日期','Model date'),say('说明','Notes')]) head.appendChild(el('th','',label));
+  table.appendChild(head);
+  for(const co of fairCompanies()) {
+    const a=fairAssessment(co), row=el('tr','rowc'), labels={ready:say('可用','Ready'),review:say('待复核','Review needed'),missing:say('待建模','Model needed'),invalid:say('模型无效','Invalid model')};
+    row.appendChild(el('td','',co.ticker)); row.appendChild(el('td',a.status==='ready'?'':'neg',labels[a.status]));
+    row.appendChild(el('td','',a.status==='ready'?[a.result.low,a.result.mid,a.result.high].map(fmtN).join(' / ')+' '+co.currency:'—'));
+    row.appendChild(el('td','',a.model?.as_of||'—'));
+    const notes=el('td','',a.reasons.join('；')||say('已通过已导入数据核验','Checked against imported data'));
+    for(const rev of a.revisions)notes.appendChild(el('div',rev.to<rev.from?'neg':'',`${rev.period} EPS ${rev.from} → ${rev.to} (${rev.change===null?'—':fmtPct(rev.change*100)}) · ${rev.from_date} → ${rev.to_date}`));
+    row.appendChild(notes);
+    if(state.companies.has(co.ticker))row.addEventListener('click',()=>{state.selected=co.ticker;renderAll();$('fairDetail').scrollIntoView({behavior:'smooth'});}); table.appendChild(row);
+  }
+  const wrap=el('div');wrap.style.overflowX='auto';wrap.appendChild(table);panel.appendChild(wrap);
+  panel.appendChild(el('p','hint',say('估值日（纽约）：','Valuation date (New York): ')+fairToday()+say('；最近导入：','; last import: ')+(state.fairImportedAt||'—')));
+  panel.appendChild(el('p','hint',say('页面打开且已连接文件夹时，每60秒检查本地文件变化；这不等于 FactSet 实时订阅，关闭页面后不会继续监控。','While open with a connected folder, checks local file changes every 60 seconds. This is not a live FactSet subscription and stops when the page closes.')));
+  const button=el('button','',say('导出每日／修订记录','Export daily / revision log'));button.addEventListener('click',exportFairLedger);panel.appendChild(button);
+  if(fairLedgerError) panel.appendChild(el('p','neg',fairLedgerError));
+}
+function renderFairDetail(co) {
+  const panel=$('fairDetail');panel.replaceChildren();
+  const a=fairAssessment(co), say=(cn,en)=>LANG==='en'?en:cn;
+  panel.appendChild(el('h3','',say('合理估值依据','Fair-value assumptions')));
+  for(const o of a.observation.earnings)panel.appendChild(el('p','hint',`${o.period} EPS ${fmtN(o.mean)} ${o.currency||'—'} · ${o.basis} · ${o.date}`));
+  if(!a.model) {panel.appendChild(el('p','hint',say('尚缺经核验的每股股东现金流、预测期、股权激励／稀释处理、折现率及稳定期假设。下方历史倍数仅供对照。','Verified per-share equity cash flows, timing, dilution, discount rate and terminal assumptions are missing. Historical multiples below are reference only.')));return;}
+  panel.appendChild(el('p','hint',`${a.model.model_id} · ${a.model.source} · ${say('复核截止','Review due')} ${a.model.review_due}`));
+  for(const key of ['equity_basis_note','normalization_note','cash_flow_timing_note'])panel.appendChild(el('p','hint',a.model[key]));
+  for(const reason of a.reasons) panel.appendChild(el('p','neg',reason));
+  if(a.result) {
+    panel.appendChild(el('p','hint',say('模型基准 EPS 对应的隐含合理 PE：','Implied fair P/E at model baseline EPS: ')+fmtX(a.result.fairPE)+say('；待复核时以下仅是旧假设计算结果。','; when flagged, figures below reflect old assumptions only.')));
+    const table=el('table','ov'),header=el('tr');
+    for(const s of [say('情景','Scenario'),say('价值','Value'),say('股权折现率','Cost of equity'),say('永续增长','Terminal growth'),say('终值占比','Terminal share'),say('依据','Rationale')]) header.appendChild(el('th','',s));table.appendChild(header);
+    for(const key of ['bear','base','bull']) {const s=a.model.scenarios[key],r=a.result.scenarios[key],row=el('tr');for(const v of [key,fmtN(r.value),fmtPct(s.cost_of_equity*100),fmtPct(s.terminal_growth*100),fmtPct(r.terminalShare*100),s.rationale]) row.appendChild(el('td','',v));table.appendChild(row);}
+    panel.appendChild(table);
+  }
+  if(a.versions.length>1) {const prev=a.versions.at(-2),d=FairValue.attribution(prev,a.model,prev.as_of,a.model.as_of);if(d)panel.appendChild(el('p','hint',say('较前版（顺序替换分解）：时间 ','Versus prior version (ordered attribution): time ')+fmtN(d.time)+' / '+say('现金流 ','cash flows ')+fmtN(d.cashflow)+' / '+say('风险及增长 ','risk and growth ')+fmtN(d.riskAndGrowth)));}
 }
 /* ================= 波动率统计 & 方法对比 ================= */
 function volStats(ticker) {
@@ -4717,7 +5141,7 @@ function renderPEBand(co, pe) {
   svg.appendChild(hit);
   box.appendChild(svg);
   const s = $('peStatsLine');
-  s.textContent = t('peStats')(h.length, h[0].date.slice(0, 7), h[li].date.slice(0, 7)) + '· P10 ' + fmtX(pe.p10)
+  s.textContent = peBasisLabel(pe) + ' · ' + t('peStats')(h.length, h[0].date.slice(0, 7), h[li].date.slice(0, 7)) + '· P10 ' + fmtX(pe.p10)
     + ' · P25 ' + fmtX(pe.p25) + ' · ' + t('peMedianShort') + ' ' + fmtX(pe.p50) + ' · P75 ' + fmtX(pe.p75) + ' · P90 ' + fmtX(pe.p90)
     + ' · ' + t('peCur') + fmtX(pe.current) + t('pctOf')(rankPct(pe.sorted, pe.current))
     + (h.length < 36 ? t('peShortWin') : '');
@@ -5037,6 +5461,7 @@ function renderAll(statusMsg) {
   /* 选中的那家被隐藏了(比如刚点了收起),就改选一家画得出来的,别让详情卡片指着表格里没有的行 */
   if (vis.length && (!state.selected || !vis.some(c => c.ticker === state.selected))) state.selected = vis[0].ticker;
   $('ovCard').hidden = !has;
+  $('fairOverview').hidden = !has;
   if (statusMsg != null) lastStatusMsg = statusMsg;
   if (lastStatusMsg != null || has) {
     const st = $('status'); st.replaceChildren();
@@ -5048,6 +5473,7 @@ function renderAll(statusMsg) {
     }
   }
   if (has) {
+    renderFairOverview();
     const rows = overviewRows();
     renderOvTable(rows);
     renderOvChart(rows);
@@ -5065,6 +5491,8 @@ drop.addEventListener('drop', ev => handleFiles([...ev.dataTransfer.files]));
 $('fileInput').addEventListener('change', ev => { handleFiles([...ev.target.files]); ev.target.value = ''; });
 $('demoBtn').addEventListener('click', loadDemo);
 $('coSel').addEventListener('change', ev => { state.selected = ev.target.value; renderAll(); });
+$('valuationBasis').addEventListener('change', ev => { state.horizon = ev.target.value; renderAll(); });
+$('peWindow').addEventListener('change', ev => { state.peYears = Number(ev.target.value); renderAll(); });
 $('hzTabs').addEventListener('click', ev => {
   const b = ev.target.closest('button'); if (!b) return;
   state.horizon = b.dataset.h; renderAll();

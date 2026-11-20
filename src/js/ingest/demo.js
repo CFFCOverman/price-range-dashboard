@@ -18,9 +18,11 @@ function loadDemo() {
     });
     const series = months.map((d, i) => ({
       date: d,
+      basis: 'ntm', eps: f1[1],
       pe: +(base + trend * i + amp * Math.sin(i / 5.1 + ph) + amp * 0.55 * Math.sin(i / 2.3 + ph * 2.7)).toFixed(2),
     }));
     state.history.set(t, series);
+    state.ntmEstimates.set(t, { date: series.at(-1).date, mean: f1[1], source: 'Synthetic demo' });
     state.priceHist.set(t, series.map(s => ({ date: s.date, price: +(s.pe * f1[1]).toFixed(2) })));
   }
   state.selected = 'DEMO-TECH';

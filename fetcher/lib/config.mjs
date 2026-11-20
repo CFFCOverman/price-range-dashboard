@@ -20,8 +20,30 @@ export const LIB_DIR = path.dirname(fileURLToPath(import.meta.url));   // <repo>
 export const FETCHER_DIR = path.resolve(LIB_DIR, '..');                // <repo>/fetcher
 export const ROOT_DIR = path.resolve(FETCHER_DIR, '..');               // <repo>
 
-/* 数据落在仓库根的 Assets/ —— 整个项目文件夹可整体搬迁/克隆,零改动可用;FS_OUT 环境变量可覆盖 */
-export const OUT_DIR = process.env.FS_OUT || path.join(ROOT_DIR, 'Assets');
+/* 数据目录,优先级:FS_OUT 环境变量 > fetcher/assets-path.txt > 仓库根的 Assets/
+ * assets-path.txt 只写一行绝对路径(# 开头为注释),用来把数据放进云盘同步文件夹,例如
+ *   Windows: G:\\My Drive\\PriceRangeDashboard\\Assets
+ *   macOS:   /Users/<你>/Library/CloudStorage/GoogleDrive-<邮箱>/My Drive/PriceRangeDashboard/Assets
+ * 每台电脑路径不同,所以这个文件不进 Git。写了却找不到该目录(云盘没挂载/没登录)时直接报错退出,
+ * 绝不悄悄退回仓库内的 Assets/ —— 否则数据会分叉成两份,仪表盘读到的是旧的那份。 */
+export const ASSETS_PATH_FILE = path.join(FETCHER_DIR, 'assets-path.txt');
+function resolveOutDir() {
+  if (process.env.FS_OUT) return process.env.FS_OUT;
+  if (fs.existsSync(ASSETS_PATH_FILE)) {
+    const line = fs.readFileSync(ASSETS_PATH_FILE, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/)
+      .map(s => s.trim()).find(s => s && !s.startsWith('#'));
+    if (line) {
+      const dir = path.resolve(line.replace(/^~(?=$|[\\/])/, os.homedir()));
+      if (!fs.existsSync(dir)) {
+        throw new Error(`assets-path.txt 指向的数据目录不存在: ${dir}\n` +
+          '  请确认 Google Drive 已登录、云盘已挂载,或改正/删除 fetcher/assets-path.txt。');
+      }
+      return dir;
+    }
+  }
+  return path.join(ROOT_DIR, 'Assets');
+}
+export const OUT_DIR = resolveOutDir();
 export const LOG_DIR = path.join(OUT_DIR, '_logs');   // 台账与跑批日志:脚本产出的东西都在 Assets 下面,一条 .gitignore 全包住
 
 /* 配置文件跟着 fetcher/ 走(它们是"你要改的东西",不是数据) */
@@ -41,9 +63,13 @@ export const OPTIONS_FLOW_TRAY_LAUNCHER = path.join(FETCHER_DIR, 'options-flow-t
  * 且是按**文件名**认数据种类的,所以文件放在哪一层都一样能被认出来。
  * 归类规则只认文件名,因此写入、读回、体检、迁移共用同一个函数,不可能各走各的。 */
 export const ASSET_RULES = [
+  ['valuation', /NTM Valuation History\.csv$/i],        // independent rolling multiple history
   ['estimates', /Estimate History\.xlsx$/i],           // <代码> FY1/FY2/FY3 Estimate History.xlsx
   ['charting', /Charting\.xlsx$/i],                    // <代码> Daily Charting.xlsx / _MARKET-* 同款
   ['targets', /Targets Ratings\.xlsx$/i],              // <代码> Targets Ratings.xlsx
+  ['earnings', /(?:Guidance|Surprise) History\.csv$/i],
+  ['company-intel', / (?:Credit|CDS History|Ownership Activity|Segments|Geographic Revenue|Supply Chain)\.csv$/i], // 见 steps/company-intel.mjs § INTEL_REPORTS
+  ['research-feed', /^research-feed .+\.json$/i],      // 给 Research OS 的每日 FactSet 数据包(dated + latest) // <代码> Guidance History.csv / Surprise History.csv
   ['news', /News\.csv$/i],                             // <代码> News.csv
   ['options-signals', /Options Signals\.csv$/i],       // 15-minute aggregated option-flow signals
   ['options', /Options(?: Flow)?\.csv$/i],             // <代码> Options.csv / Options Flow.csv
@@ -85,7 +111,7 @@ export const WANT_YEARS = 5;         // 期望跨度(年);判定时留半年余�
 export const PROFILE = path.join(os.homedir(), '.factset-bot-profile');   // 独立浏览器 profile(保存登录态)
 export const BASE = 'https://my.apps.factset.com';
 export const LOGIN_ONLY = process.argv.includes('--login');
-/* 默认 auto：先后台检查已有登录；失效时才重开可见 Chrome。--login 永远可见。 */
+/* 默认 auto：后台拉取，登录失效时开窗，登录后切回后台。--login 永远可见。 */
 export const HEADLESS_MODE = headlessMode(process.env.FS_HEADLESS, LOGIN_ONLY);
 export const envFlag = (env, name) => env?.[name] === '1';
 export const OPEN_DASHBOARD = envFlag(process.env, 'FS_OPEN_DASHBOARD'); // 默认不弹仪表盘；显式 opt-in

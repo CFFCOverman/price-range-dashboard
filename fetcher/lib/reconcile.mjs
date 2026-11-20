@@ -20,6 +20,7 @@ import { IGNORED, TICKERS, VALID, saveTickers, setTickers } from './tickers.mjs'
 
 /* 把 registry.mjs 的产出命名反过来读。顺序无所谓——文件名之间没有交集。 */
 export const KIND_RULES = [
+  ['valuation', /^(.+?) NTM Valuation History\.csv$/i],
   ['estimates', /^(.+?) FY\d+ Estimate History\.xlsx$/i],
   ['charting', /^(.+?) Daily Charting\.xlsx$/i],
   ['targets', /^(.+?) Targets Ratings\.xlsx$/i],
@@ -27,7 +28,7 @@ export const KIND_RULES = [
   ['options', /^(.+?) Options\.csv$/i],
 ];
 export const KINDS = KIND_RULES.map(r => r[0]);
-export const KIND_CN = { estimates: '估值', charting: '走势', targets: '目标价', news: '新闻', options: '期权' };
+export const KIND_CN = { valuation: 'NTM历史', estimates: '估值', charting: '走势', targets: '目标价', news: '新闻', options: '期权' };
 /** 市场级序列长得像走势文件,但它不是公司,必须先认出来摘掉 */
 export const MARKET_RULE = /^_MARKET-([A-Z]+) (.+?) Daily Charting\.xlsx$/i;
 

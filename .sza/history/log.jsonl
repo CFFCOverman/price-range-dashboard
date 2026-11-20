@@ -1,0 +1,23 @@
+{"at":"20261119T234500Z","who":"claude","node":"fetcher/steps/earnings.mjs","why":"Surprise 解析改为按表头取列(无 Sharp 列时 9 列)"}
+{"at":"20261119T234511Z","who":"claude","node":"tests/test-earnings-history.mjs","why":"表头改真名并加 9 列用例"}
+{"at":"20261119T234546Z","who":"claude","node":"fetcher/steps/research-feed.mjs","why":"日期锚从 0(上一个已入库交易日)改为 NOW(含当日);加盘中/收盘标记与未变动标记"}
+{"at":"20261119T234546Z","who":"claude","node":"tests/test-research-feed.mjs","why":"日期锚从 0(上一个已入库交易日)改为 NOW(含当日);加盘中/收盘标记与未变动标记"}
+{"at":"20261119T235053Z","who":"claude","node":"fetcher/lib/config.mjs","why":"接入 company-intel 公司情报步骤"}
+{"at":"20261119T235053Z","who":"claude","node":"fetcher/lib/registry.mjs","why":"接入 company-intel 公司情报步骤"}
+{"at":"20261119T235053Z","who":"claude","node":"fetcher/steps/ticker.mjs","why":"接入 company-intel 公司情报步骤"}
+{"at":"20261119T235053Z","who":"claude","node":"fetcher/lib/round.mjs","why":"接入 company-intel 公司情报步骤"}
+{"at":"20261119T235403Z","who":"claude","node":"fetcher/factset-fetch.mjs","why":"抓取清单补公司情报与数据包两行(只引用)"}
+{"at":"20261119T235626Z","who":"claude","node":"fetcher/steps/estimates.mjs","why":"抓取逻辑复查:估值史改走接口(修财年漂移/AVGO FY 误判)、today 每轮刷新"}
+{"at":"20261119T235626Z","who":"claude","node":"fetcher/steps/ticker.mjs","why":"抓取逻辑复查:估值史改走接口(修财年漂移/AVGO FY 误判)、today 每轮刷新"}
+{"at":"20261119T235626Z","who":"claude","node":"fetcher/lib/companies.mjs","why":"抓取逻辑复查:估值史改走接口(修财年漂移/AVGO FY 误判)、today 每轮刷新"}
+{"at":"20261119T235626Z","who":"claude","node":"fetcher/lib/round.mjs","why":"抓取逻辑复查:估值史改走接口(修财年漂移/AVGO FY 误判)、today 每轮刷新"}
+{"at":"20261119T235755Z","who":"claude","node":"fetcher/steps/short-interest.mjs","why":"抓取逻辑/频率复查"}
+{"at":"20261119T235755Z","who":"claude","node":"fetcher/steps/news.mjs","why":"抓取逻辑/频率复查"}
+{"at":"20261119T235755Z","who":"claude","node":"fetcher/steps/company-intel.mjs","why":"抓取逻辑/频率复查"}
+{"at":"20261119T235755Z","who":"claude","node":"fetcher/lib/registry.mjs","why":"抓取逻辑/频率复查"}
+{"at":"20261119T235756Z","who":"claude","node":"fetcher/lib/selftest.mjs","why":"抓取逻辑/频率复查"}
+{"at":"20261120T002605Z","who":"claude","node":"(整个仓库)","why":"原地重写前的全量快照(不含 node_modules/Assets/.git)"}
+{"ts":"20261120T003618Z","file":"fetcher/steps/options.mjs","why":"saveOptionsCsv 可指定目标文件,供 collect/datasets/options 写 raw/"}
+{"ts":"20261120T003853Z","file":"fetcher/steps/valuation.mjs","why":"fetchValuationHistory 可指定目标文件,供 collect 写 raw/valuation"}
+{"ts":"20261120T003947Z","file":"README.md","why":"接入 collect/ 采集层"}
+{"ts":"20261120T003947Z","file":"package.json","why":"接入 collect/ 采集层"}

@@ -5,6 +5,7 @@
 # 不会再把它们补回来。想恢复:删掉对应的 ignore 行,或在控制台里直接输入该代码。
 # ignore: QQQ-US
 # ignore: SPY-US
+# ignore: ORCLE-US
 #
 NVDA-US
 GOOGL-US
@@ -18,3 +19,6 @@ AMZN-US
 AVGO-US
 RKLB-US
 META-US
+ORCL-US
+NFLX-US
+MCLD-US

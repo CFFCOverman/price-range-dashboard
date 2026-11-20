@@ -7,9 +7,8 @@ import { BASE, HEADLESS_MODE, LOGIN_ONLY, PROFILE } from './config.mjs';
 import { browserUsable, factsetSessionValid, initialHeadless, loginFallback } from './browser-policy.mjs';
 import { log } from './log.mjs';
 
-/* ============ 浏览器按需启动:菜单先出现,按回车开始拉取时才弹 Chrome 窗口 ============ */
+/* ============ 浏览器按需启动:菜单先出现，开始拉取时默认后台启动 Chrome ============ */
 export let ctx = null, page = null;
-let launchedHeadless = false;
 async function closeBrowser() {
   const old = ctx; ctx = null; page = null;
   if (old) await old.close().catch(() => {});
@@ -33,7 +32,6 @@ async function launchBrowser(headless) {
     }
     throw err;
   }
-  launchedHeadless = headless;
   page = ctx.pages()[0] || await ctx.newPage();
 }
 async function openAndCheck() {
@@ -41,21 +39,35 @@ async function openAndCheck() {
   await page.waitForTimeout(5000);
   return factsetSessionValid(page.url());
 }
-export async function ensureBrowser({ visible = false } = {}) {
-  const switchVisible = visible && HEADLESS_MODE === 'auto' && launchedHeadless;
-  if (browserUsable(ctx, page) && !switchVisible) return;
-  if (switchVisible) log('Charting 导出切换到可见 Chrome（后台下载曾重复中断）。');
+async function waitForLogin() {
+  // SSO may complete in another tab; do not wait for the original tab's load event.
+  while (ctx) {
+    const pages = ctx.pages().filter(p => !p.isClosed());
+    const signedIn = pages.find(p => factsetSessionValid(p.url()));
+    if (signedIn) {
+      page = signedIn;
+      await page.waitForTimeout(1500);
+      if (!page.isClosed() && factsetSessionValid(page.url())) return;
+    }
+    if (!pages.length) throw new Error('登录窗口已关闭，尚未完成登录。请重新启动拉取。');
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  throw new Error('登录浏览器已关闭。');
+}
+export async function ensureBrowser() {
+  if (browserUsable(ctx, page) && factsetSessionValid(page.url())) return;
   await closeBrowser();
-  const firstHeadless = visible && HEADLESS_MODE === 'auto' ? false : initialHeadless(HEADLESS_MODE);
+  const firstHeadless = initialHeadless(HEADLESS_MODE);
   log(firstHeadless ? '⏳ 正在后台启动 Chrome 并检查 FactSet 登录……'
     : '⏳ 正在启动可见 Chrome……拉取期间请不要关闭或操作它。');
   await launchBrowser(firstHeadless);
 
   if (LOGIN_ONLY) {
-    await page.goto(BASE);
-    log('请在打开的浏览器里完成 FactSet 登录,然后关闭浏览器窗口。登录态会被记住。');
-    await page.waitForEvent('close', { timeout: 0 }).catch(() => {});
+    await page.goto(BASE + '/workstation/', { waitUntil: 'domcontentloaded' });
+    log('请完成 FactSet 登录，成功后窗口会自动关闭，登录态会被记住。');
+    await waitForLogin();
     await closeBrowser();
+    log('✔ 登录已保存，登录窗口已自动关闭。');
     process.exit(0);
   }
 
@@ -64,7 +76,7 @@ export async function ensureBrowser({ visible = false } = {}) {
     const fallback = loginFallback(HEADLESS_MODE);
     if (fallback === 'error') {
       await closeBrowser();
-      throw new Error('FactSet 登录已失效，但 FS_HEADLESS=1 禁止打开登录窗口。请先运行 npm run fetch:login，或改用 FS_HEADLESS=auto / 0。');
+      throw new Error('FactSet 登录已失效，FS_HEADLESS=1 禁止打开登录窗口。请先运行 npm run fetch:login，或使用默认 auto 模式自动登录后继续。');
     }
     if (fallback === 'relaunch-visible') {
       log('检测到登录失效 —— 正在关闭后台 Chrome，并以可见窗口重开……');
@@ -73,8 +85,18 @@ export async function ensureBrowser({ visible = false } = {}) {
       await page.goto(BASE + '/workstation/', { waitUntil: 'domcontentloaded' }).catch(() => {});
     }
     log('检测到未登录 —— 请在打开的窗口里登录 FactSet,登录完成后脚本会自动继续……');
-    await page.waitForURL(u => factsetSessionValid(u.href), { timeout: 0 });
-    await page.waitForTimeout(6000);
+    await waitForLogin();
+    if (fallback === 'relaunch-visible') {
+      log('✔ 登录成功，正在关闭登录窗口并切回后台继续拉取……');
+      const cookies = await ctx.cookies();
+      await closeBrowser();
+      await launchBrowser(true);
+      await ctx.addCookies(cookies);
+      if (!await openAndCheck()) {
+        await closeBrowser();
+        throw new Error('登录后后台会话检查未通过，请重新启动拉取以再次登录。');
+      }
+    }
   }
   log('✔ 已登录 FactSet。');
 }

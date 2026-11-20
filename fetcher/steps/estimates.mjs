@@ -90,14 +90,15 @@ export function estimateDataRows(rows) {
   return rows.filter(r => /^\d{1,2} [A-Z][a-z]{2} '\d{2}$/.test(r[0] || ''))
     .map(r => r.length === 12 ? [...r.slice(0, 2), '-', ...r.slice(2)] : r);   // 无 Sharp Cons 列时补齐
 }
-export function estimateRowsVerdict(fy, rows) {
+export function estimateRowsVerdict(fy, rows, { requirePe = true } = {}) {
   const data = estimateDataRows(rows);
   if (!data.length) return { ok: false, reason: '未抓到数据行', data, pe: 0 };
   const pe = data.filter(r => isFinite(parseFloat(r[11])) && parseFloat(r[11]) > 0).length;
   const latestMean = parseFloat(data[0][1]);
+  if (!isFinite(latestMean)) return { ok: false, reason: '最新 EPS Mean 缺失', data, pe };
   /* FY2 的 P/E 不能替代 FY1；这里只守 FY1。盈利为正、样本够做分位却连 12 个
    * 正 P/E 都没有，正是 2026-08-28 NVDA/AMD/AVGO 整列变成 '-' 的故障形状。 */
-  if (fy === 'FY1' && isFinite(latestMean) && latestMean > 0 && data.length >= 12 && pe < 12) {
+  if (requirePe && fy === 'FY1' && latestMean > 0 && data.length >= 12 && pe < 12) {
     return { ok: false, reason: `FY1 P/E 只有 ${pe}/${data.length} 个有效点(至少需要 12 个)`, data, pe };
   }
   return { ok: true, reason: '', data, pe };
@@ -115,17 +116,17 @@ function writeEstimateBook(file, ticker, data, src) {
   XLSX.utils.book_append_sheet(wb, ws, ticker.slice(0, 31));
   XLSX.writeFile(wb, file);
 }
-function existingEstimateIsGood(file, fy) {
+function existingEstimateIsGood(file, fy, requirePe = true) {
   try {
     const wb = XLSX.read(fs.readFileSync(file), { type: 'buffer' });
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
-    return estimateRowsVerdict(fy, rows).ok;
+    return estimateRowsVerdict(fy, rows, { requirePe }).ok;
   } catch { return false; }
 }
 /** 表格数组 → 仪表盘可识别的 Estimate History xlsx(B2 写入数据源出处,app 解析不受影响) */
-export function saveEstimateXlsx(ticker, fyTag, rows, srcInfo, { quarantine = false } = {}) {
-  const verdict = estimateRowsVerdict(fyTag, rows), data = verdict.data;
+export function saveEstimateXlsx(ticker, fyTag, rows, srcInfo, { quarantine = false, requirePe = true } = {}) {
+  const verdict = estimateRowsVerdict(fyTag, rows, { requirePe }), data = verdict.data;
   if (!verdict.ok) {
     log(`  ⚠ ${ticker} ${fyTag}: ${verdict.reason}`);
     if (quarantine && data.length) {
@@ -141,15 +142,49 @@ export function saveEstimateXlsx(ticker, fyTag, rows, srcInfo, { quarantine = fa
   const src = srcInfo || `FactSet Company/Security > Estimates > Estimate History (${ticker})`;
   const f = assetPath(`${ticker} ${fyTag} Estimate History.xlsx`);
   /* 成功文件覆盖前留一份 last-good。目录在 _logs 下，仪表盘不会误扫成第二份公司数据。 */
-  if (fs.existsSync(f) && existingEstimateIsGood(f, fyTag)) {
+  if (fs.existsSync(f) && existingEstimateIsGood(f, fyTag, requirePe)) {
     const dir = path.join(LOG_DIR, 'last-good-estimates');
     fs.mkdirSync(dir, { recursive: true });
     fs.copyFileSync(f, path.join(dir, path.basename(f)));
   }
   writeEstimateBook(f, ticker, data, src);
+  if (!requirePe && fyTag === 'FY1' && verdict.pe < 12) log(`  ℹ ${ticker} FY1: EPS 已保存，P/E 有效点 ${verdict.pe}；估值分位由独立 NTM 历史提供`);
   const span = data.length > 1 ? `${data[data.length - 1][0]} ~ ${data[0][0]}` : data[0][0];
   log(`  ✔ ${path.basename(f)} (${data.length} 行, ${span})`);
   return true;
 }
 
 /** 页面头部抓当前价格 */
+
+/* ============ 估值史走同源接口(2026-11-19 起为主路径)============
+ * 为什么换:页面上的财年下拉会被 FactSet 记住,跨公司切换时会漂移(11/19 实测 RKLB/META/ORCL/NFLX 打开时停在
+ * Dec '28E,整页拒写);按日历推 FY 也会把"已结束未公布"的财年判错(AVGO Oct '26E 与 Oct '27E 都被判成 FY1,
+ * FY1 文件被 FY2 数据覆盖)。接口用 period=1/2 直接指定 FY1/FY2,与页面同源,不依赖页面状态。
+ *   TABLE        → Date | Mean | [Sharp Cons] | Num of Est | Up | Down | Low | High | Std Dev | Chg (%) | Chg Amt | (占位) | (占位)
+ *   TABLE_DELAY  → P/E (x) | PEG (x)   与上面逐行对齐
+ */
+export function estimateApiUrl(ticker, period, option) {
+  const t = /-US$/i.test(ticker) ? ticker + 'A' : ticker;
+  return `/estimate-reports/estimate-history/api/component/ksEhSingleTable/json?kitem=EPS&statuser=MEAN&sdate=NOW&edate=-5AY`
+    + `&frq=MTD&bkrf=&win=0&units=AUTO&rbase=ANNUAL&curn=LOCAL&fixedrate=NO&period=${period}&roll=0&returnOption=${option}&ukcurrency=GBX&ticker=${t}`;
+}
+const apiRows = j => (j && Array.isArray(j.rows) ? j.rows : []).map(r => (r.fragments || []).flatMap(f => f.cells || []).map(c => {
+  const v = c.value ?? c.data;
+  return typeof v === 'number' ? (isFinite(v) ? v : '-') : (/^@na/i.test(String(v ?? '')) ? '-' : String(v ?? '').trim());
+}));
+/** 两次响应 → 与页面刮表同形的二维数组(表头 + 数据行),交给 estimateRowsVerdict / saveEstimateXlsx */
+export function mergeEstimateApi(table, delay) {
+  const a = apiRows(table), b = apiRows(delay);
+  if (!a.length) return [];
+  /* TABLE 末尾两列是 P/E、PEG 的占位(表头写 Loading...),去掉后接上 TABLE_DELAY 的同一行 */
+  const keep = a[0].map((h, j) => !/^Loading/i.test(String(h)));
+  return a.map((r, i) => [...r.filter((_, j) => keep[j]), ...(b[i] || ['-', '-'])]);
+}
+export async function fetchEstimateApi(ticker, period, request) {
+  const get = async opt => {
+    const r = await request(estimateApiUrl(ticker, period, opt));
+    if (!r || r.status !== 200) throw new Error(`Estimate History 接口回了 HTTP ${r && r.status}`);
+    try { return JSON.parse(r.text); } catch { throw new Error('Estimate History 接口回的不是 JSON(多半是登录态掉了)'); }
+  };
+  return mergeEstimateApi(await get('TABLE'), await get('TABLE_DELAY'));
+}

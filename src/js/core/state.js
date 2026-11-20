@@ -3,6 +3,12 @@ const SRC_RANK = { user: 3, file: 2, derived: 1 };   /* 现价来源优先级:�
 const state = {
   companies: new Map(),   // ticker -> {ticker,name,currency,price,priceSrc,priceDate,eps,extra}
   history: new Map(),     // ticker -> [{date, pe}] sorted by date
+  ntmEstimates: new Map(), // Latest NTM observation, including missing/nonpositive EPS.
+  fairModels: new Map(), // ticker -> immutable model versions, imported from private JSON
+  fairObservations: new Map(), // ticker|fiscal period -> latest verified observation
+  fairEvents: new Map(), // immutable event id -> evidence requiring model review
+  fairImportedAt: null,
+  fairImportErrors: [],
   priceHist: new Map(),   // ticker -> [{date, price}] sorted by date(用于波动率区间)
   overrides: new Map(),   // `${ticker}|${hz}` -> {low,mean,high}
   peManual: new Map(),    // ticker -> {p25,p50,p75}
@@ -16,7 +22,8 @@ const state = {
   roster: null,           // Set(ticker) 拉取清单(Assets/summary/roster.csv);null = 没有清单文件,不过滤
   showOffRoster: false,   // 表格下方那个开关:临时把不在清单里的也画出来
   selected: null,
-  horizon: 'fy1',        // **财年**(fy1/fy2),不是持有期。绝不能喂给 pressureLevels 的第四参。
+  horizon: 'ntm',        // Earnings basis (ntm/fy1/fy2), never a holding period.
+  peYears: 10,           // Rolling NTM history window; independent of earnings basis.
   mxPick: { eps: 'base', pe: 'p50' }, // 情景矩阵当前选中的 EPS 情景 × PE 分位；跨公司保留便于比较
   plHold: 'mid',         // 压力位面板的**持有期**('short'|'mid'|'long' → h = 5/21/63),与 horizon 是两回事
   klWin: 'w120',         // 价格走势面板画多少根('w60'|'w120'|'all');纯显示窗口,不进任何计算

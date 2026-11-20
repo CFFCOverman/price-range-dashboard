@@ -6,6 +6,8 @@ drop.addEventListener('drop', ev => handleFiles([...ev.dataTransfer.files]));
 $('fileInput').addEventListener('change', ev => { handleFiles([...ev.target.files]); ev.target.value = ''; });
 $('demoBtn').addEventListener('click', loadDemo);
 $('coSel').addEventListener('change', ev => { state.selected = ev.target.value; renderAll(); });
+$('valuationBasis').addEventListener('change', ev => { state.horizon = ev.target.value; renderAll(); });
+$('peWindow').addEventListener('change', ev => { state.peYears = Number(ev.target.value); renderAll(); });
 $('hzTabs').addEventListener('click', ev => {
   const b = ev.target.closest('button'); if (!b) return;
   state.horizon = b.dataset.h; renderAll();

@@ -2,8 +2,11 @@
 let LANG = 'zh';
 const I18N = {
   zh: {
-    colCompany: '公司', colPrice: '现价', colLow: '核心下沿', colHigh: '核心上沿', colMid: '中枢空间', colPos: '现价位置(核心区间)',
+    colCurrentPE: '当前 NTM PE', colCompany: '公司', colPrice: '现价', colLow: '核心下沿', colHigh: '核心上沿', colMid: '中枢空间', colPos: '现价位置(核心区间)',
     rowNoCalc: '缺少估值分位或 EPS ≤ 0 — 点击行补充', noPx: '缺现价', priceZero: '现价 0%',
+    keepNtm: n => ';优先采用独立滚动 NTM P/E 历史（' + n + ' 点）',
+    rowNoEps: '缺少有效 EPS 预测或 EPS ≤ 0 — 点击行查看',
+    rowNoPe: '历史 P/E 有效点不足12个 — 请补拉估值历史',
     tipCore: '核心区间 ', tipMid: '中枢 ', tipPrice: '现价 ',
     tMid: '中枢(基准 EPS × PE 中位)', tCore: '核心区间 P25–P75', tExt: '极端区间 P10–P90', tPe: '当前 NTM PE', tTgt: '分析师目标价(参考)',
     vsPrice: ' vs 现价', histPct: n => '历史 ' + n + '% 分位',
@@ -242,8 +245,11 @@ const I18N = {
     modelEpsNote: '(EPS 高低值缺失时用均值代替,可在详情里补)',
   },
   en: {
-    colCompany: 'Company', colPrice: 'Price', colLow: 'Core low', colHigh: 'Core high', colMid: 'Mid upside', colPos: 'Position in core range',
+    colCurrentPE: 'Current NTM P/E', colCompany: 'Company', colPrice: 'Price', colLow: 'Core low', colHigh: 'Core high', colMid: 'Mid upside', colPos: 'Position in core range',
     rowNoCalc: 'Missing PE percentiles or EPS ≤ 0 — click row to fill in', noPx: 'no price', priceZero: 'Price 0%',
+    keepNtm: n => '; using independent rolling NTM P/E history (' + n + ' points)',
+    rowNoEps: 'EPS forecast missing or non-positive — click for details',
+    rowNoPe: 'Fewer than 12 valid P/E observations — fetch valuation history',
     tipCore: 'Core ', tipMid: 'Mid ', tipPrice: 'Price ',
     tMid: 'Mid (base EPS × median PE)', tCore: 'Core range P25–P75', tExt: 'Extreme range P10–P90', tPe: 'Current NTM P/E', tTgt: 'Analyst target (ref)',
     vsPrice: ' vs price', histPct: n => n + '% of history',

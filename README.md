@@ -10,6 +10,10 @@ A single-file, offline-friendly dashboard that turns FactSet exports into **impl
 
 项目整体目的、范围和分阶段规划：[PROJECT.md](PROJECT.md)。本次全项目检查结果：[项目审计](docs/PROJECT-AUDIT-2026-09-07.md)。
 
+## 数据管线(2026-11 重写中)
+
+新的采集层在 **[collect/](collect/README.md)**:按 `config/params.json` 的节奏、`config/universe.csv` 的清单,把 FactSet 数据原样存进 `<Assets>/raw/`。旧的 `fetcher/` 仍可用,迁移完成后退役(见 collect/README.md)。
+
 ## Quick start · 快速开始
 
 - **New machine (Windows) · 新机器**: double-click **`setup.bat`** at the repo root. It finds (or offers to install) Node.js, then installs dependencies, runs the health check, verifies the build and runs the tests. It stops to ask you exactly twice — install Node with winget, and download chromium (~150MB) — and installs nothing behind your back. 双击根目录的 **`setup.bat`** 就行,只有那两处会停下来问你。
@@ -19,7 +23,7 @@ A single-file, offline-friendly dashboard that turns FactSet exports into **impl
 - **Options interpretation**: open **`options-dashboard.html`**, or choose **`9`** in the `run-factset.bat` menu. Connect the repo's `Assets/` folder once; the browser remembers the folder and automatically scans `options/` plus `summary/` on later visits. After a new fetch, click **重新扫描 / Rescan**. The manual CSV picker remains as a fallback. The page separates OI facts from directional inference and explicitly marks unavailable Volume/Bid/Ask/IV/Greeks.
   The built-in Chinese field guide explains OI, Volume, ΔOI, Delta, Bid–Ask and the evidence levels; table headers also carry hover explanations.
 - **Level-3 options direction proxy · 三级方向代理**: run `npm run fetch:options-flow -- --watch --interval=300 NVDA-US SPY-US` during market hours. It keeps a separate 10-day `Assets/options/* Options Flow.csv` history. The dashboard compares adjacent cumulative-Volume snapshots and checks the displayed option price against Bid–Ask, flags likely spreads, and then uses next-day ΔOI as confirmation. This is an inference, not confirmed customer/dealer classification.
-  Windows users can instead double-click **`run-options-flow.bat`**, enter one or two symbols, or enter `ALL` to monitor every active symbol in `fetcher/tickers.txt`. ALL mode uses a 15-minute interval because every symbol requires a full option-chain request.
+  Windows users can instead double-click **`run-options-flow.bat`** to start the same system-tray monitor as FactSet menu option **10**. It monitors every active symbol in `fetcher/tickers.txt` with an adaptive market-hours schedule, without asking for symbols or keeping a console window open. Right-click the tray icon to view logs or stop monitoring.
   The `run-factset.bat` main menu also has **`[10] 启动期权方向监测`**. It launches ALL mode as an independent Windows tray process, so closing the main menu does not stop it. During the regular US options session it checks every 15 minutes; after the close, on weekends, exchange holidays, and common 13:00 ET early-close days it sleeps until the next session. Consecutive zero-change Volume snapshots trigger a 30/60-minute backoff. Right-click the tray icon to open the dashboard/data/log or stop the monitor.
 - **Fetching data (macOS)**: double-click **`run-factset.command`** (on first use, Control-click → Open if Gatekeeper asks). It checks Node/Chrome, installs locked dependencies when needed, and uses the same local `Assets/` layout.
 
@@ -65,6 +69,7 @@ npm run fetch          # 跑一轮 FactSet 抓取(Windows 也可直接双击根�
 |---|---|
 | `companies.csv` | price + FY1/FY2 consensus EPS low/mean/high (template downloadable in-app) |
 | `history.csv` | monthly NTM PE series → valuation percentiles; optional `price` column feeds volatility |
+| `<ticker> NTM Valuation History.csv` | automatically fetched rolling NTM history: 10 years of month-end samples plus the latest observation; preferred over fixed-year P/E |
 | FactSet **company model** `.xlsx` ("Earnings Per Share" block) | FY1/FY2/FY3 EPS means; price derived from forward PE |
 | FactSet **Estimate History** `.xlsx` | consensus EPS low/mean/high + monthly P/E series (last 24 months used — it tracks a fixed fiscal year) |
 | FactSet **Snapshot** `.xlsx` | real closing price, 52-week range, analyst target/rating, annual PE refs |
@@ -173,7 +178,7 @@ One failure mode the ledger cannot see: the **Options** tab is a top-level FactS
 
 ## Verification · 验证
 
-抓取器按数据变化速度分别判断是否需要重拉：现价按 `price_date` 每日更新（同一天重跑可跳过）；新闻、期权、空头、公司/市场日线沿用原有 20 小时（日更）窗口；Estimate History 为 96 小时（4 天）；Targets & Ratings 为 144 小时（6 天）。旧代码若仍以 `isFresh(filename)` 调用，会继续使用原来的 20 小时语义。
+抓取器按数据变化速度分别判断是否需要重拉：现价随每轮 Estimate History 访问更新；新闻、期权、空头、公司/市场日线沿用原有 20 小时（日更）窗口；Estimate History 与 NTM 最新快照每轮更新（不再等待96小时）；Targets & Ratings 为 144 小时（6 天）。旧代码若仍以 `isFresh(filename)` 调用，会继续使用原来的 20 小时语义。
 
 `npm run test:fetch` runs the fetcher's pure-function assertions — currently ~298, and the command prints the exact count, which is the number to trust (date parsing, CSV quoting, news row filtering, ledger column integrity, volume-column detection, options-page URL resolution, the option-chain parser across both the `calls | strike | puts` layout and the one-row-per-type layout, the FactSet Options Montage **export** reader — sheet-name identity, cross-ticker rejection, multi-file merge under the 500-contract cap, staleness — the **option-chain API** path that supersedes both, whose fixtures are bytes copied verbatim off `/services/IDCServ/oc` and `/services/Fql` on 2026-07-30 (25-column header with its trailing pipe, real strikes, real open interest) and which pins the one trap unique to that path: an unknown ticker returns HTTP 200 with an empty body, so "request succeeded" must not become "succeeded with zero rows" — the short-interest block parser, whose assertions are written from the page's **verbatim** text rather than from the regexes they guard, the option-chain roll-over boundaries — a snapshot exactly 365 days old is kept and one at 366 is dropped, over-cap eviction removes a *whole* oldest snapshot rather than slicing rows (half a chain gives a wrong max pain, which is worse than none) and never touches today's layer — and the monthly backtest schedule, which compares year-and-month rather than "30 days since last run", plus a source-level ban on `tools/backtest.mjs` statically importing `xlsx` by bare specifier — ESM resolves bare names by walking up from the *importing file's own directory*, never from `cwd`, so a script in `tools/` cannot see the `fetcher/node_modules` that the first-run bootstrap actually populates, and the assertion exists because that exact import shipped in v16.8 and crashed on the first real machine that ran it). `npm test` drives the dashboard in headless Chromium — currently ~242 assertions, again with the run itself printing the count — covering: build freshness (the artifact must match `src/`), the fiscal-year classifier (the sheet's own `Jan '27E` label decides which fiscal year an Estimate History belongs to, the filename is only a fallback, and both load orders are pinned because the v17.1 sign-flip happened only when the FY3 file loaded *first*), the base-consistency guard (`P/E percentile head × base EPS` must land within 25% of the price, and the warning must reach the DOM rather than just the console), the valuation identities (core range endpoints equal `EPS scenario × P/E percentile`), the scenario matrix corners being the *same numbers* as the headline core range, every EPS/percentile guard firing, and the pressure/support engine (volume-vs-time basis selection and graceful degradation, band merging, swing-touch counting, expiry selection by open interest rather than by calendar proximity, the ±25% strike window, wall thresholds computed over participating strikes only, alignment scoring, a hand-computable max-pain case, three-track confluence scoring, and the short-history / missing-price / no-chain fallbacks). Three groups were added in the 2026-08-06 round and each of them exists because the thing it checks had already gone wrong once: that `PX_EVIDENCE` actually **drives** rendering (flip the constant to `pending`, re-render, and count percent signs in the live table — the old code read a hard-coded literal, so the downgrade clause in SPEC §3.9 was a law with no enforcement); that no code path in `render/pressure.js` can format a `pending` leg as a percentage **at the source-text level**, since a runtime check can only prove "it did not happen this time"; and that the treatment win rate, the random control and the confidence interval in the simulation panel share one CSS declaration for size, weight and colour, because typography that makes an un-skilled number look like a headline is a lie the assertions above would not have caught. Needs `npm install` (playwright + xlsx are declared in `package.json`) plus `npx playwright install chromium` for the browser itself — see [docs/SETUP-NEW-MACHINE.md](docs/SETUP-NEW-MACHINE.md) if either step misbehaves.
 
@@ -203,3 +208,16 @@ Implied price = EPS scenario × historical NTM PE percentile. Ranges combine ear
 ### 普通拉取与强制重跑
 
 主菜单 `[1] 开始拉取` 按新鲜度跳过有效数据；`[11] 强制重跑全部数据`（也可输入 `force`）重新尝试当前清单全部公司数据和市场日线，包括今日现价、空头和期权。强制只作用本轮，不删除历史、不绕过数据校验；下一轮选 1 恢复普通模式。正在运行的旧控制台需退出后重新打开，才能加载新菜单。
+
+
+## 2026-10-01 估值口径更新
+
+新增“今日合理估值”面板：使用独立 FCFE 模型，固定财年 EPS 修订、重大事件和过期数据触发待复核。模型输入、公式、口径限制和实际覆盖见 [合理估值说明](docs/FAIR_VALUE.md)。目前生产模型仍待建立，不将旧历史倍数包装成已核验的合理价。页面连接文件夹后每60秒检查本地变更；无后台实时数据订阅。`npm run fair-value:record` 可保存本地每日/修订审计，尚未定时运行。
+
+默认视图改为当前滚动 NTM：历史 NTM PE × 最新已导入 NTM EPS。NTM EPS 从独立估值 CSV 的最新日期读取；缺失或非正时停止估值，不退回 FY1，也不沿用较旧的正 EPS。现有 CSV 只有平均 EPS，默认三个盈利输入取同一数值，价格区间只反映倍数变化；允许明确的手工情景覆盖。FY1/FY2 保留为财年情景，不作为当前 NTM 的替代。
+
+历史 PE 可选3/5/10年（默认10年），按历史库最新日期回看；详情并列显示三个窗口的分位、价格区间、中枢空间、实际日期与样本数。每窗至少12个有效点；样本不足不借用更长窗口。固定财年后备与手工倍数在财年视图中明确标记，不冒充滚动历史。NTM 模式不接受固定财年后备。历史分位及组合区间不是概率区间。EPS 与价格日期同时展示。较旧 Estimate History 文件不能覆盖较新的同一预测期 EPS。
+
+验证：`node tests/test-ntm-valuation.mjs` 覆盖默认 NTM、期限隔离、缺失/亏损最新 EPS、3/5/10年、手工情景及界面联动；现有估值与页面回归继续运行。
+
+当前 PE 单列使用最新已导入现价 / 原始 NTM EPS，立即响应价格与盈利输入，不受情景手工覆盖或历史窗口切换影响。详情展示价格、盈利的实际日期、抓取时间及对 PE 变化的分解；NTM 变化包含时间滚动，固定财年最近两次观测修订单列，月度比较不标成日变动。历史区间仍是独立参考，不能用现价反推 PE 再生成目标价。Estimate History 与 NTM 取消96小时缓存跳过；已有合格 NTM 库增量补缺，刷新最新及前月末点，首轮与强制轮次完整回补。页面需拉取后重新扫描，不承诺实时订阅。

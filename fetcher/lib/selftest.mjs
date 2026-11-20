@@ -98,7 +98,7 @@ export async function runSelftest() {
   eq(forceRuns.join(','), 'true,false', '强制仅作用当前轮，下一次普通拉取恢复新鲜度');
   const ms = menuScreen(['META-US', 'NVDA-US'], [['SPY-US', 'BENCH']]);
   eq(ms.includes('[10] 启动期权方向监测'), true, '菜单首页显示托盘监测入口');
-  eq(ms.includes('公司  2 家') && ms.includes('META-US') && ms.includes('[1] 开始拉取'), true,
+  eq(ms.includes('公司  2 家') && ms.includes('META-US') && ms.includes('[1] 后台拉取'), true,
     '菜单首页同时显示清单摘要和编号操作,不用记命令');
   const opened = [];
   const od = openDashboardAction({ platform: 'win32', appHtml: 'C:\\x\\dash.html', exists: () => true, launch: s => opened.push(s) });
@@ -125,8 +125,8 @@ export async function runSelftest() {
   eq(`${cronMenu}/${cronRound}/${cronAfter}`, '0/1/1', '无 TTY:不进菜单,自动单轮后退出');
   eq(freshHoursFor('legacy.csv'), FRESH_HOURS, 'fresh legacy string keeps 20h');
   eq(freshHoursFor(metaCompanies()), 0, 'fresh price every round');
-  eq(freshHoursFor(metaEst('T-US', 'FY1')), 96, 'fresh estimates 4d');
-  eq(freshHoursFor(metaTargets('T-US')), 144, 'fresh targets 6d');
+  eq(freshHoursFor(metaEst('T-US', 'FY1')), 0, 'estimates 每轮都拉(接口快,P/E 随价每日变)');
+  eq(freshHoursFor(metaTargets('T-US')), 20, 'targets 每日');
   eq(freshHoursFor(metaCharting('T-US')), 20, 'fresh charting daily');
   eq(freshHoursFor(metaCharting('SPY-US', '_MARKET-BENCH SPY-US Daily Charting.xlsx', 'market')), 20, 'fresh market daily');
   eq(freshHoursFor(metaNews('T-US')), 20, 'fresh news daily');
@@ -141,6 +141,10 @@ export async function runSelftest() {
   eq(hasPriceToday('FRESH-TEST', '2026-08-26'), false, 'price next date stale');
   if (oldPriceRow === undefined) priceMap.delete('FRESH-TEST'); else priceMap.set('FRESH-TEST', oldPriceRow);
   eq(headlessMode(undefined), 'auto', 'browser 默认 auto');
+  eq(headlessMode('  '), 'auto', '空配置默认 auto');
+  eq(headlessMode('auto'), 'auto', '显式 auto 保留开窗回退');
+  eq(initialHeadless(headlessMode(undefined)), true, '默认后台启动');
+  eq(loginFallback(headlessMode(undefined)), 'relaunch-visible', '默认登录失效弹窗口');
   eq(headlessMode('0'), 'visible', 'FS_HEADLESS=0 强制可见');
   eq(headlessMode('1'), 'headless', 'FS_HEADLESS=1 强制后台');
   eq(headlessMode('1', true), 'visible', '--login 始终可见,压过 FS_HEADLESS=1');
@@ -159,12 +163,19 @@ export async function runSelftest() {
   const iVisible = browserSrc.indexOf('await launchBrowser(false)', iFallback);
   eq(iFallback >= 0 && iClose > iFallback && iVisible > iClose, true,
     'auto 重开顺序:先 close persistent context,再 launch visible(不并发占 profile)');
+  const iLogin = browserSrc.indexOf('await waitForLogin()', iFallback);
+  const iReturnClose = browserSrc.indexOf('await closeBrowser()', iLogin);
+  const iBackground = browserSrc.indexOf('await launchBrowser(true)', iReturnClose);
+  const iCookies = browserSrc.indexOf('await ctx.addCookies(cookies)', iBackground);
+  eq(iLogin > 0 && iReturnClose > iLogin && iBackground > iReturnClose && iCookies > iBackground, true,
+    '登录完成后先关闭登录窗口，再后台启动并恢复会话 cookie');
+  eq(browserSrc.includes('switchVisible'), false, '日线导出不再切换可见窗口');
   const forcedBlock = browserSrc.slice(browserSrc.indexOf("fallback === 'error'"), iFallback);
   eq(/await closeBrowser\(\)/.test(forcedBlock) && /FS_HEADLESS=1/.test(forcedBlock) && /fetch:login/.test(forcedBlock), true,
     '强制后台登录失效:关闭 context 并给出可执行指引');
   const loginBlock = browserSrc.slice(browserSrc.indexOf('if (LOGIN_ONLY)'), browserSrc.indexOf('log(\'⏳ 正在检查'));
-  eq(/await page\.goto\(BASE\)/.test(loginBlock) && /waitForEvent\('close'/.test(loginBlock), true,
-    '--login 行为:打开首页并等用户关窗');
+  eq(loginBlock.includes('await waitForLogin()') && loginBlock.includes('await closeBrowser()') && !loginBlock.includes('waitForEvent'), true,
+    '--login 行为:登录成功后自动关闭窗口');
   eq(fyTag("Jan '27E"), 'FY1', "fyTag Jan'27E");
   eq(fyTag("Jan '28E"), 'FY2', "fyTag Jan'28E");
   eq(fyTag("Dec '26E"), 'FY1', "fyTag Dec'26E");
@@ -887,7 +898,7 @@ export async function runSelftest() {
     '自检遗留文件不算数据(否则会把 TEST-US 补进清单,每轮白跑 8 步)');
   eq(classifyAssetFile('companies.csv'), null, '汇总 csv 不归属任何单一标的');
   eq(classifyAssetFile('我随手导的 News.csv'), null, '不像代码的前缀当手动导出放过,不硬认');
-  eq(KINDS.length, 5, '一家公司算五类数据');
+  eq(KINDS.length, 6, '一家公司算六类数据（含独立 NTM 历史）');
 
   /* 造一个假的 Assets 目录来扫,断言"扫描"和"对齐"两步分别成立 */
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'price-range-scan-'));
@@ -918,7 +929,7 @@ export async function runSelftest() {
   const R = reconcileTickers({ apply: false, list: ['MSFT-US', 'NVDA-US'], ignored: [], root: fixture });
   eq(R.extra.join(','), 'AMD-US', '有数据没登记 → 待补齐');
   eq(R.missing.join(','), 'NVDA-US', '登记了却一个文件都没有 → 只报告,不删');
-  eq(R.partial.map(([t, k]) => t + ':' + k.length).join(','), 'MSFT-US:4', '登记了但数据不全 → 点名缺几类');
+  eq(R.partial.map(([t, k]) => t + ':' + k.length).join(','), 'MSFT-US:5', '登记了但数据不全 → 点名缺几类');
   eq(R.added.length, 0, 'apply:false 时一个字都不写');
   const R2 = reconcileTickers({ apply: false, list: ['MSFT-US'], ignored: ['AMD-US'], root: fixture });
   eq(R2.extra.length + '/' + R2.skipped.join(''), '0/AMD-US',

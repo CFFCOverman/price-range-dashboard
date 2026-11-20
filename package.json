@@ -9,9 +9,10 @@
     "build:check": "node tools/build.mjs --check",
     "setup": "node tools/setup.mjs",
     "setup:selftest": "node tools/setup.mjs --selftest",
-    "test": "node tools/doctor.mjs --preflight && node tests/test-pipeline.mjs && node tests/test-app.mjs",
-    "test:pipeline": "node tests/test-pipeline.mjs",
-    "test:decision": "node tests/test-decision.mjs && node tests/test-decision-ui.mjs",
+    "test": "node tools/doctor.mjs --preflight && npm run test:pipeline && node tests/test-app.mjs",
+    "test:pipeline": "node tests/test-pipeline.mjs && node tests/test-valuation-history.mjs && node tests/test-valuation-fetch.mjs && node tests/test-earnings-history.mjs && node tests/test-research-feed.mjs && node tests/test-company-intel.mjs && node tests/test-estimates-api.mjs && node tests/test-collect.mjs",
+    "fetch:valuation": "node tools/fetch-valuation.mjs",
+    "test:decision": "node tests/test-option-flow.mjs && node tests/test-decision.mjs && node tests/test-decision-ui.mjs",
     "test:full": "node tools/doctor.mjs --preflight && node tests/test-app.mjs --require-data",
     "doctor": "node tools/doctor.mjs",
     "doctor:selftest": "node tools/doctor.mjs --selftest",
@@ -26,7 +27,13 @@
     "fetch": "node fetcher/factset-fetch.mjs",
     "fetch:options-flow": "node fetcher/options-flow.mjs",
     "backfill:options-signals": "node fetcher/options-signals-backfill.mjs",
-    "fetch:login": "node fetcher/factset-fetch.mjs --login"
+    "fetch:login": "node fetcher/factset-fetch.mjs --login",
+    "test:valuation": "node tests/test-ntm-valuation.mjs && node tests/test-fair-value.mjs",
+    "fair-value:record": "node tools/record-fair-values.mjs",
+    "collect": "node collect/run.mjs",
+    "collect:dry": "node collect/run.mjs --dry",
+    "collect:migrate": "node collect/migrate.mjs",
+    "test:collect": "node tests/test-collect.mjs"
   },
   "devDependencies": {
     "playwright": "^1.61.1",

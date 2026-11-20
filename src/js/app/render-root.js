@@ -6,6 +6,7 @@ function renderAll(statusMsg) {
   /* 选中的那家被隐藏了(比如刚点了收起),就改选一家画得出来的,别让详情卡片指着表格里没有的行 */
   if (vis.length && (!state.selected || !vis.some(c => c.ticker === state.selected))) state.selected = vis[0].ticker;
   $('ovCard').hidden = !has;
+  $('fairOverview').hidden = !has;
   if (statusMsg != null) lastStatusMsg = statusMsg;
   if (lastStatusMsg != null || has) {
     const st = $('status'); st.replaceChildren();
@@ -17,6 +18,7 @@ function renderAll(statusMsg) {
     }
   }
   if (has) {
+    renderFairOverview();
     const rows = overviewRows();
     renderOvTable(rows);
     renderOvChart(rows);

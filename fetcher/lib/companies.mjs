@@ -14,10 +14,14 @@ export function marketDate(now = new Date()) {
   const get = k => parts.find(x => x.type === k)?.value || '';
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
-export const today = marketDate();
+/* 活绑定:fetcher 进程会开着过夜(菜单循环),每轮开始由 lib/round.mjs 调 refreshToday(),
+ * 否则过了午夜价格、期权快照、空头持仓仍会盖着启动那天的日期 */
+export let today = marketDate();
+export function refreshToday(now = new Date()) { today = marketDate(now); return today; }
 export const FRESH_HOURS = 20;   /* 文件在此小时数内视为最新,跳过重复拉取 */
 export const FRESH_HOURS_BY_KIND = Object.freeze({
-  price: 0, estimates: 96, targets: 144,
+  /* targets 原 144h:财报季目标价/评级一天内就会大面积调整,一周一拉会漏(2026-11-19 改 20h) */
+  price: 0, estimates: 0, valuation: 0, targets: FRESH_HOURS,
   charting: FRESH_HOURS, market: FRESH_HOURS, news: FRESH_HOURS, options: FRESH_HOURS, short: FRESH_HOURS,
 });
 /** 旧调用 `isFresh('x')` 仍保持 20h；registry meta 可携带 kind/freshHours 选择周期。 */

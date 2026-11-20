@@ -18,6 +18,9 @@ fetcher/options-inbox/
 # 本机探测到的期权页地址(因账号权限/版本而异,不该跟着仓库走)
 fetcher/.options-url
 
+# 本机的数据目录位置(云盘路径因电脑而异,不跟着仓库走)
+fetcher/assets-path.txt
+
 # OS / editor noise
 Thumbs.db
 .DS_Store

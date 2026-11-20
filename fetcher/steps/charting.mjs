@@ -387,12 +387,12 @@ export async function fetchCharting(ticker, outName) {
     if (!browserClosedError(error)) throw error;
     log('    ⚠ 下载连接中断，重新打开浏览器并重试当前日线一次。');
     await releaseBrowser();
-    await ensureBrowser({ visible: true });
+    await ensureBrowser();
     return fetchChartingOnce(ticker, outName);
   }
 }
 async function fetchChartingOnce(ticker, outName) {
-  await ensureBrowser({ visible: true });
+  await ensureBrowser();
   phase('导航');
   await page.goto(`${BASE}/workstation/charting/`, { waitUntil: 'domcontentloaded' });
   phase('等待页面');

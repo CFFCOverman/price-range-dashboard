@@ -2,7 +2,8 @@
 export function headlessMode(raw, loginOnly = false) {
   if (loginOnly) return 'visible';
   const v = String(raw == null ? '' : raw).trim().toLowerCase();
-  if (!v || v === 'auto') return 'auto';
+  if (!v) return 'auto';
+  if (v === 'auto') return 'auto';
   if (v === '0') return 'visible';
   if (v === '1') return 'headless';
   throw new Error(`FS_HEADLESS 只接受 auto、0 或 1，收到: ${raw}`);
