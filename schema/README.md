@@ -44,6 +44,7 @@
 `latest.json` = 最新一份;`<日期>.json` = 当天归档;`previous.json` = 上一交易日(用于算变化)。`schema` 取 `config/params.json § handoff.schema`。
 ```
 { id: 内容哈希前 12 位(内容不变则不变), schema: "prd-handoff/2", asof, generated_at,
+  basis: { source, time, unit, nearest_resistance, nearest_support, confluence_zones, valuation },   // 2 起:入账字段(来源、时间、单位、口径),文字在 process/handoff.mjs § BASIS
   symbols: { <代码>: { spot, nearest_resistance, nearest_support, confluence_zones[], options_oi_basis, options_asof,
                        valuation: { range{bear,base,bull}, upside_pct, hold_pe, regime_gap, pe_now, pe_pctile_3y, pe_pctile_10y,
                                     forward_eps_mean, sell_side_median } | { not_applicable } } },

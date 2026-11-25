@@ -104,9 +104,17 @@ export function diffFeeds(feeds, P) {
   }
   return out;
 }
+/** 入账字段:symbols 各部分的单位、口径与来源类型(feeds 各项自带 asof/unit/basis) */
+export const BASIS = {
+  source: 'FactSet(用户本机 price-range-dashboard 生成)', time: 'asof = 纽约交易日收盘后数据日期', unit: '价格为报价币种;distance_pct、upside_pct 为 %',
+  nearest_resistance: '最近压力位;source 写明来自期权 OI 墙(数据)、均线/收盘高低点(由收盘计算)、卖方目标价(数据)或 gamma 翻转/共振区(推算)',
+  nearest_support: '同 nearest_resistance',
+  confluence_zones: '推算:相距 ≤ params.levels.zone_pct% 且来自 ≥2 类来源的价位合并',
+  valuation: '推算:一年后前瞻 EPS × 退出市盈率(A:自身 36 个月 NTM P/E 分位;B:今天的 P/E);输入为 FactSet 一致预期与估值史;方法见 process/README.md § 估值区间',
+};
 export function buildHandoff({ asof, symbols, prev, minPct, feeds = null, breadth = null, P = null, schema = 'prd-handoff/1' }) {
   const changes = [...diffSummaries(prev?.symbols, symbols, minPct), ...(feeds && P ? diffFeeds(feeds, P) : [])];
-  const body = { schema, asof, symbols, changes, ...(feeds ? { feeds } : {}), ...(breadth ? { breadth } : {}) };
+  const body = { schema, asof, basis: BASIS, symbols, changes, ...(feeds ? { feeds } : {}), ...(breadth ? { breadth } : {}) };
   const id = crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex').slice(0, 12);
   return { id, ...body, generated_at: new Date().toISOString() };
 }

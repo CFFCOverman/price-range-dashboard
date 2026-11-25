@@ -15,6 +15,7 @@ Author: Xuhao Chao · License: MIT
 ## 2026-11-25 · 交接包 2(配合 Research OS 7.2.0)
 - `process/handoff.mjs`:新增 feeds(新闻、修订、券商变动、空头)与 breadth;changes 增加修订、目标价、空头、新闻条目;schema 升为 `prd-handoff/2`,阈值在 `params.handoff`。
 - 控制台交接页:新增读数一览;只读显示 Research OS 写在 G 盘 `config/os-requests-<日期>.json` 的采集需求单。
+- 交接包带 `basis`(来源、时间、单位、口径),供 OS 入账最低字段使用。
 - 测试 +2(process 共 11 项)。
 
 以下为重构前的历史版本。
