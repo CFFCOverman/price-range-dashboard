@@ -49,9 +49,12 @@ if (priceDates.length) asof = priceDates.sort().at(-1);
 if (!only) {
   const latestFile = path.join(HANDOFF_DIR, 'latest.json');
   const prev = readJson(latestFile);
-  const base = prev?.asof === asof ? readJson(path.join(HANDOFF_DIR, 'previous.json')) : prev;
-  const H = params.handoff, firstSince = new Date(Date.now() - H.news_first_days * 864e5).toISOString().slice(0, 10);
-  const since = base?.asof || firstSince;
+  // 基准 = asof 早于本包的最近一份(同日重算时用 previous.json;asof 不早于本包的一律不当基准)
+  const prevFile = path.join(HANDOFF_DIR, 'previous.json');
+  const older = [prev, readJson(prevFile)].filter(x => x?.asof && x.asof < asof).sort((x, y) => y.asof.localeCompare(x.asof));
+  const base = older[0] || null;
+  const H = params.handoff;
+  const since = base?.asof || new Date(Date.parse(asof + 'T12:00:00Z') - H.news_first_days * 864e5).toISOString().slice(0, 10);
   const feeds = {};
   for (const [sym, fi] of Object.entries(feedInputs)) {
     const f = { news: newsFeed(read('news', sym), { since, prevIds: (base?.feeds?.[sym]?.news || []).map(n => n.id), max: H.news_max_per_symbol, chars: H.news_summary_chars }) };
@@ -67,7 +70,7 @@ if (!only) {
   const h = buildHandoff({ asof, symbols: summaries, prev: base, minPct: H.min_change_pct, feeds, breadth, P: H, schema: H.schema });
   if (prev?.id === h.id) console.log(`交接数据包内容未变(编号 ${h.id}),不重写`);
   else {
-    if (prev && prev.asof !== asof) writeJson(path.join(HANDOFF_DIR, 'previous.json'), prev);
+    if (prev?.asof && prev.asof < asof) writeJson(prevFile, prev);
     writeJson(path.join(HANDOFF_DIR, `${asof}.json`), h); writeJson(latestFile, h);
     console.log(`交接数据包 ${h.id}(${h.schema}):${Object.keys(summaries).length} 只,${h.changes.length} 条变化,新闻 ${Object.values(feeds).reduce((s, f) => s + f.news.length, 0)} 条 → handoff/latest.json`);
   }
