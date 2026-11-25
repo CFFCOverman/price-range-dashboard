@@ -17,6 +17,7 @@ import { phase } from '../lib/ledger.mjs';
 import { log } from '../lib/log.mjs';
 import { optionsUrlCandidates, saveOptUrlTemplate } from '../lib/options-url.mjs';
 import { mergeOptionSnapshots, OPT_EXTRA_FIELDS } from '../lib/opt-store.mjs';
+import { optionChain, saveOptionSnapshots } from '../../collect/datasets/options.mjs';
 import { csvCell, newsMonth, pad2, splitCsvLine } from './news.mjs';
 
 /* ============ 期权链未平仓量(OI)—— 压力位面板的第三轨 ============
@@ -333,55 +334,8 @@ export async function apiFql(symbols, exprs) {
  */
 export async function fetchOptionsViaApi(ticker) {
   if (!(await ensureFactsetOrigin())) throw new Error('页面不在 my.apps.factset.com 上,同源接口发不出去(多半是登录态掉了)');
-  phase('取现价');
-  const px = await apiFql([ticker], ['P_PRICE']);
-  if (px.status !== 200) throw new Error(`FQL 取现价回了 HTTP ${px.status}(登录态或权限的问题,不是解析的问题)`);
-  const spot = parseFqlValues(px.json, 'P_PRICE').get(ticker)
-    ?? [...parseFqlValues(px.json, 'P_PRICE').values()][0];
-  if (!isFinite(spot) || spot <= 0) throw new Error(`FQL 没给出 ${ticker} 的现价,没有现价就框不出行权价窗口`);
-
-  phase('取期权链目录');
-  const oc = await apiGet(`${OC_PATH}?symbol=${encodeURIComponent(ticker)}`);
-  if (oc.status !== 200) throw new Error(`期权链目录回了 HTTP ${oc.status}(${OC_PATH})`);
-  /* 这里最容易被骗:代码不对或标的没有期权时,接口给的是 **200 + 空 body**,不是 404。
-   * parseOptionChainTable 把这种情况显式变成 error,不让它当成"成功但零行"混过去。 */
-  const table = parseOptionChainTable(oc.text);
-  if (table.error) throw new Error(table.error);
-
-  phase('筛合约');
-  const { kept, stats } = pickChainContracts(table.rows, { today, spot, ticker });
-  if (!kept.length) {
-    throw new Error(`目录有 ${stats.total} 行,但没有一个合约落在窗口里`
-      + `(现价 ${spot},已到期 ${stats.expired} / 太远 ${stats.farDate} / 离钱太远 ${stats.farStrike}`
-      + ` / 调整过 ${stats.adjusted} / 标的对不上 ${stats.wrongUnderlier})`);
-  }
-  if (kept.length * 2 > OPT_API_MAX_CONTRACTS) {
-    log(`  · ${ticker} 窗口里有 ${kept.length * 2} 条腿,超过 ${OPT_API_MAX_CONTRACTS} 的上限,只取靠前的那些`);
-    kept.length = Math.floor(OPT_API_MAX_CONTRACTS / 2);
-  }
-
-  phase('取未平仓量 / 成交量 / 最新成交价 / Delta / 报价');
-  const syms = [];
-  for (const k of kept) syms.push(k.call, k.put);
-  const oi = new Map();
-  const optionalExprs = ['P_OPT_VOLUME', 'P_OPT_CLOSE_PRICE', 'P_OPT_DELTA', 'P_OPT_BID_PRICE', 'P_OPT_ASK_PRICE'];
-  const metricMaps = Object.fromEntries(optionalExprs.map(x => [x, new Map()]));
-  const batches = chunk(syms, FQL_BATCH);
-  for (let i = 0; i < batches.length; i++) {
-    const r = await apiFql(batches[i], ['P_OPT_OPEN_INTEREST', ...optionalExprs]);
-    if (r.status !== 200) throw new Error(`FQL 第 ${i + 1}/${batches.length} 批回了 HTTP ${r.status}`);
-    if (!r.json) throw new Error(`FQL 第 ${i + 1}/${batches.length} 批返回的不是 JSON:${r.text}`);
-    for (const [k, v] of parseFqlValues(r.json, 'P_OPT_OPEN_INTEREST')) oi.set(k, v);
-    for (const expr of optionalExprs) for (const [k, v] of parseFqlValues(r.json, expr)) metricMaps[expr].set(k, v);
-  }
-
-  phase('拼装');
-  const built = assembleOptionRows(kept, oi, metricMaps);
-  const bad = optApiVerdict(built);
-  if (bad) throw new Error(bad);
-  const coverage = Object.fromEntries(optionalExprs.map(expr => [expr,
-    built.legs ? metricMaps[expr].size / built.legs : 0]));
-  return { ...built, spot, stats, batches: batches.length, coverage };
+  /* 取数核心搬到 collect/datasets/options.mjs § optionChain(重构 R1),这里只注入旧 fetcher 的页面请求 */
+  return optionChain(ticker, { fqlRaw: apiFql, get: apiGet, today, log, phase });
 }
 
 /** 读回 "{ticker} Options.csv" 已有的行;文件不在或读坏了都当空表(纯读,不抛) */
@@ -405,14 +359,7 @@ export function readOptionsCsv(f) {
  *  合并/滚存的规矩全在 lib/opt-store.mjs 里(纯函数,自检覆盖得到),这里只负责读盘写盘。 */
 export function saveOptionsCsv(ticker, recs, asof, f = assetPath(`${ticker} Options.csv`)) {
   fs.mkdirSync(path.dirname(f), { recursive: true });
-  const stamp = asof || today;
-  const fetched_at = new Date().toISOString();
-  const enriched = (recs || []).map(r => ({ ...r, fetched_at: r.fetched_at || fetched_at }));
-  const m = mergeOptionSnapshots(readOptionsCsv(f), enriched, stamp, today);
-  const fields = ['asof', 'fetched_at', 'expiry', 'strike', 'call_oi', 'put_oi', ...OPT_EXTRA_FIELDS.filter(x => x !== 'fetched_at')];
-  fs.writeFileSync(f, fields.join(',') + '\n'
-    + m.rows.map(r => fields.map(k => csvCell(r[k] ?? '')).join(',')).join('\n') + '\n');
-  return { total: m.rows.length, added: m.added, snapshots: m.snapshots, agedOut: m.agedOut + m.capped };
+  return saveOptionSnapshots(f, recs, asof, today);   // 合并写盘定义在 collect/datasets/options.mjs
 }
 /** 期权链表格:先找规规矩矩的 <tr>,再退回按 bounding rect 还原(和新闻页同一套办法) */
 export async function scrapeOptionChain() {

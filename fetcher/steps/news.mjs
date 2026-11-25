@@ -36,10 +36,7 @@ export function parseNewsDate(s, ref) {
   }
   return null;
 }
-export function csvCell(s) {
-  const v = String(s ?? '').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
-  return /[",]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
-}
+export { csvFlat as csvCell } from '../../collect/lib/store.mjs';   // 定义搬到 collect/lib/store.mjs § csvFlat
 export function splitCsvLine(line) {
   const out = []; let cur = '', q = false;
   for (let i = 0; i < line.length; i++) {

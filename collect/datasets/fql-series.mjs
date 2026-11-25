@@ -1,8 +1,6 @@
 /** prices(日线 OHLCV 里 FQL 给得出的部分)与 consensus(一致预期每日快照)。都是 FQL。 */
-import { usDate, COMPANY_EXPRS } from '../../fetcher/steps/research-feed.mjs';
+import { usDate } from '../parsers/fql.mjs';
 import { readCsvFile, upsertCsv } from '../lib/store.mjs';
-import { fetchValuationHistory } from '../../fetcher/steps/valuation.mjs';
-import { apiFql } from '../../fetcher/steps/options.mjs';
 
 const num = v => (typeof v === 'number' && isFinite(v) ? v : null);
 const r4 = v => (v === null ? null : +v.toFixed(4));
@@ -51,9 +49,13 @@ export const prices = {
   },
 };
 
-/* 一致预期快照:在 research-feed 的公司读数之上补 FY2 与收入 —— 每天一行,修订轨迹靠我们攒 */
+/* 一致预期快照:每天一行,修订轨迹靠我们攒(旧 research-feed 的 COMPANY_EXPRS 从本表取前 11 项) */
 export const CONSENSUS_EXPRS = {
-  ...COMPANY_EXPRS,
+  price: 'P_PRICE(NOW)', date: 'P_DATE(NOW)',
+  eps_nq: 'FE_ESTIMATE(EPS,MEAN,QTR,+1,NOW)', eps_nq_30d: 'FE_ESTIMATE(EPS,MEAN,QTR,+1,-30D)', eps_nq_n: 'FE_ESTIMATE(EPS,NEST,QTR,+1,NOW)',
+  sales_nq: 'FE_ESTIMATE(SALES,MEAN,QTR,+1,NOW)', sales_nq_30d: 'FE_ESTIMATE(SALES,MEAN,QTR,+1,-30D)',
+  eps_fy1: 'FE_ESTIMATE(EPS,MEAN,ANN_ROLL,+1,NOW)', eps_fy1_30d: 'FE_ESTIMATE(EPS,MEAN,ANN_ROLL,+1,-30D)',
+  target_mean: 'FE_ESTIMATE(PRICE_TGT,MEAN,ANN_ROLL,+1,NOW)', target_n: 'FE_ESTIMATE(PRICE_TGT,NEST,ANN_ROLL,+1,NOW)',
   eps_fy2: 'FE_ESTIMATE(EPS,MEAN,ANN_ROLL,+2,NOW)', eps_fy2_30d: 'FE_ESTIMATE(EPS,MEAN,ANN_ROLL,+2,-30D)',
   eps_fy1_n: 'FE_ESTIMATE(EPS,NEST,ANN_ROLL,+1,NOW)',
   sales_fy1: 'FE_ESTIMATE(SALES,MEAN,ANN_ROLL,+1,NOW)', sales_fy2: 'FE_ESTIMATE(SALES,MEAN,ANN_ROLL,+2,NOW)',
@@ -80,18 +82,29 @@ export const consensus = {
   },
 };
 
-/* 月末 NTM 市盈率历史(10 年):规则与校验在 fetcher/steps/valuation.mjs;每天只重算当月与上月两个点 */
-export const valuation = {
-  key: 'valuation',
-  async run({ symbol, p, file, today }) {
-    const f = file('valuation', symbol);
-    try {
-      await fetchValuationHistory(symbol, { asOf: today, years: p.years, request: apiFql, file: f });
-    } catch (e) {
-      /* 2026-11-19 首跑:RKLB(亏损)、SPCX(上市不久)的 NTM P/E 有效点不够 —— 这是"不适用",不是故障 */
-      if (/有效 NTM P\/E 点/.test(e.message)) return { rows: 0, note: `不适用:${e.message}` };
-      throw e;
-    }
-    return { rows: readCsvFile(f).rows.length };
+
+/* 修订广度(OS L2「卖方行业修订广度」):每个成员一行,广度在 process 层算。
+ * 2026-11-24 实测:NTMA 无财年切换跳变,用它比 30 天变化;UP/DOWN 只对 ANN_ROLL 有值(FactSet 默认统计窗口)。 */
+export const BREADTH_EXPRS = {
+  eps_ntm: 'FE_ESTIMATE(EPS,MEAN,NTMA,,NOW)', eps_ntm_30d: 'FE_ESTIMATE(EPS,MEAN,NTMA,,-30D)',
+  eps_fy1: 'FE_ESTIMATE(EPS,MEAN,ANN_ROLL,+1,NOW)', nest_fy1: 'FE_ESTIMATE(EPS,NEST,ANN_ROLL,+1,NOW)',
+  up_fy1: 'FE_ESTIMATE(EPS,UP,ANN_ROLL,+1,NOW)', down_fy1: 'FE_ESTIMATE(EPS,DOWN,ANN_ROLL,+1,NOW)',
+  up_fy2: 'FE_ESTIMATE(EPS,UP,ANN_ROLL,+2,NOW)', down_fy2: 'FE_ESTIMATE(EPS,DOWN,ANN_ROLL,+2,NOW)',
+};
+export function breadthRows(table, members, asof, exprs = BREADTH_EXPRS) {
+  return members.map(sym => {
+    const row = { date: asof, symbol: sym };
+    for (const [k, e] of Object.entries(exprs)) row[k] = num((table.get(`${sym}|${e}`) || [])[0]);
+    return row;
+  }).filter(r => r.eps_ntm !== null || r.eps_fy1 !== null);
+}
+export const breadth = {
+  key: 'breadth',
+  async run({ symbol: group, entry, file, api, today }) {
+    const rows = breadthRows(await api.fql(entry.members, Object.values(BREADTH_EXPRS)), entry.members, today);
+    if (rows.length < entry.members.length * 0.8) throw new Error(`只取到 ${rows.length}/${entry.members.length} 个成员的一致预期`);
+    const { total } = upsertCsv(file('breadth', group), ['date', 'symbol', ...Object.keys(BREADTH_EXPRS)], rows, r => `${r.date}|${r.symbol}`);
+    const up = rows.filter(r => r.eps_ntm > r.eps_ntm_30d).length;
+    return { rows: total, note: `${rows.length} 家,NTM EPS 30 天上调 ${up} / 下调 ${rows.length - up}` };
   },
 };

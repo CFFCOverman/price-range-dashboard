@@ -22,6 +22,15 @@ export function planRun(params, universe, state, { now = new Date(), force = fal
       if (isDue(params, dataset, state[stateKey(dataset, entry.symbol)]?.ok_at, now, force)) jobs.push({ dataset, symbol: entry.symbol, entry });
     }
   }
+  /* 批量数据集(params.datasets.<ds>.batch_by):按 universe 该列分组,每组一个 job,symbol 记为 "<列值>" */
+  for (const [dataset, d] of Object.entries(params.datasets)) {
+    if (!d.batch_by || (only && !only.includes(dataset))) continue;
+    const groups = {};
+    for (const e of universe) if (e[d.batch_by]) (groups[e[d.batch_by]] ||= []).push(e.symbol);
+    for (const [g, members] of Object.entries(groups)) {
+      if (isDue(params, dataset, state[stateKey(dataset, g)]?.ok_at, now, force)) jobs.push({ dataset, symbol: g, entry: { kind: 'group', members } });
+    }
+  }
   /* 同一数据集排在一起:失败模式(登录、接口改版)通常按数据集成片出现,报告也好读 */
   const order = Object.keys(params.datasets);
   return jobs.sort((a, b) => order.indexOf(a.dataset) - order.indexOf(b.dataset));

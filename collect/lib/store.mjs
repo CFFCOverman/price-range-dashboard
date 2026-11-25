@@ -27,6 +27,11 @@ export function csvCell(v) {
   const s = String(v);
   return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
+/** 压平型单元格:换行与连续空白并成一个空格(旧 fetcher 各报表 csv 的写法,news/earnings/company-intel 共用) */
+export function csvFlat(v) {
+  const t = String(v ?? '').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+  return /[",]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+}
 export function toCsv(header, rows) {
   return header.join(',') + '\n' + rows.map(r => header.map(h => csvCell(r[h])).join(',')).join('\n') + (rows.length ? '\n' : '');
 }

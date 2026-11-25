@@ -7,7 +7,7 @@ process.env.FS_OUT ||= fs.mkdtempSync(path.join(os.tmpdir(), 'collect-'));
 const { parseCsv, toCsv, mergeRows, upsertCsv, readCsvFile } = await import('../collect/lib/store.mjs');
 const { isDue, planRun } = await import('../collect/lib/plan.mjs');
 const { loadParams, loadUniverse } = await import('../collect/lib/config.mjs');
-const { priceRows, priceExprs, consensusRow, CONSENSUS_EXPRS } = await import('../collect/datasets/fql-series.mjs');
+const { priceRows, priceExprs, consensusRow, CONSENSUS_EXPRS, breadthRows, BREADTH_EXPRS } = await import('../collect/datasets/fql-series.mjs');
 const { fsDate, tableObjects, seriesLabel, ownershipRow, tnrUrl } = await import('../collect/datasets/report-json.mjs');
 const { newsTime, htmlText, newsRow, newsStart } = await import('../collect/datasets/news.mjs');
 const { DATASETS } = await import('../collect/datasets/index.mjs');
@@ -34,7 +34,7 @@ t('upsertCsv 攒历史且列取并集', () => {
 const params = loadParams(), universe = loadUniverse();
 t('params ↔ 实现一一对应,scope 只引用已定义数据集', () => {
   assert.deepEqual(Object.keys(params.datasets).sort(), Object.keys(DATASETS).sort());
-  for (const [k, list] of Object.entries(params.scope)) for (const d of list) assert.ok(params.datasets[d], `${k}:${d}`);
+  for (const [k, list] of Object.entries(params.scope)) for (const d of list) { assert.ok(params.datasets[d], `${k}:${d}`); assert.ok(!params.datasets[d].batch_by, `批量数据集 ${d} 不该进 scope`); }
   for (const d of Object.values(params.datasets)) assert.ok(params.cadence_hours[d.cadence], d.cadence);
 });
 t('universe:代码唯一、kind 都在 scope 里', () => {
@@ -42,7 +42,7 @@ t('universe:代码唯一、kind 都在 scope 里', () => {
   assert.equal(new Set(syms).size, syms.length);
   for (const u of universe) assert.ok(params.scope[u.kind], u.symbol);
   assert.ok(!syms.includes('MCLD-US'));
-  assert.equal(universe.find(u => u.symbol === 'TNX').scale, 0.1);
+  assert.equal(universe.find(u => u.symbol === 'IRX').scale, 0.1); assert.equal(universe.find(u => u.symbol === 'US10YR').scale, 1);
 });
 t('isDue 按节奏', () => {
   const now = new Date('2026-11-20T00:00:00Z');
@@ -54,7 +54,7 @@ t('isDue 按节奏', () => {
 t('planRun:ETF 只拉 prices/options,市场只拉 prices', () => {
   const jobs = planRun(params, universe, {});
   assert.deepEqual([...new Set(jobs.filter(j => j.symbol === 'SPY-US').map(j => j.dataset))], ['prices', 'options']);
-  assert.deepEqual([...new Set(jobs.filter(j => j.symbol === 'TNX').map(j => j.dataset))], ['prices']);
+  assert.deepEqual([...new Set(jobs.filter(j => j.symbol === 'US10YR').map(j => j.dataset))], ['prices']);
   assert.equal(jobs.filter(j => j.symbol === 'NVDA-US').length, params.scope.company.length);
 });
 
@@ -101,5 +101,16 @@ t('newsStart:没回补完就拉全窗口,补完才增量', () => {
   assert.equal(newsStart([], now, 365).toISOString().slice(0, 10), '2025-11-19');
   assert.equal(newsStart(['2026-11-16T12:00:00', '2026-11-19T09:00:00'], now, 365).toISOString().slice(0, 10), '2025-11-19');
   assert.equal(newsStart(['2025-11-25T00:00:00', '2026-11-19T09:00:00'], now, 365).toISOString().slice(0, 10), '2026-11-16');
+});
+t('planRun:breadth 按组一个 job,成员含公司与 breadth-only', () => {
+  const jobs = planRun(params, universe, {}).filter(j => j.dataset === 'breadth');
+  assert.equal(jobs.length, 1); assert.equal(jobs[0].symbol, 'AI');
+  assert.ok(jobs[0].entry.members.includes('NVDA-US') && jobs[0].entry.members.includes('AMAT-US'));
+  assert.ok(!planRun(params, universe, {}).some(j => j.symbol === 'AMAT-US'));
+});
+t('breadthRows:缺数据的成员剔除', () => {
+  const tb = new Map([[`A|${BREADTH_EXPRS.eps_ntm}`, [2]], [`A|${BREADTH_EXPRS.eps_ntm_30d}`, [1.5]]]);
+  const r = breadthRows(tb, ['A', 'B'], '2026-11-24');
+  assert.equal(r.length, 1); assert.equal(r[0].eps_ntm, 2); assert.equal(r[0].up_fy1, null);
 });
 console.log(`collect 自检 ${n} 项全部通过`);

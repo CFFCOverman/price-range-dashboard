@@ -11,7 +11,7 @@ import { loadParams, loadUniverse, RAW_DIR, STATE_DIR, OUT_DIR } from './lib/con
 import { loadState, saveState, rawFile, atomicWrite } from './lib/store.mjs';
 import { planRun, stateKey } from './lib/plan.mjs';
 import { DATASETS } from './datasets/index.mjs';
-import { refreshToday } from '../fetcher/lib/companies.mjs';
+import { marketDate } from './lib/clock.mjs';
 import * as api from './lib/api.mjs';
 
 const arg = k => (process.argv.find(a => a.startsWith(`--${k}=`)) || '').split('=')[1];
@@ -21,7 +21,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const params = loadParams(), universe = loadUniverse(), state = loadState(STATE_DIR);
 for (const ds of Object.keys(params.datasets)) if (!DATASETS[ds]) throw new Error(`params.json 有数据集 ${ds},collect/datasets 里没有实现`);
-const now = new Date(), today = refreshToday(now);
+const now = new Date(), today = marketDate(now);
 const jobs = planRun(params, universe, state, { now, force: flag('force'), only: list('only'), symbols: list('symbols')?.map(s => s.toUpperCase()) });
 
 console.log(`collect ${today} · 输出 ${OUT_DIR} · 本轮 ${jobs.length} 项`);
@@ -31,8 +31,8 @@ if (flag('dry') || !jobs.length) {
   process.exit(0);
 }
 
-const { ensureBrowser, releaseBrowser } = await import('../fetcher/lib/browser.mjs');
-await ensureBrowser();
+const { openSession, closeSession } = await import('./lib/session.mjs');
+await openSession();
 const file = (ds, name) => rawFile(RAW_DIR, ds, name);
 const report = { started_at: now.toISOString(), today, ok: [], failed: [] };
 let i = 0;
@@ -56,5 +56,5 @@ for (const job of jobs) {
 report.finished_at = new Date().toISOString();
 atomicWrite(path.join(STATE_DIR, 'last-run.json'), JSON.stringify(report, null, 1) + '\n');
 console.log(`完成:成功 ${report.ok.length},失败 ${report.failed.length}(明细 _state/last-run.json)`);
-await releaseBrowser();
+await closeSession();
 process.exit(report.failed.length ? 1 : 0);

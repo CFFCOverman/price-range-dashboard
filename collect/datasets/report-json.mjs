@@ -1,6 +1,6 @@
 /** 页面同源 JSON 组件:estimates(Estimate History)、targets(Targets & Ratings)、ownership(Ownership Statistics,含空头)。 */
-import { estimateApiUrl, mergeEstimateApi } from '../../fetcher/steps/estimates.mjs';
-import { rowsTable, cellText } from '../../fetcher/lib/report-api.mjs';
+import { estimateApiUrl, mergeEstimateApi } from '../parsers/estimates.mjs';
+import { rowsTable, cellText } from '../parsers/report-api.mjs';
 import { replaceCsv, upsertCsv } from '../lib/store.mjs';
 
 const MON = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };

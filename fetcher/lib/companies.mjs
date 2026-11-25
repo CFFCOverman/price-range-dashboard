@@ -8,12 +8,8 @@ import { assetPath } from './config.mjs';
 
 // ================= 主流程 =================
 /** FactSet 美股快照按纽约交易日归档；UTC 午夜后纽约仍是前一日，不能提前造出“明天”的 OI。 */
-export function marketDate(now = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York',
-    year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
-  const get = k => parts.find(x => x.type === k)?.value || '';
-  return `${get('year')}-${get('month')}-${get('day')}`;
-}
+export { marketDate } from '../../collect/lib/clock.mjs';   // 定义搬到 collect/lib/clock.mjs(重构 R3)
+import { marketDate } from '../../collect/lib/clock.mjs';
 /* 活绑定:fetcher 进程会开着过夜(菜单循环),每轮开始由 lib/round.mjs 调 refreshToday(),
  * 否则过了午夜价格、期权快照、空头持仓仍会盖着启动那天的日期 */
 export let today = marketDate();

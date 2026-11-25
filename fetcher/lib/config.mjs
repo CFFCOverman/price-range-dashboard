@@ -26,24 +26,10 @@ export const ROOT_DIR = path.resolve(FETCHER_DIR, '..');               // <repo>
  *   macOS:   /Users/<你>/Library/CloudStorage/GoogleDrive-<邮箱>/My Drive/PriceRangeDashboard/Assets
  * 每台电脑路径不同,所以这个文件不进 Git。写了却找不到该目录(云盘没挂载/没登录)时直接报错退出,
  * 绝不悄悄退回仓库内的 Assets/ —— 否则数据会分叉成两份,仪表盘读到的是旧的那份。 */
-export const ASSETS_PATH_FILE = path.join(FETCHER_DIR, 'assets-path.txt');
-function resolveOutDir() {
-  if (process.env.FS_OUT) return process.env.FS_OUT;
-  if (fs.existsSync(ASSETS_PATH_FILE)) {
-    const line = fs.readFileSync(ASSETS_PATH_FILE, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/)
-      .map(s => s.trim()).find(s => s && !s.startsWith('#'));
-    if (line) {
-      const dir = path.resolve(line.replace(/^~(?=$|[\\/])/, os.homedir()));
-      if (!fs.existsSync(dir)) {
-        throw new Error(`assets-path.txt 指向的数据目录不存在: ${dir}\n` +
-          '  请确认 Google Drive 已登录、云盘已挂载,或改正/删除 fetcher/assets-path.txt。');
-      }
-      return dir;
-    }
-  }
-  return path.join(ROOT_DIR, 'Assets');
-}
-export const OUT_DIR = resolveOutDir();
+/* 数据目录的解析规则搬到 collect/lib/paths.mjs § resolveOutDir(重构 R3;新增 config/assets-path.txt 优先) */
+import { OUT_DIR as _OUT, PROFILE as _PROFILE, BASE as _BASE, ASSETS_PATH_FILES } from '../../collect/lib/paths.mjs';
+export const ASSETS_PATH_FILE = ASSETS_PATH_FILES[1];
+export const OUT_DIR = _OUT;
 export const LOG_DIR = path.join(OUT_DIR, '_logs');   // 台账与跑批日志:脚本产出的东西都在 Assets 下面,一条 .gitignore 全包住
 
 /* 配置文件跟着 fetcher/ 走(它们是"你要改的东西",不是数据) */
@@ -108,8 +94,8 @@ export const WANT_YEARS = 5;         // 期望跨度(年);判定时留半年余�
 /* 这里**没有** spanState / ohlcState:volState 建出来之后其实没有任何人读它,
  * 体检(lib/health.mjs)是直接去磁盘上重算的 —— 因为"上一轮内存里记的"和"文件现在是什么样"
  * 本来就该以后者为准。再照着建两个只写不读的 Map 只是把一处冗余抄成三处。 */
-export const PROFILE = path.join(os.homedir(), '.factset-bot-profile');   // 独立浏览器 profile(保存登录态)
-export const BASE = 'https://my.apps.factset.com';
+export const PROFILE = _PROFILE;   // 定义见 collect/lib/paths.mjs
+export const BASE = _BASE;
 export const LOGIN_ONLY = process.argv.includes('--login');
 /* 默认 auto：后台拉取，登录失效时开窗，登录后切回后台。--login 永远可见。 */
 export const HEADLESS_MODE = headlessMode(process.env.FS_HEADLESS, LOGIN_ONLY);

@@ -22,3 +22,31 @@
 {"ts":"20261120T003947Z","file":"README.md","why":"接入 collect/ 采集层"}
 {"ts":"20261120T003947Z","file":"package.json","why":"接入 collect/ 采集层"}
 {"ts":"20261120T134256Z","file":".gitignore","why":"config/universe.csv 是标的清单不是 FactSet 数据,放行进仓库"}
+{"ts":"20261125T030215Z","file":"collect/README.md","why":"加 v2 计划:按 Research OS 七层补数据集与交接"}
+{"ts":"20261125T030604Z","file":"config/universe.csv","why":"计划 v2 实施:修订广度、跨资产扩充、期权 gamma"}
+{"ts":"20261125T030604Z","file":"config/params.json","why":"计划 v2 实施:修订广度、跨资产扩充、期权 gamma"}
+{"ts":"20261125T030604Z","file":"collect/lib/plan.mjs","why":"计划 v2 实施:修订广度、跨资产扩充、期权 gamma"}
+{"ts":"20261125T030604Z","file":"collect/datasets/fql-series.mjs","why":"计划 v2 实施:修订广度、跨资产扩充、期权 gamma"}
+{"ts":"20261125T030604Z","file":"collect/datasets/index.mjs","why":"计划 v2 实施:修订广度、跨资产扩充、期权 gamma"}
+{"ts":"20261125T030604Z","file":"fetcher/lib/fql.mjs","why":"计划 v2 实施:修订广度、跨资产扩充、期权 gamma"}
+{"ts":"20261125T030604Z","file":"fetcher/steps/options.mjs","why":"计划 v2 实施:修订广度、跨资产扩充、期权 gamma"}
+{"ts":"20261125T030604Z","file":"tests/test-collect.mjs","why":"计划 v2 实施:修订广度、跨资产扩充、期权 gamma"}
+{"ts":"20261125T031637Z","file":"<repo>","why":"R1–R3 重构前全仓快照"}
+{"ts":"20261125T031733Z","file":"fetcher/steps/earnings.mjs","why":"R1 纯函数搬进 collect/parsers"}
+{"ts":"20261125T031733Z","file":"fetcher/steps/company-intel.mjs","why":"R1 纯函数搬进 collect/parsers"}
+{"ts":"20261125T031733Z","file":"fetcher/steps/estimates.mjs","why":"R1 纯函数搬进 collect/parsers"}
+{"ts":"20261125T031734Z","file":"fetcher/steps/research-feed.mjs","why":"R1 纯函数搬进 collect/parsers"}
+{"ts":"20261125T031734Z","file":"fetcher/steps/valuation.mjs","why":"R1 纯函数搬进 collect/parsers"}
+{"ts":"20261125T031734Z","file":"fetcher/steps/news.mjs","why":"R1 纯函数搬进 collect/parsers"}
+{"ts":"20261125T031734Z","file":"collect/lib/store.mjs","why":"R1 纯函数搬进 collect/parsers"}
+{"ts":"20261125T031734Z","file":"collect/datasets/fql-series.mjs","why":"R1 纯函数搬进 collect/parsers"}
+{"ts":"20261125T031734Z","file":"collect/datasets/report-csv.mjs","why":"R1 纯函数搬进 collect/parsers"}
+{"ts":"20261125T031734Z","file":"collect/datasets/report-json.mjs","why":"R1 纯函数搬进 collect/parsers"}
+{"ts":"20261125T031734Z","file":"collect/lib/api.mjs","why":"R1 纯函数搬进 collect/parsers"}
+{"ts":"20261125T031904Z","file":"fetcher/lib/config.mjs","why":"R2/R3 路径、时钟、会话归 collect"}
+{"ts":"20261125T031904Z","file":"fetcher/lib/companies.mjs","why":"R2/R3 路径、时钟、会话归 collect"}
+{"ts":"20261125T031904Z","file":"collect/lib/config.mjs","why":"R2/R3 路径、时钟、会话归 collect"}
+{"ts":"20261125T031904Z","file":".gitignore","why":"R2/R3 路径、时钟、会话归 collect"}
+{"ts":"20261125T031938Z","file":"collect/datasets/options.mjs","why":"R1 期权取数核心搬进 collect"}
+{"ts":"20261125T031938Z","file":"fetcher/steps/options.mjs","why":"R1 期权取数核心搬进 collect"}
+{"ts":"20261125T032012Z","file":"collect/run.mjs","why":"R2 改用 collect 自己的会话"}

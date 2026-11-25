@@ -1,5 +1,5 @@
 {
-  "_doc": "所有节奏与阈值的唯一来源。含义见 collect/README.md § 数据集清单;别处只引用本文件,不抄数值。",
+  "_doc": "所有节奏与阈值的唯一来源。batch_by:按 universe.csv 的该列分组,每组一次批量请求,不进 scope。含义见 collect/README.md § 数据集清单;别处只引用本文件,不抄数值。",
   "cadence_hours": { "daily": 20, "weekly": 144, "monthly": 720 },
   "datasets": {
     "prices":      { "cadence": "daily",   "years": 5 },
@@ -17,12 +17,14 @@
     "supplychain": { "cadence": "weekly" },
     "segments":    { "cadence": "monthly" },
     "georev":      { "cadence": "monthly" },
-    "options":     { "cadence": "daily" }
+    "options":     { "cadence": "daily" },
+    "breadth":     { "cadence": "daily",   "batch_by": "breadth" }
   },
   "scope": {
     "company":    ["prices", "consensus", "valuation", "estimates", "targets", "ownership", "news", "guidance", "surprise", "credit", "cds", "holders", "supplychain", "segments", "georev", "options"],
     "etf":        ["prices", "options"],
     "price-only": ["prices"],
+    "breadth-only": [],
     "market":     ["prices"]
   },
   "run": { "daily_at_et": "17:30", "pause_ms_between_requests": 300 }

@@ -1,7 +1,7 @@
-/** 已有解析器的报表:guidance / surprise(fetcher/steps/earnings.mjs)与公司情报六张表(fetcher/steps/company-intel.mjs)。
- *  解析规则只在原文件里定义;这里只负责把结果写到 raw/<数据集>/<代码>.csv。 */
-import { guidanceUrl, surpriseUrl, parseGuidance, parseSurprise, GUIDANCE_COLS, SURPRISE_COLS, SURPRISE_ITEMS, toCsv } from '../../fetcher/steps/earnings.mjs';
-import { INTEL_REPORTS } from '../../fetcher/steps/company-intel.mjs';
+/** 已有解析器的报表:guidance / surprise(collect/parsers/earnings.mjs)与公司情报六张表(collect/parsers/company-intel.mjs)。
+ *  解析规则只在 collect/parsers 里定义;这里只负责把结果写到 raw/<数据集>/<代码>.csv。 */
+import { guidanceUrl, surpriseUrl, parseGuidance, parseSurprise, GUIDANCE_COLS, SURPRISE_COLS, SURPRISE_ITEMS, toCsv } from '../parsers/earnings.mjs';
+import { INTEL_REPORTS } from '../parsers/company-intel.mjs';
 import { atomicWrite } from '../lib/store.mjs';
 
 const stamp = () => new Date().toISOString();

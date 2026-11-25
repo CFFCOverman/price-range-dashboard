@@ -1,44 +1,87 @@
-symbol,kind,name,group,scale
-NVDA-US,company,NVIDIA,,
-GOOGL-US,company,Alphabet,,
-AMD-US,company,AMD,,
-ASML-US,company,ASML,,
-MSFT-US,company,Microsoft,,
-SPCX-US,company,SpaceX,,
-TSM-US,company,TSMC,,
-AAPL-US,company,Apple,,
-AMZN-US,company,Amazon,,
-AVGO-US,company,Broadcom,,
-RKLB-US,company,Rocket Lab,,
-META-US,company,Meta,,
-ORCL-US,company,Oracle,,
-NFLX-US,company,Netflix,,
+symbol,kind,name,group,scale,breadth
+NVDA-US,company,NVIDIA,,,AI
+GOOGL-US,company,Alphabet,,,AI
+AMD-US,company,AMD,,,AI
+ASML-US,company,ASML,,,AI
+MSFT-US,company,Microsoft,,,AI
+SPCX-US,company,SpaceX,,,
+TSM-US,company,TSMC,,,AI
+AAPL-US,company,Apple,,,
+AMZN-US,company,Amazon,,,AI
+AVGO-US,company,Broadcom,,,AI
+RKLB-US,company,Rocket Lab,,,
+META-US,company,Meta,,,AI
+ORCL-US,company,Oracle,,,AI
+NFLX-US,company,Netflix,,,
 # MCLD-US,price-only,MCLD,,   (2026-11-19 FQL 对 MCLD 价格全是 @NA,FactSet 不覆盖;先停拉)
-SPY-US,etf,SPY,BENCH,
-QQQ-US,etf,QQQ,BENCH,
-SOXX-US,etf,SOXX,SECTOR,
-HYG-US,etf,HYG,CREDIT,
-IEF-US,etf,IEF,RATES,
-SPX,market,S&P 500,index,
-NDX,market,Nasdaq 100,index,
-RUT,market,Russell 2000,index,
-SOX,market,PHLX Semiconductor,index,
-SXXP-STX,market,STOXX Europe 600,index,
-VIX,market,CBOE VIX,vol,
-IRX,market,UST 13W yield %,rates,0.1
-TNX,market,UST 10Y yield %,rates,0.1
-TYX,market,UST 30Y yield %,rates,0.1
-USDJPY,market,USD/JPY,fx,
-RSP-US,market,RSP equal weight,etf,
-SMH-US,market,SMH,etf,
-XLK-US,market,XLK,sector,
-XLF-US,market,XLF,sector,
-XLE-US,market,XLE,sector,
-XLV-US,market,XLV,sector,
-XLY-US,market,XLY,sector,
-XLP-US,market,XLP,sector,
-XLI-US,market,XLI,sector,
-XLB-US,market,XLB,sector,
-XLU-US,market,XLU,sector,
-XLRE-US,market,XLRE,sector,
-XLC-US,market,XLC,sector,
+SPY-US,etf,SPY,BENCH,,
+QQQ-US,etf,QQQ,BENCH,,
+SOXX-US,etf,SOXX,SECTOR,,
+HYG-US,etf,HYG,CREDIT,,
+IEF-US,etf,IEF,RATES,,
+SPX,market,S&P 500,index,,
+NDX,market,Nasdaq 100,index,,
+RUT,market,Russell 2000,index,,
+SOX,market,PHLX Semiconductor,index,,
+SXXP-STX,market,STOXX Europe 600,index,,
+VIX,market,CBOE VIX,vol,,
+IRX,market,UST 13W yield %,rates,0.1,
+USDJPY,market,USD/JPY,fx,,
+RSP-US,market,RSP equal weight,etf,,
+SMH-US,market,SMH,etf,,
+XLK-US,market,XLK,sector,,
+XLF-US,market,XLF,sector,,
+XLE-US,market,XLE,sector,,
+XLV-US,market,XLV,sector,,
+XLY-US,market,XLY,sector,,
+XLP-US,market,XLP,sector,,
+XLI-US,market,XLI,sector,,
+XLB-US,market,XLB,sector,,
+XLU-US,market,XLU,sector,,
+XLRE-US,market,XLRE,sector,,
+XLC-US,market,XLC,sector,,
+US2YR,market,UST 2Y yield %,rates,,
+US10YR,market,UST 10Y yield %,rates,,
+US30YR,market,UST 30Y yield %,rates,,
+KOSPI-KRX,market,KOSPI,index,,
+DX00-USA,market,US Dollar Index futures,fx,,
+CL00-USA,market,WTI crude front month,commodity,,
+GC00-USA,market,Gold front month,commodity,,
+VIX3M-CBO,market,CBOE VIX 3M,vol,,
+VXN,market,CBOE Nasdaq-100 VIX,vol,,
+VVIX,market,CBOE VVIX,vol,,
+# 修订广度成员(kind=breadth-only:只进 breadth 数据集;2026-11-24 实测 FQL 均有一致预期)
+QCOM-US,breadth-only,QCOM,,,AI
+TXN-US,breadth-only,TXN,,,AI
+MU-US,breadth-only,MU,,,AI
+AMAT-US,breadth-only,AMAT,,,AI
+LRCX-US,breadth-only,LRCX,,,AI
+KLAC-US,breadth-only,KLAC,,,AI
+ADI-US,breadth-only,ADI,,,AI
+INTC-US,breadth-only,INTC,,,AI
+MRVL-US,breadth-only,MRVL,,,AI
+NXPI-US,breadth-only,NXPI,,,AI
+MCHP-US,breadth-only,MCHP,,,AI
+ON-US,breadth-only,ON,,,AI
+MPWR-US,breadth-only,MPWR,,,AI
+TER-US,breadth-only,TER,,,AI
+ENTG-US,breadth-only,ENTG,,,AI
+SWKS-US,breadth-only,SWKS,,,AI
+ARM-US,breadth-only,ARM,,,AI
+GFS-US,breadth-only,GFS,,,AI
+COHR-US,breadth-only,COHR,,,AI
+ONTO-US,breadth-only,ONTO,,,AI
+MKSI-US,breadth-only,MKSI,,,AI
+LSCC-US,breadth-only,LSCC,,,AI
+QRVO-US,breadth-only,QRVO,,,AI
+CRWV-US,breadth-only,CRWV,,,AI
+NBIS-US,breadth-only,NBIS,,,AI
+DELL-US,breadth-only,DELL,,,AI
+SMCI-US,breadth-only,SMCI,,,AI
+ANET-US,breadth-only,ANET,,,AI
+VRT-US,breadth-only,VRT,,,AI
+CRDO-US,breadth-only,CRDO,,,AI
+ALAB-US,breadth-only,ALAB,,,AI
+SNDK-US,breadth-only,SNDK,,,AI
+WDC-US,breadth-only,WDC,,,AI
+STX-US,breadth-only,STX,,,AI

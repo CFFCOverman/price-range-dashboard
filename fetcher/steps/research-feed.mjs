@@ -36,32 +36,13 @@ export const FEED_MARKETS = [
 /* 日期锚用 NOW 而不是 0(2026-11-19 实测):0 = FactSet 日终库里最近一个已入库交易日,要到次日才更新到当天;
  * NOW = 当天(收盘后即当日收盘,盘中则是盘中价),所以盘中/收盘由 sessionAt() 另行标注 */
 export const MARKET_EXPRS = [`P_PRICE(NOW,-${SERIES_DAYS}D)`, `P_DATE(NOW,-${SERIES_DAYS}D)`, 'P_PRICE_OPEN(NOW)', 'P_PRICE_HIGH(NOW)', 'P_PRICE_LOW(NOW)'];
-export const COMPANY_EXPRS = {
-  price: 'P_PRICE(NOW)', date: 'P_DATE(NOW)',
-  eps_nq: 'FE_ESTIMATE(EPS,MEAN,QTR,+1,NOW)', eps_nq_30d: 'FE_ESTIMATE(EPS,MEAN,QTR,+1,-30D)', eps_nq_n: 'FE_ESTIMATE(EPS,NEST,QTR,+1,NOW)',
-  sales_nq: 'FE_ESTIMATE(SALES,MEAN,QTR,+1,NOW)', sales_nq_30d: 'FE_ESTIMATE(SALES,MEAN,QTR,+1,-30D)',
-  eps_fy1: 'FE_ESTIMATE(EPS,MEAN,ANN_ROLL,+1,NOW)', eps_fy1_30d: 'FE_ESTIMATE(EPS,MEAN,ANN_ROLL,+1,-30D)',
-  target_mean: 'FE_ESTIMATE(PRICE_TGT,MEAN,ANN_ROLL,+1,NOW)', target_n: 'FE_ESTIMATE(PRICE_TGT,NEST,ANN_ROLL,+1,NOW)',
-};
+/* 公司读数的表达式定义在 collect/datasets/fql-series.mjs § CONSENSUS_EXPRS,这里取它的前 11 项(重构 R1) */
+import { CONSENSUS_EXPRS } from '../../collect/datasets/fql-series.mjs';
+export const COMPANY_EXPRS = Object.fromEntries(['price', 'date', 'eps_nq', 'eps_nq_30d', 'eps_nq_n', 'sales_nq', 'sales_nq_30d',
+  'eps_fy1', 'eps_fy1_30d', 'target_mean', 'target_n'].map(k => [k, CONSENSUS_EXPRS[k]]));
 
-/** FQL 扁平响应 → Map(`${symbol}|${expr}` → 值数组);数值以外(@NA 等)记为 null,日期保留字符串 */
-export function fqlTable(json) {
-  const out = new Map();
-  for (const x of Array.isArray(json) ? json : []) {
-    if (!x || x.$error || !Array.isArray(x.$value)) continue;
-    out.set(`${x.$symbol}|${x.$expression}`, x.$value.map(r => {
-      const v = Array.isArray(r) ? r[0] : r;
-      if (typeof v === 'number') return isFinite(v) ? v : null;
-      return typeof v === 'string' && !/^@NA/.test(v) ? v : null;
-    }));
-  }
-  return out;
-}
-/** 11/17/2026 → 2026-11-17 */
-export function usDate(s) {
-  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s || '').trim());
-  return m ? `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}` : null;
-}
+export { fqlTable, usDate } from '../../collect/parsers/fql.mjs';   // 定义搬到 collect/parsers/fql.mjs(重构 R1)
+import { fqlTable, usDate } from '../../collect/parsers/fql.mjs';
 const pct = (a, b) => (isFinite(a) && isFinite(b) && b !== 0 ? +((a / b - 1) * 100).toFixed(3) : null);
 const round = (v, d = 4) => (typeof v === 'number' && isFinite(v) ? +v.toFixed(d) : null);
 
