@@ -26,6 +26,9 @@ export function resolveOutDir(env = process.env, files = ASSETS_PATH_FILES) {
 }
 export const OUT_DIR = resolveOutDir();
 export const RAW_DIR = path.join(OUT_DIR, 'raw');
+export const LIVE_CONFIG_DIR = path.join(OUT_DIR, 'config');   // 标的清单的现行版本放 G 盘,换机器跟着走;仓库里只有种子
+export const DERIVED_DIR = path.join(OUT_DIR, 'derived');
+export const HANDOFF_DIR = path.join(OUT_DIR, 'handoff');
 export const STATE_DIR = path.join(OUT_DIR, '_state');
 
 export const BASE = 'https://my.apps.factset.com';

@@ -9,7 +9,7 @@
     "collect:dry": "node collect/run.mjs --dry",
     "login": "node collect/login.mjs",
     "process": "node process/run.mjs",
-    "test": "node tests/test-collect.mjs && node tests/test-parsers.mjs"
+    "test": "node tests/test-collect.mjs && node tests/test-parsers.mjs && node tests/test-process.mjs"
   },
   "devDependencies": {
     "playwright": "^1.61.1"

@@ -60,3 +60,9 @@
 {"ts":"20261125T035526Z","file":"<repo>","why":"S1 清场前全仓快照(旧 fetcher/仪表盘/tools/tests/docs 全在这个包里)"}
 {"ts":"20261125T035646Z","file":"README.md","why":"S1 清场后重写 L0"}
 {"ts":"20261125T035646Z","file":"CHANGELOG.md","why":"S1 清场后重写 L0"}
+{"ts":"20261125T040221Z","file":"collect/datasets/fql-series.mjs","why":"S2 标的清单挪 G 盘 + S4 一致预期补 FY2-FY4 区间"}
+{"ts":"20261125T040221Z","file":"collect/lib/config.mjs","why":"S2 标的清单挪 G 盘 + S4 一致预期补 FY2-FY4 区间"}
+{"ts":"20261125T040221Z","file":"collect/lib/paths.mjs","why":"S2 标的清单挪 G 盘 + S4 一致预期补 FY2-FY4 区间"}
+{"ts":"20261125T040221Z","file":"collect/run.mjs","why":"S2 标的清单挪 G 盘 + S4 一致预期补 FY2-FY4 区间"}
+{"ts":"20261125T040221Z","file":"config/universe.csv","why":"S2 标的清单挪 G 盘 + S4 一致预期补 FY2-FY4 区间"}
+{"ts":"20261125T040221Z","file":"tests/test-collect.mjs","why":"S2 标的清单挪 G 盘 + S4 一致预期补 FY2-FY4 区间"}

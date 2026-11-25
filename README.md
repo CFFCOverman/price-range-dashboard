@@ -19,11 +19,12 @@
 | 节点 | 位置 | 状态 |
 |---|---|---|
 | 采集 | [collect/](collect/README.md) | 已完成(17 个数据集) |
-| 计算 | `process/`(压力/支撑已有初版;估值区间待做) | 进行中 |
-| 交接 | `process/` 输出到 `Assets/handoff/` | 待做 |
+| 计算 | [process/](process/README.md):压力/支撑、一年前瞻估值区间 | 已完成初版 |
+| 交接 | `process/handoff.mjs` → `Assets/handoff/latest.json` | 已完成初版 |
 | 控制台 | `console/`(本机网页) | 待做 |
 | 运维 | `ops/`(计划任务、登录) | 脚本已写,未启用 |
-| 配置 | `config/params.json`(参数唯一出处);标的清单将挪到 G 盘 | — |
+| 数据存储类型 | [schema/](schema/README.md):G 盘分区与每类数据的字段 | 已完成 |
+| 配置 | `config/params.json`(参数唯一出处);标的清单现行版本在 G 盘 `config/universe.csv` | — |
 | 测试 | `tests/`,`npm test` | — |
 
 重构计划与进度:2026-11-24 起旧 fetcher 与旧仪表盘已全部删除(快照在 `.sza/history/_repo/`,不进 git)。

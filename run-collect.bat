@@ -1,6 +1,7 @@
 @echo off
-rem 采集层:到期的数据拉进 Assets\raw\。说明见 collect\README.md
+rem 采集 → 计算 → 交接。说明见 README.md
 cd /d "%~dp0"
 node collect\run.mjs %*
+node process\run.mjs
 echo.
 pause

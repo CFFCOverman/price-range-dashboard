@@ -137,5 +137,25 @@
     "pe_lookback_years": 10,
     "zone_pct": 1.5,
     "max_distance_pct": 35
+  },
+  "valuation": {
+    "_doc": "一年前瞻估值区间(process/valuation.mjs)的全部参数;方法见 process/README.md § 估值区间",
+    "horizon_days": 365,
+    "pe_window_months": 36,
+    "pe_window_long_months": 120,
+    "pe_min_months": 12,
+    "pe_pctiles": {
+      "bear": 25,
+      "base": 50,
+      "bull": 75
+    },
+    "vol_days": 252,
+    "fy_extrapolate": true,
+    "regime_pctile": 10,
+    "eps_band": "sd"
+  },
+  "handoff": {
+    "_doc": "交接数据包(process/handoff.mjs)",
+    "min_change_pct": 3
   }
 }

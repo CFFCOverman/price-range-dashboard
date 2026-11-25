@@ -7,7 +7,7 @@
  *   node collect/run.mjs --force --only=news,targets --symbols=NVDA-US
  */
 import path from 'node:path';
-import { loadParams, loadUniverse, RAW_DIR, STATE_DIR, OUT_DIR } from './lib/config.mjs';
+import { loadParams, loadUniverse, ensureUniverse, RAW_DIR, STATE_DIR, OUT_DIR } from './lib/config.mjs';
 import { loadState, saveState, rawFile, atomicWrite } from './lib/store.mjs';
 import { planRun, stateKey } from './lib/plan.mjs';
 import { DATASETS } from './datasets/index.mjs';
@@ -19,6 +19,7 @@ const list = k => (arg(k) ? arg(k).split(',').map(s => s.trim()).filter(Boolean)
 const flag = k => process.argv.includes(`--${k}`);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+ensureUniverse();
 const params = loadParams(), universe = loadUniverse(), state = loadState(STATE_DIR);
 for (const ds of Object.keys(params.datasets)) if (!DATASETS[ds]) throw new Error(`params.json 有数据集 ${ds},collect/datasets 里没有实现`);
 const now = new Date(), today = marketDate(now);

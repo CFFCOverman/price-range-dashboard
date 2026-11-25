@@ -60,6 +60,13 @@ export const CONSENSUS_EXPRS = {
   eps_fy1_n: 'FE_ESTIMATE(EPS,NEST,ANN_ROLL,+1,NOW)',
   sales_fy1: 'FE_ESTIMATE(SALES,MEAN,ANN_ROLL,+1,NOW)', sales_fy2: 'FE_ESTIMATE(SALES,MEAN,ANN_ROLL,+2,NOW)',
   target_30d: 'FE_ESTIMATE(PRICE_TGT,MEAN,ANN_ROLL,+1,-30D)',
+  /* 一年前瞻估值要 FY1–FY4 的分布(2026-11-24 实测 LOW/HIGH/NEST 与 +4 均可取;+4 家数常只有个位数) */
+  eps_fy1_low: 'FE_ESTIMATE(EPS,LOW,ANN_ROLL,+1,NOW)', eps_fy1_high: 'FE_ESTIMATE(EPS,HIGH,ANN_ROLL,+1,NOW)',
+  eps_fy2_low: 'FE_ESTIMATE(EPS,LOW,ANN_ROLL,+2,NOW)', eps_fy2_high: 'FE_ESTIMATE(EPS,HIGH,ANN_ROLL,+2,NOW)', eps_fy2_n: 'FE_ESTIMATE(EPS,NEST,ANN_ROLL,+2,NOW)',
+  eps_fy3: 'FE_ESTIMATE(EPS,MEAN,ANN_ROLL,+3,NOW)', eps_fy3_low: 'FE_ESTIMATE(EPS,LOW,ANN_ROLL,+3,NOW)', eps_fy3_high: 'FE_ESTIMATE(EPS,HIGH,ANN_ROLL,+3,NOW)', eps_fy3_n: 'FE_ESTIMATE(EPS,NEST,ANN_ROLL,+3,NOW)',
+  eps_fy1_sd: 'FE_ESTIMATE(EPS,STDDEV,ANN_ROLL,+1,NOW)', eps_fy2_sd: 'FE_ESTIMATE(EPS,STDDEV,ANN_ROLL,+2,NOW)',
+  eps_fy3_sd: 'FE_ESTIMATE(EPS,STDDEV,ANN_ROLL,+3,NOW)', eps_fy4_sd: 'FE_ESTIMATE(EPS,STDDEV,ANN_ROLL,+4,NOW)',
+  eps_fy4: 'FE_ESTIMATE(EPS,MEAN,ANN_ROLL,+4,NOW)', eps_fy4_low: 'FE_ESTIMATE(EPS,LOW,ANN_ROLL,+4,NOW)', eps_fy4_high: 'FE_ESTIMATE(EPS,HIGH,ANN_ROLL,+4,NOW)', eps_fy4_n: 'FE_ESTIMATE(EPS,NEST,ANN_ROLL,+4,NOW)',
 };
 export function consensusRow(table, sym, asof, exprs = CONSENSUS_EXPRS) {
   const row = { date: asof };
