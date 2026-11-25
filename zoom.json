@@ -69,7 +69,7 @@
   "title": "Price Range Dashboard · FactSet → 压力/支撑与估值区间 → Research OS",
   "role": "用 FactSet 数据算压力/支撑与一年前瞻估值区间，打成带编号的交接包交给 Research OS",
   "source": "README.md",
-  "location": "GitHub price-range-dashboard（本机 C:\\Users\\pinyo\\source\\repos\\Price Range Dashboard）"
+  "location": "GitHub CFFCOverman/price-range-dashboard"
  },
  "interface": [
   {
