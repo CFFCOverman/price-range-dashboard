@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Price Range · 控制台</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<header>
+  <div class="brand">Price Range · 控制台</div>
+  <nav id="tabs">
+    <button data-tab="levels" class="on">价位与估值</button>
+    <button data-tab="universe">标的</button>
+    <button data-tab="status">运行</button>
+    <button data-tab="handoff">交接</button>
+  </nav>
+  <div id="outdir" class="muted"></div>
+</header>
+<main>
+  <section id="levels" class="tab on">
+    <div class="bar">
+      <select id="symSel"></select>
+      <span id="symMeta" class="muted"></span>
+    </div>
+    <div class="grid2">
+      <div class="card"><h3>压力位 / 支撑位</h3><div id="ladder"></div><p class="note">只描述价位在哪、有多强,不报触及概率。方法见 process/README.md。</p></div>
+      <div class="card"><h3>一年前瞻估值</h3><div id="valChart"></div><div id="valTable"></div></div>
+    </div>
+    <div class="card"><h3>价位明细</h3><table id="lvTable"></table></div>
+  </section>
+
+  <section id="universe" class="tab">
+    <div class="bar">
+      <button id="uAdd">+ 添加一行</button>
+      <button id="uSave" class="primary">保存到 G 盘</button>
+      <span id="uMsg" class="muted"></span>
+    </div>
+    <p class="note">类型:company 全部数据 · etf 日线+期权 · market 只日线 · breadth-only 只进修订广度 · price-only 只日线。美股代码写成 NVDA-US。保存前会自动备份旧清单到 _state/universe-history/。新加的标的保存后勾选它,去「运行」点「强制重拉选中标的」。</p>
+    <table id="uTable"></table>
+  </section>
+
+  <section id="status" class="tab">
+    <div class="bar">
+      <button data-run="all">拉取到期项 + 计算</button>
+      <button data-run="process">只重算</button>
+      <button data-run="force-sel">强制重拉选中标的</button>
+      <button data-run="login">登录 FactSet</button>
+      <span id="runMsg" class="muted"></span>
+    </div>
+    <pre id="runLog" class="log"></pre>
+    <div class="card"><h3>各数据集最后一次</h3><div id="stateGrid"></div></div>
+  </section>
+
+  <section id="handoff" class="tab">
+    <div class="card"><h3>交接数据包 <span id="hId" class="muted"></span></h3><table id="hChanges"></table></div>
+    <div class="card"><h3>各标的摘要</h3><table id="hTable"></table></div>
+  </section>
+</main>
+<script src="/app.js" type="module"></script>
+</body>
+</html>

@@ -12,6 +12,11 @@ Author: Xuhao Chao · License: MIT
 - **S8 Research OS 接入**:OS 7.0.0 宪法第 2 条改为接受用户自己的 FactSet 交接包;早晚两轮按编号读入账本 `factset` 集合,页面新增「价位与估值(FactSet · L7)」;OS 7.1.0 同时降频到每周 22 轮。
 - **S9 语义缩放收尾**:根 README 加「概念 → 唯一出处」表;去掉 README 里重复写的数值(运行时刻改由 `install-schedule.ps1` 从 `params.json § run` 读;估值窗口与分位改写参数名);collect README 删去过时的「计划 v2 / 交给 OS」段;星图清单 `zoom.json`。
 
+## 2026-11-25 · 交接包 2(配合 Research OS 7.2.0)
+- `process/handoff.mjs`:新增 feeds(新闻、修订、券商变动、空头)与 breadth;changes 增加修订、目标价、空头、新闻条目;schema 升为 `prd-handoff/2`,阈值在 `params.handoff`。
+- 控制台交接页:新增读数一览;只读显示 Research OS 写在 G 盘 `config/os-requests-<日期>.json` 的采集需求单。
+- 测试 +2(process 共 11 项)。
+
 以下为重构前的历史版本。
 
 ## v18.0 (2026-08-06) —— 压力位引擎按持有期重写;一个偷看未来的期权墙;以及一次什么都没搜到的调参

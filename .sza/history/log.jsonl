@@ -72,3 +72,14 @@
 {"ts": "20261125T045209Z", "file": "ops/install-schedule.ps1", "why": "S9 语义缩放收尾:出处表、去重复定义、星图"}
 {"ts": "20261125T045209Z", "file": "process/README.md", "why": "S9 语义缩放收尾:出处表、去重复定义、星图"}
 {"ts": "20261125T045209Z", "file": "CHANGELOG.md", "why": "S9 语义缩放收尾:出处表、去重复定义、星图"}
+{"ts": "20261125T053724Z", "file": "process/handoff.mjs", "why": "交接包 2:新闻、修订、目标价/评级、空头、修订广度(配合 OS 7.2.0)"}
+{"ts": "20261125T053724Z", "file": "process/run.mjs", "why": "交接包 2:新闻、修订、目标价/评级、空头、修订广度(配合 OS 7.2.0)"}
+{"ts": "20261125T053724Z", "file": "process/README.md", "why": "交接包 2:新闻、修订、目标价/评级、空头、修订广度(配合 OS 7.2.0)"}
+{"ts": "20261125T053724Z", "file": "schema/README.md", "why": "交接包 2:新闻、修订、目标价/评级、空头、修订广度(配合 OS 7.2.0)"}
+{"ts": "20261125T053724Z", "file": "config/params.json", "why": "交接包 2:新闻、修订、目标价/评级、空头、修订广度(配合 OS 7.2.0)"}
+{"ts": "20261125T053724Z", "file": "tests/test-process.mjs", "why": "交接包 2:新闻、修订、目标价/评级、空头、修订广度(配合 OS 7.2.0)"}
+{"ts": "20261125T053724Z", "file": "CHANGELOG.md", "why": "交接包 2:新闻、修订、目标价/评级、空头、修订广度(配合 OS 7.2.0)"}
+{"ts": "20261125T053844Z", "file": "console/server.mjs", "why": "控制台交接页:新增读数与 OS 采集需求单"}
+{"ts": "20261125T053844Z", "file": "console/public/app.js", "why": "控制台交接页:新增读数与 OS 采集需求单"}
+{"ts": "20261125T053844Z", "file": "console/public/index.html", "why": "控制台交接页:新增读数与 OS 采集需求单"}
+{"ts": "20261125T053844Z", "file": "console/README.md", "why": "控制台交接页:新增读数与 OS 采集需求单"}

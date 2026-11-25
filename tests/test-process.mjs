@@ -67,4 +67,22 @@ t('forwardEps:sd 档用均值 ∓ σ,缺 σ 退回最低/最高', () => {
   const f = V.forwardEps({ eps_fy3: 20, eps_fy3_low: 5, eps_fy3_high: 30 }, [0, 0, 1, 0], true, 'sd');
   assert.deepEqual([f.low, f.high], [5, 30]);
 });
+t('交接包 2:新闻按 id 去重、只取 since 之后、截断摘要', () => {
+  const rows = [{ id: 'a', datetime: '2026-11-23T10:00:00', headline: 'old', body: 'x' }, { id: 'b', datetime: '2026-11-24T09:00:00', headline: 'sent', body: 'y' },
+    { id: 'c', datetime: '2026-11-24T15:00:00', headline: 'new', body: 'z'.repeat(500) }, { id: 'legacy:1', datetime: '2026-11-25T00:00:00', headline: 'l' }];
+  const f = H.newsFeed(rows, { since: '2026-11-24', prevIds: ['b'], max: 10, chars: 50 });
+  assert.deepEqual(f.map(x => x.id), ['c']);
+  assert.equal(f[0].summary.length, 50);
+});
+t('交接包 2:修订、券商变动、空头、广度与变化阈值', () => {
+  const rv = H.revisionReading({ date: '2026-11-24', eps_fy1: '10.5', eps_fy1_30d: '10', eps_fy2: '12', eps_fy2_30d: '12', target_mean: '110', target_30d: '100' });
+  assert.equal(rv.eps_fy1_30d_pct, 5); assert.equal(rv.target_30d_pct, 10);
+  const bc = H.brokerChanges([{ broker: 'Mean' }, { broker: 'GS', tgt_date: '11/24/2026', tgt_price: '120', rtg: 'Buy' }, { broker: 'MS', tgt_date: '2026-10-01' }], '2026-11-23');
+  assert.deepEqual(bc.map(b => [b.broker, b.target_date]), [['GS', '2026-11-24']]);
+  const sh = H.shortReading([{ date: 'a', short_pct_float: '2', short_days: '1' }, { date: 'b', short_pct_float: '2.5', short_days: '1.2' }]);
+  const br = H.breadthSummary([{ date: 'd', eps_ntm: '2', eps_ntm_30d: '1', up_fy1: '3', down_fy1: '1' }, { date: 'd', eps_ntm: '1', eps_ntm_30d: '2', up_fy1: '0', down_fy1: '2' }]);
+  assert.deepEqual([br.ntm_up, br.ntm_down, br.fy1_up, br.fy1_down], [1, 1, 3, 3]);
+  const ch = H.diffFeeds({ X: { news: [{}], revisions: rv, broker_changes: bc, short: sh } }, { revision_min_pct: 2, short_change_min_pct: 10 });
+  assert.deepEqual(ch.map(c => c.what), ['FY1 EPS 30 天修订', '目标价均值 30 天变化', '券商目标价/评级变动', '空头占流通盘变化', '新闻']);
+});
 console.log(`process 自检 ${n} 项全部通过`);

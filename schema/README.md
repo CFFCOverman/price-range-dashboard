@@ -41,12 +41,20 @@
 - 方法见 `process/README.md`。`【推算】` 标记的值是自算的,不是数据源给的。
 
 ## handoff
-`latest.json` = 最新一份;`<日期>.json` = 当天归档;`previous.json` = 上一交易日(用于算变化)。
+`latest.json` = 最新一份;`<日期>.json` = 当天归档;`previous.json` = 上一交易日(用于算变化)。`schema` 取 `config/params.json § handoff.schema`。
 ```
-{ id: 内容哈希前 12 位(内容不变则不变), schema: "prd-handoff/1", asof, generated_at,
+{ id: 内容哈希前 12 位(内容不变则不变), schema: "prd-handoff/2", asof, generated_at,
   symbols: { <代码>: { spot, nearest_resistance, nearest_support, confluence_zones[], options_oi_basis, options_asof,
                        valuation: { range{bear,base,bull}, upside_pct, hold_pe, regime_gap, pe_now, pe_pctile_3y, pe_pctile_10y,
                                     forward_eps_mean, sell_side_median } | { not_applicable } } },
-  changes: [ { symbol, what, from, to, ... } ] }
+  feeds: { <代码>: {                                   // 2 起:上一个包之后的新增读数
+    news: [ { id, datetime_et, headline, subjects, summary(截断,不带全文), source } ],
+    revisions: { asof, unit, basis, eps_fy1, eps_fy1_30d_pct, eps_fy1_n, eps_fy2, eps_fy2_30d_pct, eps_nq, eps_nq_30d_pct,
+                 target_mean, target_30d_pct, target_n },          // 只有 company
+    broker_changes: [ { broker, rating, rating_date, target, target_date } ],   // 只有 company
+    short: { asof, unit, basis, short_days, short_pct_float, prev{asof, short_days, short_pct_float} } } },  // 只有 company
+  breadth: { <组>: { asof, members, unit, basis, ntm_up, ntm_down, fy1_up, fy1_down, fy2_up, fy2_down } },
+  changes: [ { symbol, what, from, to, change_pct?, unit? } ] }
 ```
-Research OS 的读法:`id` 与上次读到的相同就跳过;不同才更新账本并处理 `changes`。
+「新增」的起点是上一个交易日的包(同一天重算时沿用同一起点);新闻按 id 去掉上一个包已给过的。交接包只做机械过滤,不分层、不分级:归层、筛选、分级由 Research OS 做(OS 技能 `modules/factset.md`)。
+Research OS 的读法:`id` 与上次读到的相同就跳过;不同才处理。

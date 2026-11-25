@@ -155,7 +155,13 @@
     "eps_band": "sd"
   },
   "handoff": {
-    "_doc": "交接数据包(process/handoff.mjs)",
-    "min_change_pct": 3
+    "_doc": "交接数据包(process/handoff.mjs);字段见 schema/README.md § handoff",
+    "min_change_pct": 3,
+    "schema": "prd-handoff/2",
+    "news_first_days": 2,
+    "news_max_per_symbol": 15,
+    "news_summary_chars": 240,
+    "revision_min_pct": 2,
+    "short_change_min_pct": 10
   }
 }

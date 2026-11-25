@@ -130,13 +130,24 @@ async function loadStatus(skipPoll) {
 /* ---------- 交接 ---------- */
 async function loadHandoff() {
   const h = await api('/api/handoff');
-  if (!h) { $('#hId').textContent = '还没有'; return; }
+  if (!h) { $('#hId').textContent = '还没有'; loadFeedAndRequests(null); return; }
   $('#hId').textContent = `编号 ${h.id} · ${h.asof} · 生成于 ${h.generated_at?.slice(0, 16).replace('T', ' ')}`;
   $('#hChanges').innerHTML = '<tr><th>标的</th><th>变化</th><th>从</th><th>到</th></tr>' + (h.changes.length ? h.changes.map(c => `<tr><td>${c.symbol}</td><td>${c.what}${c.source ? `(${c.source})` : ''}</td><td class="num">${c.from ?? ''}</td><td class="num">${c.to ?? ''}${c.change_pct != null ? ` <span class="muted">${pct(c.change_pct)}</span>` : ''}</td></tr>`).join('') : '<tr><td colspan="4" class="muted">与上一交易日相比没有变化</td></tr>');
   $('#hTable').innerHTML = '<tr><th>标的</th><th>现价</th><th>最近压力</th><th>最近支撑</th><th>共振区</th><th>A 中性</th><th>B 中性</th><th>卖方中位</th><th>P/E 3 年分位</th></tr>' + Object.entries(h.symbols).map(([s, v]) => {
     const va = v.valuation || {};
     return `<tr><td>${s}</td><td class="num">${fmt(v.spot)}</td><td class="num res">${fmt(v.nearest_resistance?.price)}</td><td class="num sup">${fmt(v.nearest_support?.price)}</td><td class="num">${v.confluence_zones.length}</td>
       <td class="num">${va.range ? fmt(va.range.base, 0) : va.not_applicable ? '<span class="muted" title="' + va.not_applicable + '">不适用</span>' : '—'}</td><td class="num">${fmt(va.hold_pe?.base, 0)}</td><td class="num">${fmt(va.sell_side_median, 0)}</td><td class="num">${va.regime_gap ? '<span class="warn">' + fmt(va.pe_pctile_3y, 0) + ' ⚠</span>' : fmt(va.pe_pctile_3y, 0)}</td></tr>`; }).join('');
+  loadFeedAndRequests(h);
+}
+
+async function loadFeedAndRequests(h) {
+  const F = h?.feeds || {};
+  $('#hFeed').innerHTML = '<tr><th>标的</th><th>新闻</th><th>FY1 30 天修订</th><th>目标价 30 天</th><th>券商变动</th><th>空头 % 流通盘</th></tr>' + (Object.keys(F).length ? Object.entries(F).map(([s, f]) =>
+    `<tr><td>${s}</td><td class="num" title="${(f.news || []).map(n => n.datetime_et + ' ' + n.headline).join('\n').replace(/"/g, '&quot;')}">${f.news?.length || 0}</td><td class="num">${f.revisions ? pct(f.revisions.eps_fy1_30d_pct) : '—'}</td><td class="num">${f.revisions ? pct(f.revisions.target_30d_pct) : '—'}</td><td class="num">${f.broker_changes?.length ?? '—'}</td><td class="num">${f.short ? fmt(f.short.short_pct_float) : '—'}</td></tr>`).join('') : '<tr><td colspan="6" class="muted">交接包还是旧格式(prd-handoff/1),下次计算后出现</td></tr>');
+  $('#hBreadth').textContent = Object.entries(h?.breadth || {}).map(([g, b]) => `修订广度 ${g}(${b.asof},${b.members} 家):NTM 上调 ${b.ntm_up} / 下调 ${b.ntm_down};FY1 上调 ${b.fy1_up} / 下调 ${b.fy1_down}`).join(' · ');
+  const r = await api('/api/requests');
+  $('#rqMeta').textContent = r ? `${r.file} · ${r.asof || ''}` : '';
+  $('#rqTable').innerHTML = '<tr><th>读数</th><th>层</th><th>为什么要</th><th>搜不到次数</th></tr>' + (r?.requests?.length ? r.requests.map(q => `<tr><td>${q.reading}</td><td>${q.layer || ''}</td><td>${q.why || ''}</td><td class="num">${q.misses ?? ''}</td></tr>`).join('') : '<tr><td colspan="4" class="muted">还没有需求单(Research OS 周五晚报写;要不要加进采集由你决定)</td></tr>');
 }
 
 /* ---------- 启动 ---------- */

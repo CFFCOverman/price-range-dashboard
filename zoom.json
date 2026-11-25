@@ -385,6 +385,10 @@
     },
     {
      "level": 2,
+     "title": "2026-11-25 · 交接包 2(配合 Research OS 7.2.0)"
+    },
+    {
+     "level": 2,
      "title": "v18.0 (2026-08-06) —— 压力位引擎按持有期重写;一个偷看未来的期权墙;以及一次什么都没搜到的调参"
     },
     {
@@ -974,7 +978,7 @@
    "layer": 3,
    "kind": "file",
    "title": "server.mjs",
-   "role": "本机 HTTP 服务与 API(`/api/overview` `universe` `status` `symbol` `handoff` `run`)",
+   "role": "本机 HTTP 服务与 API(`/api/overview` `universe` `status` `symbol` `handoff` `requests` `run`)",
    "source": "console/server.mjs"
   },
   {
@@ -1200,15 +1204,21 @@
   },
   {
    "from": "price-range-dashboard:CHANGELOG.md",
+   "to": "price-range-dashboard:process/handoff.mjs",
+   "kind": "mention",
+   "source": "CHANGELOG.md:16"
+  },
+  {
+   "from": "price-range-dashboard:CHANGELOG.md",
    "to": "price-range-dashboard:tests/",
    "kind": "mention",
-   "source": "CHANGELOG.md:814"
+   "source": "CHANGELOG.md:819"
   },
   {
    "from": "price-range-dashboard:CHANGELOG.md",
    "to": "price-range-dashboard:package.json",
    "kind": "mention",
-   "source": "CHANGELOG.md:815"
+   "source": "CHANGELOG.md:820"
   },
   {
    "from": "price-range-dashboard",

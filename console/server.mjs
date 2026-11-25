@@ -2,7 +2,7 @@
 /**
  * 控制台(本机网页)。只监听 127.0.0.1。
  *   node console/server.mjs   → 浏览器打开 http://127.0.0.1:5179
- * 读写的东西都在 G 盘(schema/README.md):config/universe.csv、_state/、derived/、handoff/。
+ * 读写的东西都在 G 盘(schema/README.md):config/universe.csv、_state/、derived/、handoff/;只读 config/os-requests-*.json(Research OS 写的采集需求单)。
  * 不碰 FactSet:要拉数据时启动 collect/run.mjs 子进程,同一时间只跑一个。
  */
 import http from 'node:http';
@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { loadParams, loadUniverse, ensureUniverse, UNIVERSE_FILE, STATE_DIR, DERIVED_DIR, HANDOFF_DIR, OUT_DIR, ROOT } from '../collect/lib/config.mjs';
+import { loadParams, loadUniverse, ensureUniverse, UNIVERSE_FILE, STATE_DIR, DERIVED_DIR, HANDOFF_DIR, OUT_DIR, ROOT, LIVE_CONFIG_DIR } from '../collect/lib/config.mjs';
 import { toCsv, atomicWrite, loadState } from '../collect/lib/store.mjs';
 import { validateUniverse, UNIVERSE_COLS } from './universe.mjs';
 
@@ -59,6 +59,11 @@ const routes = {
     return { state, last_run: readJson(path.join(STATE_DIR, 'last-run.json')) };
   },
   'GET /api/handoff': () => readJson(path.join(HANDOFF_DIR, 'latest.json')),
+  'GET /api/requests': () => {
+    let files = []; try { files = fs.readdirSync(LIVE_CONFIG_DIR).filter(f => /^os-requests-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort(); } catch {}
+    const f = files.at(-1);
+    return f ? { file: f, ...readJson(path.join(LIVE_CONFIG_DIR, f)) } : null;
+  },
   'GET /api/symbol': (_, q) => {
     const s = String(q.get('s') || '').toUpperCase();
     return { levels: readJson(path.join(DERIVED_DIR, 'levels', `${s}.json`)), valuation: readJson(path.join(DERIVED_DIR, 'valuation', `${s}.json`)) };
