@@ -83,3 +83,6 @@
 {"ts": "20261125T053844Z", "file": "console/public/app.js", "why": "控制台交接页:新增读数与 OS 采集需求单"}
 {"ts": "20261125T053844Z", "file": "console/public/index.html", "why": "控制台交接页:新增读数与 OS 采集需求单"}
 {"ts": "20261125T053844Z", "file": "console/README.md", "why": "控制台交接页:新增读数与 OS 采集需求单"}
+{"ts": "20261125T054500Z", "file": "process/handoff.mjs", "why": "补记快照:basis 改动前的版本(取自提交 0826a82;改前漏拍,事后补)"}
+{"ts": "20261125T054500Z", "file": "schema/README.md", "why": "补记快照:basis 改动前的版本(取自提交 0826a82;改前漏拍,事后补)"}
+{"ts": "20261125T054500Z", "file": "CHANGELOG.md", "why": "补记快照:basis 改动前的版本(取自提交 0826a82;改前漏拍,事后补)"}

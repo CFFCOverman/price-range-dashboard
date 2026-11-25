@@ -1212,13 +1212,13 @@
    "from": "price-range-dashboard:CHANGELOG.md",
    "to": "price-range-dashboard:tests/",
    "kind": "mention",
-   "source": "CHANGELOG.md:819"
+   "source": "CHANGELOG.md:820"
   },
   {
    "from": "price-range-dashboard:CHANGELOG.md",
    "to": "price-range-dashboard:package.json",
    "kind": "mention",
-   "source": "CHANGELOG.md:820"
+   "source": "CHANGELOG.md:821"
   },
   {
    "from": "price-range-dashboard",
