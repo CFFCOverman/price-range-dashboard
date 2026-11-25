@@ -11,6 +11,8 @@ const { priceRows, priceExprs, consensusRow, CONSENSUS_EXPRS, breadthRows, BREAD
 const { fsDate, tableObjects, seriesLabel, ownershipRow, tnrUrl } = await import('../collect/datasets/report-json.mjs');
 const { newsTime, htmlText, newsRow, newsStart } = await import('../collect/datasets/news.mjs');
 const { DATASETS } = await import('../collect/datasets/index.mjs');
+const { applyEodOi, splitLegacy, snapshotDays, pruneDays } = await import('../collect/datasets/options.mjs');
+const { rawFile } = await import('../collect/lib/store.mjs');
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('  ✔ ' + name); };
@@ -53,9 +55,9 @@ t('isDue 按节奏', () => {
 });
 t('planRun:ETF 只拉 prices/options,市场只拉 prices', () => {
   const jobs = planRun(params, universe, {});
-  assert.deepEqual([...new Set(jobs.filter(j => j.symbol === 'SPY-US').map(j => j.dataset))], ['prices', 'options']);
+  assert.deepEqual([...new Set(jobs.filter(j => j.symbol === 'SPY-US').map(j => j.dataset))], ['prices', 'options']);   // options-oi 是 manual
   assert.deepEqual([...new Set(jobs.filter(j => j.symbol === 'US10YR').map(j => j.dataset))], ['prices']);
-  assert.equal(jobs.filter(j => j.symbol === 'NVDA-US').length, params.scope.company.length);
+  assert.equal(jobs.filter(j => j.symbol === 'NVDA-US').length, params.scope.company.filter(d => !params.datasets[d].manual).length);
 });
 
 t('priceRows:新→旧翻成旧→新,缩放,当天高低,0 成交量记空', () => {
@@ -112,5 +114,24 @@ t('breadthRows:缺数据的成员剔除', () => {
   const tb = new Map([[`A|${BREADTH_EXPRS.eps_ntm}`, [2]], [`A|${BREADTH_EXPRS.eps_ntm_30d}`, [1.5]]]);
   const r = breadthRows(tb, ['A', 'B'], '2026-11-24');
   assert.equal(r.length, 1); assert.equal(r[0].eps_ntm, 2); assert.equal(r[0].up_fy1, null);
+});
+t('options-oi 只在点名时进计划', () => {
+  assert.ok(!planRun(params, universe, {}).some(j => j.dataset === 'options-oi'));
+  assert.ok(planRun(params, universe, {}, { only: ['options-oi'] }).some(j => j.dataset === 'options-oi' && j.symbol === 'NVDA-US'));
+});
+t('期权:旧单文件拆成按天文件、按保留期删、收盘 OI 回填', () => {
+  const raw = fs.mkdtempSync(path.join(os.tmpdir(), 'opt-'));
+  const file = (ds, n) => rawFile(raw, ds, n);
+  fs.mkdirSync(path.join(raw, 'options'), { recursive: true });
+  fs.writeFileSync(file('options', 'X-US'), 'asof,expiry,strike,call_oi,put_oi\n2026-11-20,2026-12-18,100,5,6\n2026-11-24,2026-12-18,100,7,8\n2026-11-24,2026-12-18,110,1,2\n');
+  assert.equal(splitLegacy(file, 'X-US'), 2);
+  const dir = path.join(raw, 'options', 'X-US');
+  assert.deepEqual(snapshotDays(dir), ['2026-11-20', '2026-11-24']);
+  assert.ok(fs.existsSync(path.join(raw, 'options', 'X-US.legacy-split.csv')));
+  assert.equal(pruneDays(dir, '2026-11-25', 3), 1);
+  const rows = readCsvFile(path.join(dir, '2026-11-24.csv')).rows;
+  const kept = [{ expiry: '2026-12-18', strike: 100, call: 'C100', put: 'P100' }];
+  const r = applyEodOi(rows, kept, new Map([['C100', 9.4], ['P100', 11]]), 'T');
+  assert.equal(r.matched, 1); assert.equal(r.rows[0].call_oi_eod, 9); assert.equal(r.rows[1].call_oi_eod || '', '');
 });
 console.log(`collect 自检 ${n} 项全部通过`);

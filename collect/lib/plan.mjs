@@ -19,6 +19,7 @@ export function planRun(params, universe, state, { now = new Date(), force = fal
     if (!list) throw new Error(`universe.csv 里 ${entry.symbol} 的 kind "${entry.kind}" 在 params.scope 里没有定义`);
     for (const dataset of list) {
       if (only && !only.includes(dataset)) continue;
+      if (params.datasets[dataset]?.manual && !(only && only.includes(dataset))) continue;   // manual:只在点名时跑(如 06:30 的 options-oi)
       if (isDue(params, dataset, state[stateKey(dataset, entry.symbol)]?.ok_at, now, force)) jobs.push({ dataset, symbol: entry.symbol, entry });
     }
   }

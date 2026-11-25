@@ -17,15 +17,16 @@
     "supplychain": { "cadence": "weekly" },
     "segments":    { "cadence": "monthly" },
     "georev":      { "cadence": "monthly" },
-    "options":     { "cadence": "daily" },
+    "options":     { "cadence": "daily",   "keep_days": 365 },
+    "options-oi":  { "cadence": "daily",   "manual": true },
     "breadth":     { "cadence": "daily",   "batch_by": "breadth" }
   },
   "scope": {
-    "company":    ["prices", "consensus", "valuation", "estimates", "targets", "ownership", "news", "guidance", "surprise", "credit", "cds", "holders", "supplychain", "segments", "georev", "options"],
-    "etf":        ["prices", "options"],
+    "company":    ["prices", "consensus", "valuation", "estimates", "targets", "ownership", "news", "guidance", "surprise", "credit", "cds", "holders", "supplychain", "segments", "georev", "options", "options-oi"],
+    "etf":        ["prices", "options", "options-oi"],
     "price-only": ["prices"],
     "breadth-only": [],
     "market":     ["prices"]
   },
-  "run": { "daily_at_et": "17:30", "pause_ms_between_requests": 300 }
+  "run": { "daily_at_et": "17:45", "options_oi_at_et": "06:30", "pause_ms_between_requests": 300 }
 }

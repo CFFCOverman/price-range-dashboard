@@ -4,6 +4,6 @@ import { valuation } from './valuation.mjs';
 import { estimates, targets, ownership } from './report-json.mjs';
 import { news } from './news.mjs';
 import { guidance, surprise, intel } from './report-csv.mjs';
-import { options } from './options.mjs';
+import { options, optionsOi } from './options.mjs';
 
-export const DATASETS = { prices, consensus, valuation, estimates, targets, ownership, news, guidance, surprise, ...intel, options, breadth };
+export const DATASETS = { prices, consensus, valuation, estimates, targets, ownership, news, guidance, surprise, ...intel, options, 'options-oi': optionsOi, breadth };

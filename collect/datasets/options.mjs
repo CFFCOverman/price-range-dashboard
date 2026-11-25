@@ -72,11 +72,97 @@ export function saveOptionSnapshots(file, recs, asof, today) {
   return { total: m.rows.length, added: m.added, snapshots: m.snapshots, agedOut: m.agedOut + m.capped };
 }
 
+/* ---------- R4(2026-11-24):按天分文件 + 次日早上补读收盘 OI ----------
+ * 一天一个文件 raw/options/<代码>/<asof>.csv:单文件 2 万行上限下 NVDA 一天 1360 条腿,一年存不下。
+ * OI 由清算所次日盘前公布:当晚拉到的 call_oi/put_oi 多半还是前一交易日的;次日 06:30 的 options-oi 轮
+ * 把真正的当日收盘 OI 写进同一文件的 call_oi_eod / put_oi_eod(成交量那时已清零,不动)。 */
+import fs from 'node:fs';
+import path from 'node:path';
+import { replaceCsv } from '../lib/store.mjs';
+
+export const DAY_FIELDS = [...OPTION_FIELDS, 'call_oi_eod', 'put_oi_eod', 'oi_eod_at'];
+const ymdRe = /^\d{4}-\d{2}-\d{2}$/;
+export const dayDir = (file, symbol) => path.dirname(file('options', `${symbol}/x`));
+export const dayFile = (file, symbol, asof) => file('options', `${symbol}/${asof}`);
+/** 目录里的快照日(升序) */
+export function snapshotDays(dir) {
+  try { return fs.readdirSync(dir).map(f => f.replace(/\.csv$/, '')).filter(d => ymdRe.test(d)).sort(); } catch { return []; }
+}
+/** 旧的单文件 → 按 asof 拆成按天文件(已存在的那天不覆盖);旧文件改名留作备份。返回拆出的天数 */
+export function splitLegacy(file, symbol) {
+  const legacy = file('options', symbol);
+  if (!fs.existsSync(legacy)) return 0;
+  const by = {};
+  for (const r of readCsvFile(legacy).rows) if (ymdRe.test(r.asof || '')) (by[r.asof] ||= []).push(r);
+  let n = 0;
+  for (const [d, rows] of Object.entries(by)) {
+    const f = dayFile(file, symbol, d);
+    if (fs.existsSync(f)) continue;
+    replaceCsv(f, DAY_FIELDS, rows); n++;
+  }
+  fs.renameSync(legacy, legacy.replace(/\.csv$/, '.legacy-split.csv'));
+  return n;
+}
+/** 只留最近 keepDays 天 */
+export function pruneDays(dir, today, keepDays) {
+  const cut = new Date(Date.parse(today) - keepDays * 864e5).toISOString().slice(0, 10);
+  let n = 0;
+  for (const d of snapshotDays(dir)) if (d < cut) { fs.unlinkSync(path.join(dir, `${d}.csv`)); n++; }
+  return n;
+}
+/** 快照行 + 链目录里挑出的合约 + OI 表 → 写入 *_oi_eod;返回 {rows, matched} */
+export function applyEodOi(rows, kept, oi, at) {
+  const sym = new Map(kept.map(k => [`${k.expiry}|${Number(k.strike)}`, k]));
+  let matched = 0;
+  const out = rows.map(r => {
+    const k = sym.get(`${r.expiry}|${Number(r.strike)}`);
+    if (!k) return r;
+    const c = oi.get(k.call), p = oi.get(k.put);
+    if (c == null && p == null) return r;
+    matched++;
+    return { ...r, call_oi_eod: c == null ? '' : Math.round(c), put_oi_eod: p == null ? '' : Math.round(p), oi_eod_at: at };
+  });
+  return { rows: out, matched };
+}
+
 export const options = {
   key: 'options',
-  async run({ symbol, file, api, today }) {
+  async run({ symbol, p, file, api, today }) {
+    const split = splitLegacy(file, symbol);
     const res = await optionChain(symbol, { fqlRaw: api.fqlRaw, get: api.get, today });
-    const { total, snapshots } = saveOptionSnapshots(file('options', symbol), res.rows, today, today);
-    return { rows: total, note: `${res.legs} 条腿,${res.expiries.length} 个到期日,${snapshots} 层快照` };
+    const fetched_at = new Date().toISOString();
+    const rows = res.rows.map(r => ({ ...r, asof: today, fetched_at }));
+    replaceCsv(dayFile(file, symbol, today), DAY_FIELDS, rows);
+    const pruned = pruneDays(dayDir(file, symbol), today, p.keep_days);
+    const days = snapshotDays(dayDir(file, symbol)).length;
+    return { rows: rows.length, note: `${res.legs} 条腿,${res.expiries.length} 个到期日;共 ${days} 天${split ? `(旧文件拆出 ${split} 天)` : ''}${pruned ? `,过期删 ${pruned} 天` : ''}` };
+  },
+};
+
+/** 次日早上补读收盘 OI(params.datasets['options-oi'].manual:只在 --only=options-oi 时跑,给 06:30 计划任务用) */
+export const optionsOi = {
+  key: 'options-oi',
+  async run({ symbol, file, api, today }) {
+    const days = snapshotDays(dayDir(file, symbol)).filter(d => d < today);
+    if (!days.length) return { rows: 0, note: '没有更早的快照可补' };
+    const asof = days.at(-1), f = dayFile(file, symbol, asof);
+    const rows = readCsvFile(f).rows;
+    const oc = await api.get(`${OC_PATH}?symbol=${encodeURIComponent(symbol)}`);
+    if (oc.status !== 200) throw new Error(`期权链目录回了 HTTP ${oc.status}`);
+    const table = parseOptionChainTable(oc.text);
+    if (table.error) throw new Error(table.error);
+    /* 以快照日为"今天"、窗口放到最大:只为把快照里的 (到期日, 行权价) 对回合约代码 */
+    const { kept } = pickChainContracts(table.rows, { today: asof, spot: NaN, ticker: symbol, maxDte: 3650, window: 1e9 });
+    const want = new Set(rows.map(r => `${r.expiry}|${Number(r.strike)}`));
+    const legs = kept.filter(k => want.has(`${k.expiry}|${Number(k.strike)}`)).flatMap(k => [k.call, k.put]);
+    const oi = new Map();
+    for (const b of chunk(legs, FQL_BATCH)) {
+      const r = await api.fqlRaw(b, ['P_OPT_OPEN_INTEREST']);
+      if (r.status !== 200 || !r.json) throw new Error(`FQL 回了 HTTP ${r.status}`);
+      for (const [k, v] of parseFqlValues(r.json, 'P_OPT_OPEN_INTEREST')) oi.set(k, v);
+    }
+    const out = applyEodOi(rows, kept, oi, new Date().toISOString());
+    replaceCsv(f, DAY_FIELDS, out.rows);
+    return { rows: out.matched, note: `补 ${asof} 收盘 OI:${out.matched}/${rows.length} 行` };
   },
 };

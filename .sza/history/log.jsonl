@@ -50,3 +50,9 @@
 {"ts":"20261125T031938Z","file":"collect/datasets/options.mjs","why":"R1 期权取数核心搬进 collect"}
 {"ts":"20261125T031938Z","file":"fetcher/steps/options.mjs","why":"R1 期权取数核心搬进 collect"}
 {"ts":"20261125T032012Z","file":"collect/run.mjs","why":"R2 改用 collect 自己的会话"}
+{"ts":"20261125T032527Z","file":"collect/datasets/options.mjs","why":"R4 期权按天分文件 + 06:30 收盘 OI 补读"}
+{"ts":"20261125T032527Z","file":"collect/datasets/index.mjs","why":"R4 期权按天分文件 + 06:30 收盘 OI 补读"}
+{"ts":"20261125T032527Z","file":"collect/lib/plan.mjs","why":"R4 期权按天分文件 + 06:30 收盘 OI 补读"}
+{"ts":"20261125T032527Z","file":"config/params.json","why":"R4 期权按天分文件 + 06:30 收盘 OI 补读"}
+{"ts":"20261125T032527Z","file":"tests/test-collect.mjs","why":"R4 期权按天分文件 + 06:30 收盘 OI 补读"}
+{"ts":"20261125T032527Z","file":"collect/README.md","why":"R4 期权按天分文件 + 06:30 收盘 OI 补读"}

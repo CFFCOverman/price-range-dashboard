@@ -42,7 +42,8 @@ FactSet(已登录页面,同源接口) ──collect──▶ Assets/raw/<数据�
 | news | `NewsSearch`(StreetAccount,JSON,含正文摘要) | 合并(按 id) | `news/<T>.csv` |
 | guidance / surprise | 解析见 `fetcher/steps/earnings.mjs` | 替换 | `guidance/<T>.csv`、`surprise/<T>.csv` |
 | credit / cds / holders / supplychain / segments / georev | 解析见 `fetcher/steps/company-intel.mjs` § INTEL_REPORTS | 替换 | `<数据集>/<T>.csv` |
-| options | 期权链接口,合并规则见 `fetcher/lib/opt-store.mjs` | 合并(按日快照) | `options/<T>.csv` |
+| options | 期权链接口(OI、全天成交量、收盘价、Delta、Gamma、买卖价);取数核心 `datasets/options.mjs` § optionChain | 一天一个文件,保留 `keep_days` 天 | `options/<T>/<日期>.csv` |
+| options-oi | 次日 06:30 补读上一快照日的**收盘 OI**,写进同一文件的 `call_oi_eod/put_oi_eod`(OI 次日盘前才公布;成交量不动) | 只在 `--only=options-oi` 时跑(`manual`) | 同上 |
 
 不拉的:transcripts 列表(无稳定接口)、Snapshot/Price Summary 导入、页面导出的 Charting xlsx(被 FQL 日线取代)。
 盘中 15 分钟的期权方向托盘(`fetcher/options-flow.mjs`)不在这里,照旧单独运行。
