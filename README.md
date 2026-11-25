@@ -22,7 +22,7 @@
 | 计算 | [process/](process/README.md):压力/支撑、一年前瞻估值区间 | 已完成初版 |
 | 交接 | `process/handoff.mjs` → `Assets/handoff/latest.json` | 已完成初版 |
 | 控制台 | [console/](console/README.md):双击 `console.bat` | 已完成初版 |
-| 运维 | `ops/`(计划任务、登录) | 脚本已写,未启用 |
+| 运维 | [ops/](ops/README.md):计划任务(17:45 拉取→计算→交接;06:30 补收盘 OI→重算)、登录 | 待你安装 |
 | 数据存储类型 | [schema/](schema/README.md):G 盘分区与每类数据的字段 | 已完成 |
 | 配置 | `config/params.json`(参数唯一出处);标的清单现行版本在 G 盘 `config/universe.csv` | — |
 | 测试 | `tests/`,`npm test` | — |
