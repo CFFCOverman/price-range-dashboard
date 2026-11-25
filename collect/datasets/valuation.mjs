@@ -1,5 +1,5 @@
 /**
- * valuation:月末 NTM 市盈率历史(10 年),逐月 FQL 取 P/E、价格、NTM EPS(重构 R1:从旧 fetcher 搬来,唯一定义)。
+ * valuation:月末 NTM 市盈率历史(10 年),逐月 FQL 取 P/E、价格、NTM EPS。
  * 2026-09-30 实测:NTMA 是 FactSet 基于年度预期的 NTM;字面 NTM 被 FQL 拒绝;ANN_ROLL,+1 是 FY1 不是 NTM。
  * 历史月份的 P/E 不变,只重算当月与上月(上月价格/EPS 用当前的拆股口径);亏损或上市不久的(有效点不足)记"不适用"。
  */

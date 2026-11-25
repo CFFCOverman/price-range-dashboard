@@ -1,3 +1,0 @@
-# 复制本文件为 assets-path.txt,把下面换成你这台电脑上云盘里 Assets 文件夹的绝对路径(只写一行)。
-# Windows(Google Drive 桌面版默认): G:\My Drive\PriceRangeDashboard\Assets
-# macOS: /Users/<你>/Library/CloudStorage/GoogleDrive-<邮箱>/My Drive/PriceRangeDashboard/Assets

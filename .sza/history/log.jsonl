@@ -56,3 +56,7 @@
 {"ts":"20261125T032527Z","file":"config/params.json","why":"R4 期权按天分文件 + 06:30 收盘 OI 补读"}
 {"ts":"20261125T032527Z","file":"tests/test-collect.mjs","why":"R4 期权按天分文件 + 06:30 收盘 OI 补读"}
 {"ts":"20261125T032527Z","file":"collect/README.md","why":"R4 期权按天分文件 + 06:30 收盘 OI 补读"}
+{"ts":"20261125T034257Z","file":"config/params.json","why":"process 层:levels 参数"}
+{"ts":"20261125T035526Z","file":"<repo>","why":"S1 清场前全仓快照(旧 fetcher/仪表盘/tools/tests/docs 全在这个包里)"}
+{"ts":"20261125T035646Z","file":"README.md","why":"S1 清场后重写 L0"}
+{"ts":"20261125T035646Z","file":"CHANGELOG.md","why":"S1 清场后重写 L0"}

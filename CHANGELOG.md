@@ -1,3 +1,7 @@
+## 2026-11-24 · 重写
+- 删除旧 fetcher、旧仪表盘(src/、构建产物)、tools、旧测试与文档;新采集层 collect/ 为第一部分
+- 目标管线:采集 → 压力/支撑 + 估值区间 → 交接数据包 → Research OS 账本
+
 # Changelog · Price Range Dashboard
 
 Author: Xuhao Chao · License: MIT

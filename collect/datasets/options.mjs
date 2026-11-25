@@ -1,14 +1,14 @@
 /**
- * options:期权链(OI / 全天成交量 / 收盘价 / Delta / Gamma / 买卖价),全部走同源接口(重构 R1:取数核心从旧 fetcher 搬来,唯一定义)。
+ * options:期权链(OI / 全天成交量 / 收盘价 / Delta / Gamma / 买卖价),全部走同源接口。
  * 接口与字段的实测记录见 collect/parsers/fql.mjs 顶部;快照合并与滚存规则见 collect/parsers/opt-store.mjs。
- * 取数函数 optionChain 的网络请求由调用方注入(fqlRaw / get),所以旧 fetcher 退役前也复用同一份。
+ * 取数函数 optionChain 的网络请求由调用方注入(fqlRaw / get),便于测试。
  */
 import {
   FQL_BATCH, OC_PATH, OPT_API_MAX_CONTRACTS,
   assembleOptionRows, chunk, optApiVerdict, parseFqlValues, parseOptionChainTable, pickChainContracts,
 } from '../parsers/fql.mjs';
-import { mergeOptionSnapshots, OPT_EXTRA_FIELDS } from '../parsers/opt-store.mjs';
-import { readCsvFile, atomicWrite, csvFlat } from '../lib/store.mjs';
+import { OPT_EXTRA_FIELDS } from '../parsers/opt-store.mjs';
+import { readCsvFile } from '../lib/store.mjs';
 
 /* GAMMA:2026-11-24 实测可取;隐含波动率没有直接字段(由 process 层从价格反推) */
 export const OPT_METRICS = ['P_OPT_VOLUME', 'P_OPT_CLOSE_PRICE', 'P_OPT_DELTA', 'P_OPT_BID_PRICE', 'P_OPT_ASK_PRICE', 'P_OPT_GAMMA'];
@@ -62,15 +62,6 @@ export async function optionChain(ticker, { fqlRaw, get, today, log = () => {}, 
 }
 
 export const OPTION_FIELDS = ['asof', 'fetched_at', 'expiry', 'strike', 'call_oi', 'put_oi', ...OPT_EXTRA_FIELDS.filter(x => x !== 'fetched_at')];
-/** 按 asof 合并进快照文件(一天一层);返回 { total, added, snapshots, agedOut } */
-export function saveOptionSnapshots(file, recs, asof, today) {
-  const old = readCsvFile(file).rows.filter(r => r.asof && r.expiry);
-  const fetched_at = new Date().toISOString();
-  const enriched = (recs || []).map(r => ({ ...r, fetched_at: r.fetched_at || fetched_at }));
-  const m = mergeOptionSnapshots(old, enriched, asof || today, today);
-  atomicWrite(file, OPTION_FIELDS.join(',') + '\n' + m.rows.map(r => OPTION_FIELDS.map(k => csvFlat(r[k] ?? '')).join(',')).join('\n') + '\n');
-  return { total: m.rows.length, added: m.added, snapshots: m.snapshots, agedOut: m.agedOut + m.capped };
-}
 
 /* ---------- R4(2026-11-24):按天分文件 + 次日早上补读收盘 OI ----------
  * 一天一个文件 raw/options/<代码>/<asof>.csv:单文件 2 万行上限下 NVDA 一天 1360 条腿,一年存不下。

@@ -3,40 +3,15 @@
   "version": "18.0.0",
   "private": true,
   "type": "module",
-  "description": "股价区间仪表盘:源码在 src/ 分模块开发,构建回零依赖单文件 HTML 交付",
+  "description": "FactSet 采集 → 压力/支撑与估值区间 → 交给 Research OS 账本",
   "scripts": {
-    "build": "node tools/build.mjs",
-    "build:check": "node tools/build.mjs --check",
-    "setup": "node tools/setup.mjs",
-    "setup:selftest": "node tools/setup.mjs --selftest",
-    "test": "node tools/doctor.mjs --preflight && npm run test:pipeline && node tests/test-app.mjs",
-    "test:pipeline": "node tests/test-pipeline.mjs && node tests/test-valuation-history.mjs && node tests/test-valuation-fetch.mjs && node tests/test-earnings-history.mjs && node tests/test-research-feed.mjs && node tests/test-company-intel.mjs && node tests/test-estimates-api.mjs && node tests/test-collect.mjs",
-    "fetch:valuation": "node tools/fetch-valuation.mjs",
-    "test:decision": "node tests/test-option-flow.mjs && node tests/test-decision.mjs && node tests/test-decision-ui.mjs",
-    "test:full": "node tools/doctor.mjs --preflight && node tests/test-app.mjs --require-data",
-    "doctor": "node tools/doctor.mjs",
-    "doctor:selftest": "node tools/doctor.mjs --selftest",
-    "test:fetcher-preflight": "node fetcher/preflight.mjs --selftest && node tools/scratch/bat-lint.mjs && node tools/scratch/test-run-factset-bat.mjs && node tools/scratch/test-run-factset-command.mjs",
-    "test:fetch": "node fetcher/factset-fetch.mjs --selftest",
-    "backtest": "node tools/backtest.mjs",
-    "backtest:selftest": "node tools/backtest.mjs --selftest",
-    "paramsearch": "node tools/paramsearch.mjs",
-    "ledger:write": "node tools/ledger.mjs --write",
-    "ledger:param": "node tools/ledger.mjs --param",
-    "ledger:resolve": "node tools/ledger.mjs --resolve",
-    "fetch": "node fetcher/factset-fetch.mjs",
-    "fetch:options-flow": "node fetcher/options-flow.mjs",
-    "backfill:options-signals": "node fetcher/options-signals-backfill.mjs",
-    "fetch:login": "node fetcher/factset-fetch.mjs --login",
-    "test:valuation": "node tests/test-ntm-valuation.mjs && node tests/test-fair-value.mjs",
-    "fair-value:record": "node tools/record-fair-values.mjs",
     "collect": "node collect/run.mjs",
     "collect:dry": "node collect/run.mjs --dry",
-    "collect:migrate": "node collect/migrate.mjs",
-    "test:collect": "node tests/test-collect.mjs"
+    "login": "node collect/login.mjs",
+    "process": "node process/run.mjs",
+    "test": "node tests/test-collect.mjs && node tests/test-parsers.mjs"
   },
   "devDependencies": {
-    "playwright": "^1.61.1",
-    "xlsx": "^0.18.5"
+    "playwright": "^1.61.1"
   }
 }

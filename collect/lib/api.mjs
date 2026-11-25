@@ -1,4 +1,4 @@
-/** 同源请求:在已登录的 FactSet 页面里发 fetch。所有数据集只通过这里取数(重构 R2:不再借用旧 fetcher 的页面)。 */
+/** 同源请求:在已登录的 FactSet 页面里发 fetch。所有数据集只通过这里取数。 */
 import { openSession } from './session.mjs';
 import { BASE } from './paths.mjs';
 import { getJson } from '../parsers/report-api.mjs';

@@ -1,6 +1,6 @@
-/** 路径与站点常量的唯一出处(重构 R3)。旧 fetcher/lib/config.mjs 从这里取 OUT_DIR / PROFILE / BASE。
+/** 路径与站点常量的唯一出处。
  *
- * 数据目录优先级:FS_OUT 环境变量 > config/assets-path.txt > fetcher/assets-path.txt(迁移期兼容)> <repo>/Assets
+ * 数据目录优先级:FS_OUT 环境变量 > config/assets-path.txt > <repo>/Assets
  * assets-path.txt 只写一行绝对路径(# 开头为注释);每台电脑不同,不进 git。写了却找不到目录(云盘没挂载)
  * 直接报错,绝不悄悄退回仓库内的 Assets/ —— 否则数据分叉成两份。 */
 import fs from 'node:fs';
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const CONFIG_DIR = path.join(ROOT, 'config');
-export const ASSETS_PATH_FILES = [path.join(CONFIG_DIR, 'assets-path.txt'), path.join(ROOT, 'fetcher', 'assets-path.txt')];
+export const ASSETS_PATH_FILES = [path.join(CONFIG_DIR, 'assets-path.txt')];
 
 export function resolveOutDir(env = process.env, files = ASSETS_PATH_FILES) {
   if (env.FS_OUT) return env.FS_OUT;

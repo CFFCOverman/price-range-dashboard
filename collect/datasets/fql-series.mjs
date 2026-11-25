@@ -49,7 +49,7 @@ export const prices = {
   },
 };
 
-/* 一致预期快照:每天一行,修订轨迹靠我们攒(旧 research-feed 的 COMPANY_EXPRS 从本表取前 11 项) */
+/* 一致预期快照:每天一行,修订轨迹靠我们攒 */
 export const CONSENSUS_EXPRS = {
   price: 'P_PRICE(NOW)', date: 'P_DATE(NOW)',
   eps_nq: 'FE_ESTIMATE(EPS,MEAN,QTR,+1,NOW)', eps_nq_30d: 'FE_ESTIMATE(EPS,MEAN,QTR,+1,-30D)', eps_nq_n: 'FE_ESTIMATE(EPS,NEST,QTR,+1,NOW)',
