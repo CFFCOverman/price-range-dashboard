@@ -1,0 +1,1471 @@
+{
+ "zoom": "2.0",
+ "generated": {
+  "by": "skill-starmap/tools/zoomgen.py",
+  "at": "2026-11-25",
+  "from": [
+   "CHANGELOG.md",
+   "LICENSE",
+   "PRIVATE_DATA.md",
+   "README.md",
+   "collect/README.md",
+   "collect/datasets/fql-series.mjs",
+   "collect/datasets/index.mjs",
+   "collect/datasets/news.mjs",
+   "collect/datasets/options.mjs",
+   "collect/datasets/report-csv.mjs",
+   "collect/datasets/report-json.mjs",
+   "collect/datasets/valuation.mjs",
+   "collect/lib/api.mjs",
+   "collect/lib/clock.mjs",
+   "collect/lib/config.mjs",
+   "collect/lib/paths.mjs",
+   "collect/lib/plan.mjs",
+   "collect/lib/session-policy.mjs",
+   "collect/lib/session.mjs",
+   "collect/lib/store.mjs",
+   "collect/login.mjs",
+   "collect/parsers/company-intel.mjs",
+   "collect/parsers/earnings.mjs",
+   "collect/parsers/estimates.mjs",
+   "collect/parsers/fql.mjs",
+   "collect/parsers/opt-store.mjs",
+   "collect/parsers/report-api.mjs",
+   "collect/parsers/valuation-history.mjs",
+   "collect/run.mjs",
+   "config/assets-path.txt",
+   "config/params.json",
+   "config/universe.seed.csv",
+   "console.bat",
+   "console/README.md",
+   "console/public/app.css",
+   "console/public/app.js",
+   "console/public/index.html",
+   "console/server.mjs",
+   "console/universe.mjs",
+   "ops/README.md",
+   "ops/install-schedule.ps1",
+   "ops/login.bat",
+   "ops/run-scheduled.ps1",
+   "ops/uninstall-schedule.ps1",
+   "package-lock.json",
+   "package.json",
+   "process/README.md",
+   "process/handoff.mjs",
+   "process/levels.mjs",
+   "process/run.mjs",
+   "process/valuation.mjs",
+   "run-collect.bat",
+   "schema/README.md",
+   "tests/test-collect.mjs",
+   "tests/test-parsers.mjs",
+   "tests/test-process.mjs",
+   "zoom.hints.json"
+  ],
+  "note": "生成文件，勿手改。改源文件或 zoom.hints.json 后重新运行 zoomgen。"
+ },
+ "system": {
+  "id": "price-range-dashboard",
+  "title": "Price Range Dashboard · FactSet → 压力/支撑与估值区间 → Research OS",
+  "role": "用 FactSet 数据算压力/支撑与一年前瞻估值区间，打成带编号的交接包交给 Research OS",
+  "source": "README.md",
+  "location": "GitHub price-range-dashboard（本机 C:\\Users\\pinyo\\source\\repos\\Price Range Dashboard）"
+ },
+ "interface": [
+  {
+   "dir": "in",
+   "label": "在控制台增删标的、手动重跑",
+   "via": "price-range-dashboard:console/",
+   "source": "README.md § L0 · 人 ↔ 系统"
+  },
+  {
+   "dir": "in",
+   "label": "双击 run-collect.bat 手动跑一轮",
+   "via": "price-range-dashboard:run-collect.bat",
+   "source": "README.md § L1 · 节点"
+  },
+  {
+   "dir": "decide",
+   "label": "标的清单；登录 FactSet；交易决定",
+   "via": "price-range-dashboard:console/",
+   "source": "README.md § L0 · 人 ↔ 系统"
+  },
+  {
+   "dir": "read",
+   "label": "FactSet 同源接口（用户已登录的浏览器）",
+   "via": "price-range-dashboard:collect/",
+   "source": "collect/README.md § L0 · 人 ↔ 系统"
+  },
+  {
+   "dir": "write",
+   "label": "G 盘 Assets（raw / derived / handoff / _state）",
+   "via": "price-range-dashboard:schema/",
+   "source": "schema/README.md § 分区"
+  },
+  {
+   "dir": "out",
+   "label": "交接包 handoff/latest.json → Research OS 账本「价位与估值」",
+   "via": "price-range-dashboard:process/handoff.mjs",
+   "source": "process/README.md § 交接"
+  },
+  {
+   "dir": "never",
+   "label": "FactSet 数据进 git；报触及概率",
+   "source": "PRIVATE_DATA.md；process/README.md § 压力位与支撑位"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "price-range-dashboard",
+   "parent": null,
+   "layer": 0,
+   "kind": "system",
+   "title": "Price Range Dashboard · FactSet → 压力/支撑与估值区间 → Research OS",
+   "role": "用 FactSet 数据算压力/支撑与一年前瞻估值区间，打成带编号的交接包交给 Research OS",
+   "source": "README.md",
+   "head": "README.md",
+   "sections": [
+    {
+     "level": 2,
+     "title": "L0 · 人 ↔ 系统"
+    },
+    {
+     "level": 2,
+     "title": "L1 · 节点"
+    },
+    {
+     "level": 2,
+     "title": "概念 → 唯一出处"
+    }
+   ]
+  },
+  {
+   "id": "price-range-dashboard:collect/",
+   "parent": "price-range-dashboard",
+   "layer": 1,
+   "kind": "dir",
+   "title": "collect · 采集层",
+   "role": "你做两件事:保持 FactSet 已登录(第一次或掉线时在弹出的 Chrome 里登录一次),改清单(在控制台「标的」页增删)。",
+   "source": "collect/README.md",
+   "head": "collect/README.md",
+   "sections": [
+    {
+     "level": 2,
+     "title": "L0 · 人 ↔ 系统"
+    },
+    {
+     "level": 2,
+     "title": "L1 · 节点"
+    },
+    {
+     "level": 2,
+     "title": "数据集清单"
+    },
+    {
+     "level": 2,
+     "title": "七层覆盖(2026-11-24 登录后逐项实测)"
+    },
+    {
+     "level": 3,
+     "title": "新增与扩充(2026-11-24 登录后逐项实测)"
+    },
+    {
+     "level": 3,
+     "title": "不拉"
+    },
+    {
+     "level": 3,
+     "title": "运行与交给 Research OS"
+    },
+    {
+     "level": 2,
+     "title": "怎么跑"
+    },
+    {
+     "level": 2,
+     "title": "已知限制"
+    }
+   ],
+   "defines": [
+    "数据集的来源与取数方法（§ 数据集清单）",
+    "FactSet 覆盖到哪、哪些不拉（§ 七层覆盖）"
+   ]
+  },
+  {
+   "id": "price-range-dashboard:config/",
+   "parent": "price-range-dashboard",
+   "layer": 1,
+   "kind": "dir",
+   "title": "config/",
+   "role": "`config/`:`config/params.json`(全部数值);`config/universe.seed.csv`(标的初始值,现行清单在 G 盘)",
+   "source": "config/"
+  },
+  {
+   "id": "price-range-dashboard:console/",
+   "parent": "price-range-dashboard",
+   "layer": 1,
+   "kind": "dir",
+   "title": "console · 控制台",
+   "role": "你:双击仓库根的 console.bat(或 npm run console),浏览器打开 （链接）",
+   "source": "console/README.md",
+   "head": "console/README.md",
+   "sections": [
+    {
+     "level": 2,
+     "title": "L0 · 人 ↔ 系统"
+    },
+    {
+     "level": 2,
+     "title": "文件"
+    }
+   ],
+   "defines": [
+    "控制台页面与 API"
+   ]
+  },
+  {
+   "id": "price-range-dashboard:ops/",
+   "parent": "price-range-dashboard",
+   "layer": 1,
+   "kind": "dir",
+   "title": "ops · 运维",
+   "role": "你做:装一次计划任务;登录过期时(会弹系统通知)双击 login.bat。",
+   "source": "ops/README.md",
+   "head": "ops/README.md",
+   "sections": [
+    {
+     "level": 2,
+     "title": "L0 · 人 ↔ 系统"
+    },
+    {
+     "level": 2,
+     "title": "文件"
+    },
+    {
+     "level": 2,
+     "title": "装"
+    }
+   ],
+   "defines": [
+    "计划任务的安装与登录"
+   ]
+  },
+  {
+   "id": "price-range-dashboard:process/",
+   "parent": "price-range-dashboard",
+   "layer": 1,
+   "kind": "dir",
+   "title": "process · 计算",
+   "role": "raw/ ─▶ levels.mjs(压力/支撑)+ valuation.mjs(一年前瞻估值区间)─▶ derived/ ─▶ handoff.mjs ─▶ handoff/latest.json",
+   "source": "process/README.md",
+   "head": "process/README.md",
+   "sections": [
+    {
+     "level": 2,
+     "title": "L0"
+    },
+    {
+     "level": 2,
+     "title": "压力位与支撑位(levels.mjs)"
+    },
+    {
+     "level": 2,
+     "title": "估值区间(valuation.mjs)"
+    },
+    {
+     "level": 2,
+     "title": "交接(handoff.mjs)"
+    },
+    {
+     "level": 2,
+     "title": "测试"
+    }
+   ],
+   "defines": [
+    "压力位与支撑位的方法（§ 压力位与支撑位）",
+    "一年前瞻估值区间的方法（§ 估值区间）",
+    "交接变化怎么算（§ 交接）"
+   ]
+  },
+  {
+   "id": "price-range-dashboard:schema/",
+   "parent": "price-range-dashboard",
+   "layer": 1,
+   "kind": "dir",
+   "title": "schema · 数据存储类型(唯一出处)",
+   "role": "symbol,kind,name,group,scale,breadth",
+   "source": "schema/README.md",
+   "head": "schema/README.md",
+   "sections": [
+    {
+     "level": 2,
+     "title": "分区"
+    },
+    {
+     "level": 2,
+     "title": "universe.csv"
+    },
+    {
+     "level": 2,
+     "title": "raw"
+    },
+    {
+     "level": 2,
+     "title": "derived"
+    },
+    {
+     "level": 2,
+     "title": "handoff"
+    }
+   ],
+   "defines": [
+    "标的清单的列与写法（§ universe.csv）",
+    "G 盘分区、raw 文件格式（§ 分区、§ raw）",
+    "derived 字段（§ derived）",
+    "交接包格式与编号规则（§ handoff）"
+   ]
+  },
+  {
+   "id": "price-range-dashboard:tests/",
+   "parent": "price-range-dashboard",
+   "layer": 1,
+   "kind": "dir",
+   "title": "tests/",
+   "role": "`tests/`,`npm test`",
+   "source": "tests/"
+  },
+  {
+   "id": "price-range-dashboard:collect/datasets/",
+   "parent": "price-range-dashboard:collect/",
+   "layer": 2,
+   "kind": "dir",
+   "title": "collect/datasets/",
+   "role": "`datasets/`:`datasets/*.mjs`",
+   "source": "collect/datasets/"
+  },
+  {
+   "id": "price-range-dashboard:collect/lib/",
+   "parent": "price-range-dashboard:collect/",
+   "layer": 2,
+   "kind": "dir",
+   "title": "collect/lib/",
+   "role": "`lib/`(取数、计划、配置、存储共用):`lib/paths.mjs` · `lib/config.mjs` · `lib/clock.mjs`",
+   "source": "collect/lib/"
+  },
+  {
+   "id": "price-range-dashboard:collect/parsers/",
+   "parent": "price-range-dashboard:collect/",
+   "layer": 2,
+   "kind": "dir",
+   "title": "collect/parsers/",
+   "role": "`parsers/`:`parsers/*.mjs`",
+   "source": "collect/parsers/"
+  },
+  {
+   "id": "price-range-dashboard:console/public/",
+   "parent": "price-range-dashboard:console/",
+   "layer": 2,
+   "kind": "dir",
+   "title": "console/public/",
+   "role": "页面:`index.html`、`app.js`、`app.css`",
+   "source": "console/public/"
+  },
+  {
+   "id": "price-range-dashboard:CHANGELOG.md",
+   "parent": "price-range-dashboard",
+   "layer": 1,
+   "kind": "file",
+   "title": "CHANGELOG.md",
+   "role": "Changelog · Price Range Dashboard",
+   "source": "CHANGELOG.md",
+   "sections": [
+    {
+     "level": 2,
+     "title": "2026-11-24 · 重构(S1–S9)"
+    },
+    {
+     "level": 2,
+     "title": "v18.0 (2026-08-06) —— 压力位引擎按持有期重写;一个偷看未来的期权墙;以及一次什么都没搜到的调参"
+    },
+    {
+     "level": 3,
+     "title": "重写:持有期是第一维,不是事后能加的一个参数"
+    },
+    {
+     "level": 3,
+     "title": "事故:期权墙读的是几周之后才登记下来的未平仓量"
+    },
+    {
+     "level": 3,
+     "title": "台账:164 行盖作废戳,不删、不改、不结算"
+    },
+    {
+     "level": 3,
+     "title": "PX_EVIDENCE 原来是一张贴纸"
+    },
+    {
+     "level": 3,
+     "title": "两处降级,都是把面板改得更悲观"
+    },
+    {
+     "level": 3,
+     "title": "判据本身也修了两处"
+    },
+    {
+     "level": 3,
+     "title": "调参:搜了两轮六格,一格没过,三个参数原地不动"
+    },
+    {
+     "level": 3,
+     "title": "顺手修的一处排版,以及为什么它不算小事"
+    },
+    {
+     "level": 3,
+     "title": "本轮已知未修"
+    },
+    {
+     "level": 2,
+     "title": "v17.1 (2026-07-31) —— 财年认表里的标签,不认文件名;并加一条口径护栏"
+    },
+    {
+     "level": 3,
+     "title": "现象"
+    },
+    {
+     "level": 3,
+     "title": "根因:一句 if 里的一个假设"
+    },
+    {
+     "level": 3,
+     "title": "错到什么程度"
+    },
+    {
+     "level": 3,
+     "title": "改法一:认数据自己带的那行标签"
+    },
+    {
+     "level": 3,
+     "title": "改法二:第三财年及以后,只借价格序列"
+    },
+    {
+     "level": 3,
+     "title": "改法三:一条通用护栏,防下一次"
+    },
+    {
+     "level": 3,
+     "title": "顺带查清的两件事:都不是 bug"
+    },
+    {
+     "level": 3,
+     "title": "测试"
+    },
+    {
+     "level": 3,
+     "title": "那五个文件"
+    },
+    {
+     "level": 2,
+     "title": "v17.0 (2026-07-30) —— 仪表盘只画拉取清单里的公司;落榜的数据留满一年再挪走"
+    },
+    {
+     "level": 3,
+     "title": "1. 显示归显示:清单外的公司默认不画"
+    },
+    {
+     "level": 3,
+     "title": "2. 清理归清理:落榜满一年才动,而且是挪不是删"
+    },
+    {
+     "level": 3,
+     "title": "顺带"
+    },
+    {
+     "level": 2,
+     "title": "v16.9 (2026-07-30) —— 修 v16.8 的两处:回测在真机上根本没跑起来;FY2 失败时台账写着 OK"
+    },
+    {
+     "level": 3,
+     "title": "1. 每月回测在你的机器上一次都没跑成"
+    },
+    {
+     "level": 3,
+     "title": "2. TSM-US ✖FY2:失败了,但台账里那行写着 OK"
+    },
+    {
+     "level": 3,
+     "title": "顺带回答:QQQ-US 为什么在仪表盘上,却不在拉取清单里"
+    },
+    {
+     "level": 2,
+     "title": "v16.8 (2026-07-30) —— 期权链不再覆盖写;回测多一组、留台账、每月自己跑"
+    },
+    {
+     "level": 3,
+     "title": "1. Options.csv 改成按 asof 追加,保留一年"
+    },
+    {
+     "level": 3,
+     "title": "2. 回测补上 F 组:新闻情绪(并更正 v16.7 的一处错误)"
+    },
+    {
+     "level": 3,
+     "title": "3. --log 台账 + bt 命令 + 每月自动跑一轮"
+    },
+    {
+     "level": 2,
+     "title": "v16.7 (2026-07-30) —— 回测:这几条线过去到底准不准"
+    },
+    {
+     "level": 3,
+     "title": "测的是仪表盘真在跑的那份代码"
+    },
+    {
+     "level": 3,
+     "title": "第一版报了四个红,四个都是假的"
+    },
+    {
+     "level": 3,
+     "title": "三条真结论"
+    },
+    {
+     "level": 3,
+     "title": "期权轨一条都没测"
+    },
+    {
+     "level": 2,
+     "title": "v16.6 (2026-07-30) —— 期权链改走接口:不用手动导出,也不用刮屏"
+    },
+    {
+     "level": 3,
+     "title": "数据源不是那张表格,是表格背后的两个接口"
+    },
+    {
+     "level": 3,
+     "title": "这条路自己的坑:200 不等于拿到了"
+    },
+    {
+     "level": 3,
+     "title": "三层降级,顺序按\"读得全不全\"排"
+    },
+    {
+     "level": 3,
+     "title": "新文件 fetcher/lib/fql.mjs——只放纯函数"
+    },
+    {
+     "level": 3,
+     "title": "自检 +36 项(154 → 190)"
+    },
+    {
+     "level": 2,
+     "title": "v16.5 (2026-07-30) —— 修:空头持仓读的是隔壁那一格 + 期权链从来就没读全过"
+    },
+    {
+     "level": 3,
+     "title": "空头持仓:根因不在正则,在取数的范围"
+    },
+    {
+     "level": 3,
+     "title": "期权:改走导出。刮屏在这一页上结构性地读不全"
+    },
+    {
+     "level": 3,
+     "title": "仪表盘:导出到位以后,期权轨的三个参数全都站不住了"
+    },
+    {
+     "level": 2,
+     "title": "v16.4 (2026-07-29) —— 修:空头持仓那一步\"改版了\"却说不出改成什么样"
+    },
+    {
+     "level": 2,
+     "title": "v16.3 (2026-07-29) —— 修:bat 双击报错 + 清单与数据对不上"
+    },
+    {
+     "level": 2,
+     "title": "v16.2 (2026-07-29) —— 修:数据写去了没人看的地方 + Assets 分层"
+    },
+    {
+     "level": 2,
+     "title": "v16.1 (2026-07-29) —— 修:期权页找错了地方"
+    },
+    {
+     "level": 2,
+     "title": "v16 (2026-07-29) —— 仓库结构重构(功能不变)"
+    },
+    {
+     "level": 2,
+     "title": "v15 (2026-07-29)"
+    },
+    {
+     "level": 2,
+     "title": "v14 (2026-07-29)"
+    },
+    {
+     "level": 2,
+     "title": "v13 (2026-07-29)"
+    },
+    {
+     "level": 2,
+     "title": "v12 (2026-07-29)"
+    },
+    {
+     "level": 2,
+     "title": "v11.1 (2026-07-29)"
+    },
+    {
+     "level": 2,
+     "title": "v11 (2026-07-28)"
+    },
+    {
+     "level": 2,
+     "title": "v10 (2026-07-28)"
+    },
+    {
+     "level": 2,
+     "title": "v9 (2026-07-28)"
+    },
+    {
+     "level": 2,
+     "title": "v8 (2026-07-27)"
+    },
+    {
+     "level": 2,
+     "title": "v7 (2026-07-26)"
+    },
+    {
+     "level": 2,
+     "title": "v6 (2026-07-26)"
+    },
+    {
+     "level": 2,
+     "title": "v5 (2026-07-25)"
+    },
+    {
+     "level": 2,
+     "title": "v2–v4 (2026-07-24)"
+    },
+    {
+     "level": 2,
+     "title": "v1 (2026-07-24)"
+    }
+   ]
+  },
+  {
+   "id": "price-range-dashboard:LICENSE",
+   "parent": "price-range-dashboard",
+   "layer": 3,
+   "kind": "file",
+   "title": "LICENSE",
+   "role": "文件:run-collect.bat(手动跑一轮:拉取到期项 → 计算 → 交接)· console.bat · package.json · package-lock.json(依赖锁定) · CHANGELOG.md · LICENSE · PRIVATE_DATA.md(哪些数据不能进 git)· zoom.hints.json(星图的手写边)· zoom.json(星图清单)· .sza/history/(改前快照,_repo/ 不进 git)。",
+   "source": "LICENSE",
+   "generated": true
+  },
+  {
+   "id": "price-range-dashboard:PRIVATE_DATA.md",
+   "parent": "price-range-dashboard",
+   "layer": 1,
+   "kind": "file",
+   "title": "PRIVATE_DATA.md",
+   "role": "`PRIVATE_DATA.md`",
+   "source": "PRIVATE_DATA.md",
+   "sections": [
+    {
+     "level": 2,
+     "title": "Before making the repository public"
+    }
+   ],
+   "defines": [
+    "数据许可与不进 git 的内容"
+   ]
+  },
+  {
+   "id": "price-range-dashboard:collect/datasets/fql-series.mjs",
+   "parent": "price-range-dashboard:collect/datasets/",
+   "layer": 3,
+   "kind": "file",
+   "title": "fql-series.mjs",
+   "source": "collect/datasets/fql-series.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/datasets/index.mjs",
+   "parent": "price-range-dashboard:collect/datasets/",
+   "layer": 3,
+   "kind": "file",
+   "title": "index.mjs",
+   "source": "collect/datasets/index.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/datasets/news.mjs",
+   "parent": "price-range-dashboard:collect/datasets/",
+   "layer": 3,
+   "kind": "file",
+   "title": "news.mjs",
+   "source": "collect/datasets/news.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/datasets/options.mjs",
+   "parent": "price-range-dashboard:collect/datasets/",
+   "layer": 3,
+   "kind": "file",
+   "title": "options.mjs",
+   "source": "collect/datasets/options.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/datasets/report-csv.mjs",
+   "parent": "price-range-dashboard:collect/datasets/",
+   "layer": 3,
+   "kind": "file",
+   "title": "report-csv.mjs",
+   "source": "collect/datasets/report-csv.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/datasets/report-json.mjs",
+   "parent": "price-range-dashboard:collect/datasets/",
+   "layer": 3,
+   "kind": "file",
+   "title": "report-json.mjs",
+   "source": "collect/datasets/report-json.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/datasets/valuation.mjs",
+   "parent": "price-range-dashboard:collect/datasets/",
+   "layer": 3,
+   "kind": "file",
+   "title": "valuation.mjs",
+   "source": "collect/datasets/valuation.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/lib/api.mjs",
+   "parent": "price-range-dashboard:collect/lib/",
+   "layer": 3,
+   "kind": "file",
+   "title": "api.mjs",
+   "source": "collect/lib/api.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/lib/clock.mjs",
+   "parent": "price-range-dashboard:collect/lib/",
+   "layer": 3,
+   "kind": "file",
+   "title": "clock.mjs",
+   "source": "collect/lib/clock.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/lib/config.mjs",
+   "parent": "price-range-dashboard:collect/lib/",
+   "layer": 3,
+   "kind": "file",
+   "title": "config.mjs",
+   "source": "collect/lib/config.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/lib/paths.mjs",
+   "parent": "price-range-dashboard:collect/lib/",
+   "layer": 3,
+   "kind": "file",
+   "title": "paths.mjs",
+   "source": "collect/lib/paths.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/lib/plan.mjs",
+   "parent": "price-range-dashboard:collect/lib/",
+   "layer": 3,
+   "kind": "file",
+   "title": "plan.mjs",
+   "source": "collect/lib/plan.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/lib/session-policy.mjs",
+   "parent": "price-range-dashboard:collect/lib/",
+   "layer": 3,
+   "kind": "file",
+   "title": "session-policy.mjs",
+   "source": "collect/lib/session-policy.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/lib/session.mjs",
+   "parent": "price-range-dashboard:collect/lib/",
+   "layer": 3,
+   "kind": "file",
+   "title": "session.mjs",
+   "source": "collect/lib/session.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/lib/store.mjs",
+   "parent": "price-range-dashboard:collect/lib/",
+   "layer": 3,
+   "kind": "file",
+   "title": "store.mjs",
+   "source": "collect/lib/store.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/login.mjs",
+   "parent": "price-range-dashboard:collect/",
+   "layer": 3,
+   "kind": "file",
+   "title": "login.mjs",
+   "role": "`login.mjs` · `lib/session.mjs` · `lib/session-policy.mjs`",
+   "source": "collect/login.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/parsers/company-intel.mjs",
+   "parent": "price-range-dashboard:collect/parsers/",
+   "layer": 3,
+   "kind": "file",
+   "title": "company-intel.mjs",
+   "source": "collect/parsers/company-intel.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/parsers/earnings.mjs",
+   "parent": "price-range-dashboard:collect/parsers/",
+   "layer": 3,
+   "kind": "file",
+   "title": "earnings.mjs",
+   "source": "collect/parsers/earnings.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/parsers/estimates.mjs",
+   "parent": "price-range-dashboard:collect/parsers/",
+   "layer": 3,
+   "kind": "file",
+   "title": "estimates.mjs",
+   "source": "collect/parsers/estimates.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/parsers/fql.mjs",
+   "parent": "price-range-dashboard:collect/parsers/",
+   "layer": 3,
+   "kind": "file",
+   "title": "fql.mjs",
+   "source": "collect/parsers/fql.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/parsers/opt-store.mjs",
+   "parent": "price-range-dashboard:collect/parsers/",
+   "layer": 3,
+   "kind": "file",
+   "title": "opt-store.mjs",
+   "source": "collect/parsers/opt-store.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/parsers/report-api.mjs",
+   "parent": "price-range-dashboard:collect/parsers/",
+   "layer": 3,
+   "kind": "file",
+   "title": "report-api.mjs",
+   "source": "collect/parsers/report-api.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/parsers/valuation-history.mjs",
+   "parent": "price-range-dashboard:collect/parsers/",
+   "layer": 3,
+   "kind": "file",
+   "title": "valuation-history.mjs",
+   "source": "collect/parsers/valuation-history.mjs"
+  },
+  {
+   "id": "price-range-dashboard:collect/run.mjs",
+   "parent": "price-range-dashboard:collect/",
+   "layer": 3,
+   "kind": "file",
+   "title": "run.mjs",
+   "role": "`run.mjs`",
+   "source": "collect/run.mjs"
+  },
+  {
+   "id": "price-range-dashboard:config/assets-path.txt",
+   "parent": "price-range-dashboard:config/",
+   "layer": 3,
+   "kind": "file",
+   "title": "assets-path.txt",
+   "source": "config/assets-path.txt"
+  },
+  {
+   "id": "price-range-dashboard:config/params.json",
+   "parent": "price-range-dashboard:config/",
+   "layer": 3,
+   "kind": "file",
+   "title": "params.json",
+   "role": "参数 / 数据",
+   "source": "config/params.json",
+   "sections": [
+    {
+     "level": 2,
+     "title": "_doc"
+    },
+    {
+     "level": 2,
+     "title": "cadence_hours"
+    },
+    {
+     "level": 2,
+     "title": "datasets"
+    },
+    {
+     "level": 2,
+     "title": "scope"
+    },
+    {
+     "level": 2,
+     "title": "run"
+    },
+    {
+     "level": 2,
+     "title": "levels"
+    },
+    {
+     "level": 2,
+     "title": "valuation"
+    },
+    {
+     "level": 2,
+     "title": "handoff"
+    }
+   ],
+   "defines": [
+    "全部数值(节奏、窗口、分位、阈值、运行时刻)",
+    "每类标的拉哪些数据集（§ scope）"
+   ]
+  },
+  {
+   "id": "price-range-dashboard:config/universe.seed.csv",
+   "parent": "price-range-dashboard:config/",
+   "layer": 3,
+   "kind": "file",
+   "title": "universe.seed.csv",
+   "source": "config/universe.seed.csv"
+  },
+  {
+   "id": "price-range-dashboard:console.bat",
+   "parent": "price-range-dashboard",
+   "layer": 3,
+   "kind": "file",
+   "title": "console.bat",
+   "role": "[console/](console/README.md):双击 `console.bat`",
+   "source": "console.bat"
+  },
+  {
+   "id": "price-range-dashboard:console/public/app.css",
+   "parent": "price-range-dashboard:console/public/",
+   "layer": 3,
+   "kind": "file",
+   "title": "app.css",
+   "source": "console/public/app.css"
+  },
+  {
+   "id": "price-range-dashboard:console/public/app.js",
+   "parent": "price-range-dashboard:console/public/",
+   "layer": 3,
+   "kind": "file",
+   "title": "app.js",
+   "source": "console/public/app.js"
+  },
+  {
+   "id": "price-range-dashboard:console/public/index.html",
+   "parent": "price-range-dashboard:console/public/",
+   "layer": 3,
+   "kind": "file",
+   "title": "index.html",
+   "role": "Price Range · 控制台",
+   "source": "console/public/index.html"
+  },
+  {
+   "id": "price-range-dashboard:console/server.mjs",
+   "parent": "price-range-dashboard:console/",
+   "layer": 3,
+   "kind": "file",
+   "title": "server.mjs",
+   "role": "本机 HTTP 服务与 API(`/api/overview` `universe` `status` `symbol` `handoff` `run`)",
+   "source": "console/server.mjs"
+  },
+  {
+   "id": "price-range-dashboard:console/universe.mjs",
+   "parent": "price-range-dashboard:console/",
+   "layer": 3,
+   "kind": "file",
+   "title": "universe.mjs",
+   "role": "标的清单校验(纯函数)",
+   "source": "console/universe.mjs"
+  },
+  {
+   "id": "price-range-dashboard:ops/install-schedule.ps1",
+   "parent": "price-range-dashboard:ops/",
+   "layer": 3,
+   "kind": "file",
+   "title": "install-schedule.ps1",
+   "role": "注册两个 Windows 计划任务(唤醒运行、错过补跑、最长 2 小时、只在你登录时运行)",
+   "source": "ops/install-schedule.ps1"
+  },
+  {
+   "id": "price-range-dashboard:ops/login.bat",
+   "parent": "price-range-dashboard:ops/",
+   "layer": 3,
+   "kind": "file",
+   "title": "login.bat",
+   "role": "开窗口登录 FactSet 一次,保存登录态",
+   "source": "ops/login.bat"
+  },
+  {
+   "id": "price-range-dashboard:ops/run-scheduled.ps1",
+   "parent": "price-range-dashboard:ops/",
+   "layer": 3,
+   "kind": "file",
+   "title": "run-scheduled.ps1",
+   "role": "计划任务调用的入口:`FS_HEADLESS=1` 跑 collect 再跑 process(拉取个别失败也照样计算),输出写 `ops/logs/`(留 30 天),失败时弹通知",
+   "source": "ops/run-scheduled.ps1"
+  },
+  {
+   "id": "price-range-dashboard:ops/uninstall-schedule.ps1",
+   "parent": "price-range-dashboard:ops/",
+   "layer": 3,
+   "kind": "file",
+   "title": "uninstall-schedule.ps1",
+   "role": "撤掉这两个任务",
+   "source": "ops/uninstall-schedule.ps1"
+  },
+  {
+   "id": "price-range-dashboard:package-lock.json",
+   "parent": "price-range-dashboard",
+   "layer": 3,
+   "kind": "file",
+   "title": "package-lock.json",
+   "role": "参数 / 数据",
+   "source": "package-lock.json",
+   "sections": [
+    {
+     "level": 2,
+     "title": "name"
+    },
+    {
+     "level": 2,
+     "title": "version"
+    },
+    {
+     "level": 2,
+     "title": "lockfileVersion"
+    },
+    {
+     "level": 2,
+     "title": "requires"
+    },
+    {
+     "level": 2,
+     "title": "packages"
+    }
+   ]
+  },
+  {
+   "id": "price-range-dashboard:package.json",
+   "parent": "price-range-dashboard",
+   "layer": 3,
+   "kind": "file",
+   "title": "package.json",
+   "role": "FactSet 采集 → 压力/支撑与估值区间 → 交给 Research OS 账本",
+   "source": "package.json",
+   "sections": [
+    {
+     "level": 2,
+     "title": "name"
+    },
+    {
+     "level": 2,
+     "title": "version"
+    },
+    {
+     "level": 2,
+     "title": "private"
+    },
+    {
+     "level": 2,
+     "title": "type"
+    },
+    {
+     "level": 2,
+     "title": "description"
+    },
+    {
+     "level": 2,
+     "title": "scripts"
+    },
+    {
+     "level": 2,
+     "title": "devDependencies"
+    }
+   ]
+  },
+  {
+   "id": "price-range-dashboard:process/handoff.mjs",
+   "parent": "price-range-dashboard:process/",
+   "layer": 3,
+   "kind": "file",
+   "title": "handoff.mjs",
+   "source": "process/handoff.mjs"
+  },
+  {
+   "id": "price-range-dashboard:process/levels.mjs",
+   "parent": "price-range-dashboard:process/",
+   "layer": 3,
+   "kind": "file",
+   "title": "levels.mjs",
+   "source": "process/levels.mjs"
+  },
+  {
+   "id": "price-range-dashboard:process/run.mjs",
+   "parent": "price-range-dashboard:process/",
+   "layer": 3,
+   "kind": "file",
+   "title": "run.mjs",
+   "source": "process/run.mjs"
+  },
+  {
+   "id": "price-range-dashboard:process/valuation.mjs",
+   "parent": "price-range-dashboard:process/",
+   "layer": 3,
+   "kind": "file",
+   "title": "valuation.mjs",
+   "source": "process/valuation.mjs"
+  },
+  {
+   "id": "price-range-dashboard:run-collect.bat",
+   "parent": "price-range-dashboard",
+   "layer": 3,
+   "kind": "file",
+   "title": "run-collect.bat",
+   "role": "[ops/](ops/README.md):Windows 计划任务、登录",
+   "source": "run-collect.bat"
+  },
+  {
+   "id": "price-range-dashboard:tests/test-collect.mjs",
+   "parent": "price-range-dashboard:tests/",
+   "layer": 3,
+   "kind": "file",
+   "title": "test-collect.mjs",
+   "source": "tests/test-collect.mjs"
+  },
+  {
+   "id": "price-range-dashboard:tests/test-parsers.mjs",
+   "parent": "price-range-dashboard:tests/",
+   "layer": 3,
+   "kind": "file",
+   "title": "test-parsers.mjs",
+   "source": "tests/test-parsers.mjs"
+  },
+  {
+   "id": "price-range-dashboard:tests/test-process.mjs",
+   "parent": "price-range-dashboard:tests/",
+   "layer": 3,
+   "kind": "file",
+   "title": "test-process.mjs",
+   "source": "tests/test-process.mjs"
+  },
+  {
+   "id": "price-range-dashboard:zoom.hints.json",
+   "parent": "price-range-dashboard",
+   "layer": 3,
+   "kind": "file",
+   "title": "zoom.hints.json",
+   "role": "参数 / 数据",
+   "source": "zoom.hints.json",
+   "sections": [
+    {
+     "level": 2,
+     "title": "system"
+    },
+    {
+     "level": 2,
+     "title": "interface"
+    },
+    {
+     "level": 2,
+     "title": "layers"
+    },
+    {
+     "level": 2,
+     "title": "edges"
+    }
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "from": "price-range-dashboard:CHANGELOG.md",
+   "to": "price-range-dashboard:collect/",
+   "kind": "mention",
+   "source": "CHANGELOG.md:8"
+  },
+  {
+   "from": "price-range-dashboard:CHANGELOG.md",
+   "to": "price-range-dashboard:schema/",
+   "kind": "mention",
+   "source": "CHANGELOG.md:9"
+  },
+  {
+   "from": "price-range-dashboard:CHANGELOG.md",
+   "to": "price-range-dashboard:tests/",
+   "kind": "mention",
+   "source": "CHANGELOG.md:814"
+  },
+  {
+   "from": "price-range-dashboard:CHANGELOG.md",
+   "to": "price-range-dashboard:package.json",
+   "kind": "mention",
+   "source": "CHANGELOG.md:815"
+  },
+  {
+   "from": "price-range-dashboard",
+   "to": "price-range-dashboard:PRIVATE_DATA.md",
+   "kind": "ref",
+   "source": "README.md:3"
+  },
+  {
+   "from": "price-range-dashboard",
+   "to": "price-range-dashboard:config/params.json",
+   "kind": "ref",
+   "source": "README.md:21",
+   "sections": [
+    "§ datasets"
+   ]
+  },
+  {
+   "from": "price-range-dashboard",
+   "to": "price-range-dashboard:CHANGELOG.md",
+   "kind": "ref",
+   "source": "README.md:53"
+  },
+  {
+   "from": "price-range-dashboard:collect/",
+   "to": "price-range-dashboard:config/params.json",
+   "kind": "mention",
+   "source": "collect/README.md:3"
+  },
+  {
+   "from": "price-range-dashboard:collect/",
+   "to": "price-range-dashboard:schema/",
+   "kind": "mention",
+   "source": "collect/README.md:3"
+  },
+  {
+   "from": "price-range-dashboard:collect/",
+   "to": "price-range-dashboard:process/",
+   "kind": "mention",
+   "source": "collect/README.md:8"
+  },
+  {
+   "from": "price-range-dashboard:collect/",
+   "to": "price-range-dashboard:config/assets-path.txt",
+   "kind": "ref",
+   "source": "collect/README.md:14"
+  },
+  {
+   "from": "price-range-dashboard:collect/",
+   "to": "price-range-dashboard:config/params.json",
+   "kind": "ref",
+   "source": "collect/README.md:29",
+   "sections": [
+    "§",
+    "§ run"
+   ],
+   "n": 3
+  },
+  {
+   "from": "price-range-dashboard:collect/",
+   "to": "price-range-dashboard:ops/",
+   "kind": "ref",
+   "source": "collect/README.md:65"
+  },
+  {
+   "from": "price-range-dashboard:collect/",
+   "to": "price-range-dashboard:process/",
+   "kind": "ref",
+   "source": "collect/README.md:65",
+   "sections": [
+    "§ 交接"
+   ]
+  },
+  {
+   "from": "price-range-dashboard:console/",
+   "to": "price-range-dashboard:schema/",
+   "kind": "ref",
+   "source": "console/README.md:3"
+  },
+  {
+   "from": "price-range-dashboard:console/",
+   "to": "price-range-dashboard:console.bat",
+   "kind": "mention",
+   "source": "console/README.md:6"
+  },
+  {
+   "from": "price-range-dashboard:console/",
+   "to": "price-range-dashboard:collect/run.mjs",
+   "kind": "mention",
+   "source": "console/README.md:11"
+  },
+  {
+   "from": "price-range-dashboard:ops/",
+   "to": "price-range-dashboard:config/params.json",
+   "kind": "mention",
+   "source": "ops/README.md:3"
+  },
+  {
+   "from": "price-range-dashboard:ops/",
+   "to": "price-range-dashboard:console.bat",
+   "kind": "mention",
+   "source": "ops/README.md:25"
+  },
+  {
+   "from": "price-range-dashboard:process/",
+   "to": "price-range-dashboard:schema/",
+   "kind": "ref",
+   "source": "process/README.md:3",
+   "n": 2,
+   "sections": [
+    "§ handoff"
+   ]
+  },
+  {
+   "from": "price-range-dashboard:schema/",
+   "to": "price-range-dashboard:config/assets-path.txt",
+   "kind": "mention",
+   "source": "schema/README.md:4"
+  },
+  {
+   "from": "price-range-dashboard:schema/",
+   "to": "price-range-dashboard:collect/lib/paths.mjs",
+   "kind": "mention",
+   "source": "schema/README.md:4"
+  },
+  {
+   "from": "price-range-dashboard:schema/",
+   "to": "price-range-dashboard:config/",
+   "kind": "mention",
+   "source": "schema/README.md:9"
+  },
+  {
+   "from": "price-range-dashboard:schema/",
+   "to": "price-range-dashboard:config/universe.seed.csv",
+   "kind": "mention",
+   "source": "schema/README.md:9"
+  },
+  {
+   "from": "price-range-dashboard:schema/",
+   "to": "price-range-dashboard:process/",
+   "kind": "ref",
+   "source": "schema/README.md:41"
+  },
+  {
+   "from": "price-range-dashboard:collect/run.mjs",
+   "to": "price-range-dashboard:config/params.json",
+   "kind": "reads",
+   "source": "collect/README.md 开头"
+  },
+  {
+   "from": "price-range-dashboard:process/run.mjs",
+   "to": "price-range-dashboard:config/params.json",
+   "kind": "reads",
+   "source": "process/README.md 开头"
+  },
+  {
+   "from": "price-range-dashboard:process/run.mjs",
+   "to": "price-range-dashboard:process/levels.mjs",
+   "kind": "reads",
+   "source": "process/README.md § L0"
+  },
+  {
+   "from": "price-range-dashboard:process/run.mjs",
+   "to": "price-range-dashboard:process/valuation.mjs",
+   "kind": "reads",
+   "source": "process/README.md § L0"
+  },
+  {
+   "from": "price-range-dashboard:process/run.mjs",
+   "to": "price-range-dashboard:process/handoff.mjs",
+   "kind": "reads",
+   "source": "process/README.md § L0"
+  },
+  {
+   "from": "price-range-dashboard:console/server.mjs",
+   "to": "price-range-dashboard:collect/run.mjs",
+   "kind": "dispatch",
+   "source": "console/README.md § L0 · 人 ↔ 系统"
+  },
+  {
+   "from": "price-range-dashboard:ops/run-scheduled.ps1",
+   "to": "price-range-dashboard:collect/run.mjs",
+   "kind": "runs",
+   "source": "ops/README.md § 文件"
+  },
+  {
+   "from": "price-range-dashboard:ops/run-scheduled.ps1",
+   "to": "price-range-dashboard:process/run.mjs",
+   "kind": "runs",
+   "source": "ops/README.md § 文件"
+  },
+  {
+   "from": "price-range-dashboard:ops/install-schedule.ps1",
+   "to": "price-range-dashboard:config/params.json",
+   "kind": "reads",
+   "source": "ops/README.md 开头"
+  },
+  {
+   "from": "price-range-dashboard:run-collect.bat",
+   "to": "price-range-dashboard:collect/run.mjs",
+   "kind": "dispatch",
+   "source": "README.md § L1 · 节点"
+  },
+  {
+   "from": "price-range-dashboard:run-collect.bat",
+   "to": "price-range-dashboard:process/run.mjs",
+   "kind": "dispatch",
+   "source": "README.md § L1 · 节点"
+  },
+  {
+   "from": "price-range-dashboard",
+   "to": "semantic-zoom-architecture",
+   "kind": "follows",
+   "source": "README.md 开头"
+  },
+  {
+   "from": "price-range-dashboard:process/handoff.mjs",
+   "to": "price-range-dashboard:schema/",
+   "kind": "follows",
+   "source": "process/README.md § 交接"
+  }
+ ],
+ "checks": {
+  "broken": [],
+  "unresolved": [],
+  "duplicates": [],
+  "structure": [],
+  "info": [
+   {
+    "node": "price-range-dashboard:collect/datasets/",
+    "at": "collect/datasets/",
+    "why": "没有头脑文件，按默认处理：下面的文件就是它的节点"
+   },
+   {
+    "node": "price-range-dashboard:collect/lib/",
+    "at": "collect/lib/",
+    "why": "没有头脑文件，按默认处理：下面的文件就是它的节点"
+   },
+   {
+    "node": "price-range-dashboard:collect/parsers/",
+    "at": "collect/parsers/",
+    "why": "没有头脑文件，按默认处理：下面的文件就是它的节点"
+   },
+   {
+    "node": "price-range-dashboard:config/",
+    "at": "config/",
+    "why": "没有头脑文件，按默认处理：下面的文件就是它的节点"
+   },
+   {
+    "node": "price-range-dashboard:console/public/",
+    "at": "console/public/",
+    "why": "没有头脑文件，按默认处理：下面的文件就是它的节点"
+   },
+   {
+    "node": "price-range-dashboard:tests/",
+    "at": "tests/",
+    "why": "没有头脑文件，按默认处理：下面的文件就是它的节点"
+   }
+  ]
+ }
+}

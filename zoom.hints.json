@@ -1,0 +1,28 @@
+{
+ "system": {"id": "price-range-dashboard", "role": "用 FactSet 数据算压力/支撑与一年前瞻估值区间，打成带编号的交接包交给 Research OS"},
+ "interface": [
+  {"dir": "in", "label": "在控制台增删标的、手动重跑", "via": "console/", "source": "README.md § L0 · 人 ↔ 系统"},
+  {"dir": "in", "label": "双击 run-collect.bat 手动跑一轮", "via": "run-collect.bat", "source": "README.md § L1 · 节点"},
+  {"dir": "decide", "label": "标的清单；登录 FactSet；交易决定", "via": "console/", "source": "README.md § L0 · 人 ↔ 系统"},
+  {"dir": "read", "label": "FactSet 同源接口（用户已登录的浏览器）", "via": "collect/", "source": "collect/README.md § L0 · 人 ↔ 系统"},
+  {"dir": "write", "label": "G 盘 Assets（raw / derived / handoff / _state）", "via": "schema/", "source": "schema/README.md § 分区"},
+  {"dir": "out", "label": "交接包 handoff/latest.json → Research OS 账本「价位与估值」", "via": "process/handoff.mjs", "source": "process/README.md § 交接"},
+  {"dir": "never", "label": "FactSet 数据进 git；报触及概率", "source": "PRIVATE_DATA.md；process/README.md § 压力位与支撑位"}
+ ],
+ "layers": {},
+ "edges": [
+  {"from": "collect/run.mjs", "to": "config/params.json", "kind": "reads", "source": "collect/README.md 开头"},
+  {"from": "process/run.mjs", "to": "config/params.json", "kind": "reads", "source": "process/README.md 开头"},
+  {"from": "process/run.mjs", "to": "process/levels.mjs", "kind": "reads", "source": "process/README.md § L0"},
+  {"from": "process/run.mjs", "to": "process/valuation.mjs", "kind": "reads", "source": "process/README.md § L0"},
+  {"from": "process/run.mjs", "to": "process/handoff.mjs", "kind": "reads", "source": "process/README.md § L0"},
+  {"from": "console/server.mjs", "to": "collect/run.mjs", "kind": "dispatch", "source": "console/README.md § L0 · 人 ↔ 系统"},
+  {"from": "ops/run-scheduled.ps1", "to": "collect/run.mjs", "kind": "runs", "source": "ops/README.md § 文件"},
+  {"from": "ops/run-scheduled.ps1", "to": "process/run.mjs", "kind": "runs", "source": "ops/README.md § 文件"},
+  {"from": "ops/install-schedule.ps1", "to": "config/params.json", "kind": "reads", "source": "ops/README.md 开头"},
+  {"from": "run-collect.bat", "to": "collect/run.mjs", "kind": "dispatch", "source": "README.md § L1 · 节点"},
+  {"from": "run-collect.bat", "to": "process/run.mjs", "kind": "dispatch", "source": "README.md § L1 · 节点"},
+  {"from": "price-range-dashboard", "to": "semantic-zoom-architecture", "kind": "follows", "source": "README.md 开头"},
+  {"from": "process/handoff.mjs", "to": "schema/README.md", "kind": "follows", "source": "process/README.md § 交接"}
+ ]
+}

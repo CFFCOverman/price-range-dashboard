@@ -66,3 +66,9 @@
 {"ts":"20261125T040221Z","file":"collect/run.mjs","why":"S2 标的清单挪 G 盘 + S4 一致预期补 FY2-FY4 区间"}
 {"ts":"20261125T040221Z","file":"config/universe.csv","why":"S2 标的清单挪 G 盘 + S4 一致预期补 FY2-FY4 区间"}
 {"ts":"20261125T040221Z","file":"tests/test-collect.mjs","why":"S2 标的清单挪 G 盘 + S4 一致预期补 FY2-FY4 区间"}
+{"ts": "20261125T045209Z", "file": "README.md", "why": "S9 语义缩放收尾:出处表、去重复定义、星图"}
+{"ts": "20261125T045209Z", "file": "collect/README.md", "why": "S9 语义缩放收尾:出处表、去重复定义、星图"}
+{"ts": "20261125T045209Z", "file": "ops/README.md", "why": "S9 语义缩放收尾:出处表、去重复定义、星图"}
+{"ts": "20261125T045209Z", "file": "ops/install-schedule.ps1", "why": "S9 语义缩放收尾:出处表、去重复定义、星图"}
+{"ts": "20261125T045209Z", "file": "process/README.md", "why": "S9 语义缩放收尾:出处表、去重复定义、星图"}
+{"ts": "20261125T045209Z", "file": "CHANGELOG.md", "why": "S9 语义缩放收尾:出处表、去重复定义、星图"}

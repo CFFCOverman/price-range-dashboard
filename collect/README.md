@@ -1,9 +1,9 @@
 # collect · 采集层
 
-> 生成/维护:Claude(2026-11-19 重写)。本文件是 `collect/` 的唯一大脑文件;数值一律在 [config/params.json](../config/params.json),标的一律在 [config/universe.csv](../config/universe.csv),这里只引用。
+> 生成/维护:Claude(2026-11-19 重写)。本文件是 `collect/` 的唯一大脑文件;数值一律在 [config/params.json](../config/params.json),标的清单的位置与写法见 [schema/README.md § universe.csv](../schema/README.md),这里只引用。
 
 ## L0 · 人 ↔ 系统
-你做两件事:**保持 FactSet 已登录**(第一次或掉线时在弹出的 Chrome 里登录一次),**改清单**(`config/universe.csv` 加删一行)。
+你做两件事:**保持 FactSet 已登录**(第一次或掉线时在弹出的 Chrome 里登录一次),**改清单**(在控制台「标的」页增删)。
 系统做一件事:按节奏把到期的数据拉下来,原样存进 `<Assets>/raw/`,并在 `<Assets>/_state/` 记下每项最后一次成功/失败。
 下游(`process/` → 交接数据包 → Research Ledger)只读 `raw/`,不碰 FactSet。
 
@@ -20,10 +20,10 @@ FactSet(已登录页面,同源接口) ──collect──▶ Assets/raw/<数据�
 | 登录 | `login.mjs` · `lib/session.mjs` · `lib/session-policy.mjs` | 专用 Chrome profile;后台跑,登录失效时开窗口(策略为纯函数) |
 | 取数 | `lib/api.mjs` | 页面同源 GET / POST / FQL;数据集只通过这里碰网络 |
 | 计划 | `lib/plan.mjs` | 哪些 (数据集 × 代码 / 组) 到期:纯函数 |
-| 配置 | `lib/paths.mjs` · `lib/config.mjs` · `lib/clock.mjs` | 数据目录与站点常量;读 params / universe;纽约交易日 |
+| 配置 | `lib/`(取数、计划、配置、存储共用):`lib/paths.mjs` · `lib/config.mjs` · `lib/clock.mjs` | 数据目录与站点常量;读 params / universe;纽约交易日 |
 | 存储 | `lib/store.mjs` | CSV 读写、按 key 合并、原子写、状态文件 |
-| 解析 | `parsers/*.mjs` | 纯函数:FQL 与期权链、快照合并、报表接口、业绩、公司情报、预期历史、估值史 |
-| 数据集 | `datasets/*.mjs` | 每个数据集一个 `run()`;注册表 `datasets/index.mjs` |
+| 解析 | `parsers/`:`parsers/*.mjs` | 纯函数:FQL 与期权链、快照合并、报表接口、业绩、公司情报、预期历史、估值史 |
+| 数据集 | `datasets/`:`datasets/*.mjs` | 每个数据集一个 `run()`;注册表 `datasets/index.mjs` |
 
 ## 数据集清单
 节奏(daily/weekly/monthly 各多少小时)和每个数据集用哪个节奏:见 `config/params.json` § `cadence_hours` / `datasets`。哪类标的拉哪些:见 § `scope`。
@@ -40,14 +40,13 @@ FactSet(已登录页面,同源接口) ──collect──▶ Assets/raw/<数据�
 | guidance / surprise | 解析见 `parsers/earnings.mjs` | 替换 | `guidance/<T>.csv`、`surprise/<T>.csv` |
 | credit / cds / holders / supplychain / segments / georev | 解析见 `parsers/company-intel.mjs` § INTEL_REPORTS | 替换 | `<数据集>/<T>.csv` |
 | options | 期权链接口(OI、全天成交量、收盘价、Delta、Gamma、买卖价);取数核心 `datasets/options.mjs` § optionChain | 一天一个文件,保留 `keep_days` 天 | `options/<T>/<日期>.csv` |
-| options-oi | 次日 06:30 补读上一快照日的**收盘 OI**,写进同一文件的 `call_oi_eod/put_oi_eod`(OI 次日盘前才公布;成交量不动) | 只在 `--only=options-oi` 时跑(`manual`) | 同上 |
+| options-oi | 次日盘前补读上一快照日的**收盘 OI**,写进同一文件的 `call_oi_eod/put_oi_eod`(OI 次日盘前才公布;成交量不动) | 只在 `--only=options-oi` 时跑(`manual`) | 同上 |
 
 不拉的:transcripts 列表(无稳定接口)、Snapshot/Price Summary 导入、页面导出的 Charting xlsx(被 FQL 日线取代)。
-盘中期权方向托盘已停用(2026-11-24);期权只在每晚拉一次、次日 06:30 补收盘 OI。
+盘中期权方向托盘已停用(2026-11-24);期权只在每晚拉一次、次日盘前补收盘 OI(时刻见 `config/params.json § run`)。
 
-## 计划 v2(2026-11-24,按 Research OS 七层补齐;实施后并入上面的数据集清单)
-依据:Research OS 七层清单(OS 技能 `modules/selection.md` 2.1)逐项对照 FactSet。原则:只补**公开来源拿不稳、FactSet 有同源连续数据**的项;宏观数据、CFTC、主经纪商/资金流研报留给 OS 的公开来源。
-状态:✅ 已在拉 · 🔍 待实测(需登录后在浏览器里试接口) · — 不拉
+## 七层覆盖(2026-11-24 登录后逐项实测)
+依据 Research OS 七层清单(OS 技能 `modules/selection.md` 2.1)逐项对照 FactSet。原则:只补公开来源拿不稳、FactSet 有同源连续数据的项。
 
 ### 新增与扩充(2026-11-24 登录后逐项实测)
 | 项 | OS 层 | 结果 | 落地 |
@@ -62,21 +61,8 @@ FactSet(已登录页面,同源接口) ──collect──▶ Assets/raw/<数据�
 ### 不拉
 财报日期、Form 4 逐笔、日经/台股/Brent/MOVE/OAS(见上表),以及 L1 宏观数据(BLS/BEA/FRED 公开够用)、CTA/主经纪商/CFTC/资金流研报(FactSet 没有)、电话会全文(无稳定接口)、SEC 正文(公开)。
 
-### 运行时刻(美东)
-- 17:45 主拉取(收盘后,赶在 OS EVENING 20:53 之前);周六补 weekly、每月 1 日补 monthly。
-- 06:30 期权链补一轮:OI 次日盘前才更新,这一轮的 OI 才是上一交易日的(赶在 OS MORNING 07:52 之前)。
-- 由 Windows 计划任务触发,勾选「唤醒计算机运行此任务」;登录过期时弹通知。
-
-### 交给 Research OS(由 process 层产出,collect 只负责 raw)
-- 文件:`<Assets>/reports/daily-<日期>.json` 与 `.md`,17:45 拉完后生成;06:30 那轮追加期权段。OS 经 Google Drive 连接器读。
-- 只写**变化**(阈值放 `config/params.json`,process 层定义),按 OS 七层分段:
-  - L3:FY1/FY2 修订(30 天 %、上调/下调家数)、目标价与评级变动(逐家)、新指引/超预期、估值在 3 年区间的分位、Street Takeaways 标题
-  - L2:修订广度、供应链/分部变动、AI 融资链 CDS 异动
-  - L4:空头天数与占比变化、13F 增减、期权 OI 集中位/ΔOI/put-call、隐含 vs 实现波动、行业 ETF 5 日相对 SPY
-  - L5:曲线、美元、油金、亚洲指数、信用利差的日变动
-  - L6:未来 10 个交易日财报日期
-- 每条带【FactSet】来源标签、数据口径日期与单位,符合 OS 宪法 12 的数据纪律。
-- 前提:OS 宪法第 2 条「只用公开来源」需用户在 OS 那边改(大版本 +1);未改之前,摘要照常生成,OS 不读。
+### 运行与交给 Research OS
+运行时刻见 `config/params.json § run`(安装见 `ops/README.md`);交给 OS 的数据包由 process 层生成,见 `process/README.md § 交接` 与 `schema/README.md § handoff`;OS 一侧读法见 OS 技能 `modules/factset.md`。
 
 ## 怎么跑
 ```

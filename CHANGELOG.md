@@ -1,10 +1,18 @@
-## 2026-11-24 · 重写
-- 删除旧 fetcher、旧仪表盘(src/、构建产物)、tools、旧测试与文档;新采集层 collect/ 为第一部分
-- 目标管线:采集 → 压力/支撑 + 估值区间 → 交接数据包 → Research OS 账本
-
 # Changelog · Price Range Dashboard
 
 Author: Xuhao Chao · License: MIT
+
+
+## 2026-11-24 · 重构(S1–S9)
+- **重写**:删除旧 fetcher、旧仪表盘(src/、构建产物)、tools、旧测试与文档(快照在 `.sza/history/_repo/`)。管线:采集 → 压力/支撑 + 估值区间 → 交接数据包 → Research OS 账本。
+- **S1 采集**:`collect/` 按 Research OS 七层补齐数据集;期权一天一个文件,次日盘前补收盘 OI。
+- **S2–S5**:G 盘数据存储类型(`schema/`)、标的清单挪到 G 盘;压力/支撑(期权墙、gamma 翻转、均线、高低点、卖方目标、共振区);一年前瞻估值区间(两个锚 + 交叉核对);带编号的交接数据包。
+- **S6 控制台**:本机网页,看价位与估值、增删标的、运行、交接。
+- **S7 运维**:Windows 计划任务脚本(你选择暂不安装)。
+- **S8 Research OS 接入**:OS 7.0.0 宪法第 2 条改为接受用户自己的 FactSet 交接包;早晚两轮按编号读入账本 `factset` 集合,页面新增「价位与估值(FactSet · L7)」;OS 7.1.0 同时降频到每周 22 轮。
+- **S9 语义缩放收尾**:根 README 加「概念 → 唯一出处」表;去掉 README 里重复写的数值(运行时刻改由 `install-schedule.ps1` 从 `params.json § run` 读;估值窗口与分位改写参数名);collect README 删去过时的「计划 v2 / 交给 OS」段;星图清单 `zoom.json`。
+
+以下为重构前的历史版本。
 
 ## v18.0 (2026-08-06) —— 压力位引擎按持有期重写;一个偷看未来的期权墙;以及一次什么都没搜到的调参
 
@@ -167,7 +175,7 @@ c 就变成了拟合参数**,那个划分立刻不再是样本外。所以外层
 `PX_SIGMA_WIN = 20` 在这个仓库里跑不出来、`ingestOptions` 让 ΔOI 架构上不可得、
 `[8]` 的三条断言挂在 2026 年 9 月之后就会过期的到期日上、3.9 的兜底词表里没有 `inconclusive`
 这一档(而 bounce 恰好落在那里)、TSM 页头 402.9 与期权步 374.67 对不上 ——
-五条都记在 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 的「已知缺陷」一节里,附着为什么本轮不动它们。
+五条都记在旧文档 docs/ARCHITECTURE.md(重构时已删)的「已知缺陷」一节里,附着为什么本轮不动它们。
 
 ## v17.1 (2026-07-31) —— 财年认表里的标签,不认文件名;并加一条口径护栏
 
@@ -381,7 +389,7 @@ Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'xlsx' imported from
 
 ### 2. `TSM-US ✖FY2`:失败了,但台账里那行写着 OK
 
-同一轮里 TSM 的 FY2 打了 ✖,提示「详见 sources.txt」,而 sources.txt 里那行是
+同一轮里 TSM 的 FY2 打了 ✖,提示「详见 sources 文本」,而那份 sources 文本里那行是
 `OK | TSM-US · 估值历史 FY2 | ... | 2026-07-29`——上一轮留下的。日志里连一行 FY2 都没有。
 
 翻代码找到了:那一轮页面上的财年标签(`Jul '26E` 那一格)没读出来,`p0` 是 `null`,

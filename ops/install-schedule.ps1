@@ -1,9 +1,10 @@
-﻿# 注册两个 Windows 计划任务(S7)。时刻的唯一出处在这里;collect 的数据集节奏另见 config/params.json。
+﻿# 注册两个 Windows 计划任务(S7)。时刻只在 config/params.json § run(S9 起从那里读)。
 # 用法:右键「使用 PowerShell 运行」,或在 PowerShell 里: powershell -ExecutionPolicy Bypass -File ops\install-schedule.ps1
 # 时间按本机时区;电脑时区应为美东。勾选了「唤醒计算机运行」:电脑可以睡眠,但不能关机;电源选项里要允许唤醒定时器。
-$MainAt = '17:45'   # 收盘后:拉取 → 计算 → 交接,赶在 Research OS EVENING(20:53)之前
-$OiAt   = '06:30'   # 次日:补读收盘 OI → 重算 → 交接,赶在 Research OS MORNING(07:52)之前
 $repo = Split-Path -Parent $PSScriptRoot
+$run = (Get-Content (Join-Path $repo 'config\params.json') -Raw -Encoding UTF8 | ConvertFrom-Json).run
+$MainAt = $run.daily_at_et       # 收盘后:拉取 → 计算 → 交接,赶在 Research OS EVENING 之前
+$OiAt   = $run.options_oi_at_et  # 次日:补读收盘 OI → 重算 → 交接,赶在 Research OS MORNING 之前
 $ps = (Get-Command powershell.exe).Source
 $script = Join-Path $repo 'ops\run-scheduled.ps1'
 $user = "$env:USERDOMAIN\$env:USERNAME"
