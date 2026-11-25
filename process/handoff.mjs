@@ -16,10 +16,10 @@ export function symbolSummary(levels, valuation) {
     nearest_resistance: pick(res[0]), nearest_support: pick(sup[0]),
     confluence_zones: levels.zones.filter(z => z.confluence).map(z => ({ lo: z.lo, hi: z.hi, role: z.role, distance_pct: z.distance_pct, sources: z.sources })),
     options_oi_basis: levels.options?.oi_basis ?? null, options_asof: levels.options?.asof ?? null,
-    valuation: valuation?.applicable
+    valuation: !valuation ? null : valuation.applicable
       ? { range: valuation.range, upside_pct: valuation.upside_pct, hold_pe: valuation.hold_pe, regime_gap: valuation.regime_gap, pe_now: valuation.now.pe_ntm, pe_pctile_3y: valuation.now.pe_pctile_3y,
           pe_pctile_10y: valuation.now.pe_pctile_10y, forward_eps_mean: valuation.forward_eps.mean, sell_side_median: valuation.checks.sell_side_12m?.median ?? null }
-      : { not_applicable: valuation?.reason || '缺数据' },
+      : { not_applicable: valuation.reason || '缺数据' },
   };
 }
 /** 与上一份比:估值中性值变动 ≥ minPct%、最近压力/支撑换了价位、共振区数量变化 */
