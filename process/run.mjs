@@ -13,17 +13,19 @@ import { buildLevels } from './levels.mjs';
 import { buildValuation } from './valuation.mjs';
 import { buildHandoff, symbolSummary, newsFeed, revisionReading, brokerChanges, shortReading, breadthSummary } from './handoff.mjs';
 
-const params = loadParams(), universe = loadUniverse(), asof = marketDate();
+const params = loadParams(), universe = loadUniverse();
+let asof = marketDate();   // 先用纽约日期;下面改成价格数据里最新的交易日(午夜后跑也不会标成第二天)
 const only = (process.argv.find(a => a.startsWith('--symbols=')) || '').split('=')[1]?.split(',');
 const read = (ds, name) => readCsvFile(rawFile(RAW_DIR, ds, name)).rows;
 const writeJson = (f, o) => atomicWrite(f, JSON.stringify(o, null, 1) + '\n');
 const readJson = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 
-const summaries = {}, feedInputs = {};
+const summaries = {}, feedInputs = {}, priceDates = [];
 for (const e of universe.filter(u => ['company', 'etf'].includes(u.kind) && (!only || only.includes(u.symbol)))) {
   const prices = read('prices', e.symbol);
   const spot = Number(prices.at(-1)?.close);
   if (!(spot > 0)) { console.log(`  ✘ ${e.symbol} 没有价格`); continue; }
+  if (prices.at(-1)?.date) priceDates.push(prices.at(-1).date);
   const dir = path.join(RAW_DIR, 'options', e.symbol);
   let days = []; try { days = fs.readdirSync(dir).filter(f => /^\d{4}-\d{2}-\d{2}\.csv$/.test(f)).sort(); } catch {}
   const optAsof = days.at(-1)?.slice(0, 10);
@@ -43,6 +45,7 @@ for (const e of universe.filter(u => ['company', 'etf'].includes(u.kind) && (!on
   const v = va?.applicable ? `估值 ${va.range.bear}/${va.range.base}/${va.range.bull}` : va ? `估值不适用:${va.reason}` : '';
   console.log(`  ✔ ${e.symbol} 现价 ${spot} · ${lv.levels.length} 个价位 · ${lv.zones.filter(z => z.confluence).length} 个共振区 · ${v}`);
 }
+if (priceDates.length) asof = priceDates.sort().at(-1);
 if (!only) {
   const latestFile = path.join(HANDOFF_DIR, 'latest.json');
   const prev = readJson(latestFile);

@@ -27,7 +27,7 @@
 | consensus | `consensus/<代码>.csv`:每天一行,EPS NQ/FY1–FY4 的均值/最低/最高/标准差/家数,收入,目标价 | date | 合并 |
 | valuation | `valuation/<代码>.csv`:月末 pe_ntm, price, eps_ntm(10 年) | date | 合并 |
 | estimates | `estimates/<代码> FY1.csv`、`FY2.csv`:5 年月度一致预期 + P/E、PEG;`fiscal_period` 为财年标签 | date | 整表替换 |
-| targets | `targets/<代码> history.csv`(月度一致)、`<代码> brokers.csv`(逐家,首行 `Mean` 为均值) | date / 当日 | 合并 / 替换 |
+| targets | `targets/<代码> history.csv`(月度一致)、`<代码> brokers.csv`(逐家:broker, analyst, rating_date, rating, price_on_rating_date, tgt_price_date, tgt_price, price_on_tgt_price_date, tgt_price_implied_return_pct, asof;首行 `Mean` 为均值) | date / 当日 | 合并 / 替换 |
 | ownership | `ownership/<代码>.csv`:机构/内部人/流通盘 %、short_pct_float、short_days、shares_os | date | 合并 |
 | news | `news/<代码>.csv`:id, datetime(美东), headline, subjects, primary_symbols, body | id | 合并;`legacy:` 开头为旧版只有标题的 |
 | guidance / surprise | `guidance/<代码>.csv`、`surprise/<代码>.csv` | — | 替换 |
@@ -43,14 +43,14 @@
 ## handoff
 `latest.json` = 最新一份;`<日期>.json` = 当天归档;`previous.json` = 上一交易日(用于算变化)。`schema` 取 `config/params.json § handoff.schema`。
 ```
-{ id: 内容哈希前 12 位(内容不变则不变), schema: "prd-handoff/2", asof, generated_at,
+{ id: 内容哈希前 12 位(内容不变则不变), schema: "prd-handoff/2", asof(价格数据里最新的交易日), generated_at,
   basis: { source, time, unit, nearest_resistance, nearest_support, confluence_zones, valuation },   // 2 起:入账字段(来源、时间、单位、口径),文字在 process/handoff.mjs § BASIS
   symbols: { <代码>: { spot, nearest_resistance, nearest_support, confluence_zones[], options_oi_basis, options_asof,
                        valuation: { range{bear,base,bull}, upside_pct, hold_pe, regime_gap, pe_now, pe_pctile_3y, pe_pctile_10y,
                                     forward_eps_mean, sell_side_median } | { not_applicable } } },
   feeds: { <代码>: {                                   // 2 起:上一个包之后的新增读数
     news: [ { id, datetime_et, headline, subjects, summary(截断,不带全文), source } ],
-    revisions: { asof, unit, basis, eps_fy1, eps_fy1_30d_pct, eps_fy1_n, eps_fy2, eps_fy2_30d_pct, eps_nq, eps_nq_30d_pct,
+    revisions: { asof, unit, basis, eps_fy1, eps_fy1_30d_pct, eps_fy1_30d_abs, eps_fy1_n, eps_fy2, eps_fy2_30d_pct, eps_fy2_30d_abs, eps_nq, eps_nq_30d_pct, eps_nq_30d_abs,
                  target_mean, target_30d_pct, target_n },          // 只有 company
     broker_changes: [ { broker, rating, rating_date, target, target_date } ],   // 只有 company
     short: { asof, unit, basis, short_days, short_pct_float, prev{asof, short_days, short_pct_float} } } },  // 只有 company

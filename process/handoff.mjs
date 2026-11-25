@@ -58,19 +58,27 @@ export function newsFeed(rows, { since, prevIds = [], max, chars }) {
       summary: String(r.body || '').replace(/\s+/g, ' ').slice(0, chars), source: 'FactSet StreetAccount' }));
 }
 /** 一致预期修订:最新一行的 30 天变化(同源序列) */
+/** 30 天变化:正负号相同且基数非零才给 %;亏损转盈或反之只给绝对变化(避免 -2308% 这类无意义的百分比) */
+export function rev(a, b) {
+  if (!isFinite(a) || !isFinite(b) || a === null || b === null) return { pct: null, abs: null };
+  const abs = r2(a - b);
+  return { pct: a > 0 && b > 0 ? pct(a, b) : null, abs };
+}
 export function revisionReading(cons) {
   if (!cons) return null;
   const f = k => num(cons[k]);
-  return { asof: cons.date, unit: 'EPS 为报价币种;变化为 %', basis: 'FactSet 一致预期均值,对比 30 天前同一口径',
-    eps_fy1: f('eps_fy1'), eps_fy1_30d_pct: pct(f('eps_fy1'), f('eps_fy1_30d')), eps_fy1_n: f('eps_fy1_n'),
-    eps_fy2: f('eps_fy2'), eps_fy2_30d_pct: pct(f('eps_fy2'), f('eps_fy2_30d')),
-    eps_nq: f('eps_nq'), eps_nq_30d_pct: pct(f('eps_nq'), f('eps_nq_30d')),
+  const e1 = rev(f('eps_fy1'), f('eps_fy1_30d')), e2 = rev(f('eps_fy2'), f('eps_fy2_30d')), eq = rev(f('eps_nq'), f('eps_nq_30d'));
+  return { asof: cons.date, unit: 'EPS 为报价币种;_pct 为 %,_abs 为 EPS 绝对变化(正负号翻转或非正时只给 _abs)', basis: 'FactSet 一致预期均值,对比 30 天前同一口径',
+    eps_fy1: f('eps_fy1'), eps_fy1_30d_pct: e1.pct, eps_fy1_30d_abs: e1.abs, eps_fy1_n: f('eps_fy1_n'),
+    eps_fy2: f('eps_fy2'), eps_fy2_30d_pct: e2.pct, eps_fy2_30d_abs: e2.abs,
+    eps_nq: f('eps_nq'), eps_nq_30d_pct: eq.pct, eps_nq_30d_abs: eq.abs,
     target_mean: f('target_mean'), target_30d_pct: pct(f('target_mean'), f('target_30d')), target_n: f('target_n') };
 }
 /** 券商目标价/评级:日期晚于 since 的逐家变动 */
 export function brokerChanges(brokers, since) {
-  return brokers.filter(r => r.broker && r.broker !== 'Mean' && (isoDate(r.tgt_date) > since || isoDate(r.rtg_date) > since))
-    .map(r => ({ broker: r.broker, rating: r.rtg || null, rating_date: isoDate(r.rtg_date) || null, target: num(r.tgt_price), target_date: isoDate(r.tgt_date) || null }));
+  /* 列名见 schema/README.md § raw 的 targets 行 */
+  return brokers.filter(r => r.broker && r.broker !== 'Mean' && r.broker !== 'Excluded' && (isoDate(r.tgt_price_date) > since || isoDate(r.rating_date) > since))
+    .map(r => ({ broker: r.broker, rating: r.rating || null, rating_date: isoDate(r.rating_date) || null, target: num(r.tgt_price), target_date: isoDate(r.tgt_price_date) || null }));
 }
 /** 空头:最新一行与上一行 */
 export function shortReading(rows) {

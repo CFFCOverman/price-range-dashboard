@@ -86,3 +86,7 @@
 {"ts": "20261125T054500Z", "file": "process/handoff.mjs", "why": "补记快照:basis 改动前的版本(取自提交 0826a82;改前漏拍,事后补)"}
 {"ts": "20261125T054500Z", "file": "schema/README.md", "why": "补记快照:basis 改动前的版本(取自提交 0826a82;改前漏拍,事后补)"}
 {"ts": "20261125T054500Z", "file": "CHANGELOG.md", "why": "补记快照:basis 改动前的版本(取自提交 0826a82;改前漏拍,事后补)"}
+{"ts": "20261125T055632Z", "file": "process/handoff.mjs", "why": "首份交接包 2 实测修正:券商列名、asof 取数据日期、修订遇正负号翻转不算 %"}
+{"ts": "20261125T055632Z", "file": "process/run.mjs", "why": "首份交接包 2 实测修正:券商列名、asof 取数据日期、修订遇正负号翻转不算 %"}
+{"ts": "20261125T055632Z", "file": "tests/test-process.mjs", "why": "首份交接包 2 实测修正:券商列名、asof 取数据日期、修订遇正负号翻转不算 %"}
+{"ts": "20261125T055632Z", "file": "schema/README.md", "why": "首份交接包 2 实测修正:券商列名、asof 取数据日期、修订遇正负号翻转不算 %"}

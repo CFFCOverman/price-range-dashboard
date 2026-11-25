@@ -77,7 +77,9 @@ t('交接包 2:新闻按 id 去重、只取 since 之后、截断摘要', () => 
 t('交接包 2:修订、券商变动、空头、广度与变化阈值', () => {
   const rv = H.revisionReading({ date: '2026-11-24', eps_fy1: '10.5', eps_fy1_30d: '10', eps_fy2: '12', eps_fy2_30d: '12', target_mean: '110', target_30d: '100' });
   assert.equal(rv.eps_fy1_30d_pct, 5); assert.equal(rv.target_30d_pct, 10);
-  const bc = H.brokerChanges([{ broker: 'Mean' }, { broker: 'GS', tgt_date: '11/24/2026', tgt_price: '120', rtg: 'Buy' }, { broker: 'MS', tgt_date: '2026-10-01' }], '2026-11-23');
+  const flip = H.revisionReading({ date: 'd', eps_fy1: '0.41', eps_fy1_30d: '-0.02' });
+  assert.equal(flip.eps_fy1_30d_pct, null); assert.equal(flip.eps_fy1_30d_abs, 0.43);
+  const bc = H.brokerChanges([{ broker: 'Mean' }, { broker: 'GS', tgt_price_date: '11/24/2026', tgt_price: '120', rating: 'Buy' }, { broker: 'MS', tgt_price_date: '2026-10-01' }], '2026-11-23');
   assert.deepEqual(bc.map(b => [b.broker, b.target_date]), [['GS', '2026-11-24']]);
   const sh = H.shortReading([{ date: 'a', short_pct_float: '2', short_days: '1' }, { date: 'b', short_pct_float: '2.5', short_days: '1.2' }]);
   const br = H.breadthSummary([{ date: 'd', eps_ntm: '2', eps_ntm_30d: '1', up_fy1: '3', down_fy1: '1' }, { date: 'd', eps_ntm: '1', eps_ntm_30d: '2', up_fy1: '0', down_fy1: '2' }]);
