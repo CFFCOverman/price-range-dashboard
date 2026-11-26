@@ -15,6 +15,16 @@ import { toCsv, atomicWrite, loadState } from '../collect/lib/store.mjs';
 import { validateUniverse, UNIVERSE_COLS } from './universe.mjs';
 
 const PORT = Number(process.env.PRD_CONSOLE_PORT || 5179);
+const URL_HOME = `http://127.0.0.1:${PORT}`;
+/** 服务起来后才开浏览器(之前 bat 先开浏览器、服务还没监听 → 拒绝连接);重启时不重复开 */
+function openBrowser() {
+  if (process.env.PRD_CONSOLE_NO_OPEN) return;
+  const cmd = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', URL_HOME]] : process.platform === 'darwin' ? ['open', [URL_HOME]] : ['xdg-open', [URL_HOME]];
+  try { spawn(cmd[0], cmd[1], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref(); } catch {}
+}
+/* 任何漏网的异常只记日志,不让服务退出(服务一退,刷新就是「拒绝连接」) */
+process.on('uncaughtException', e => console.error('[控制台] 未捕获异常:', e?.stack || e));
+process.on('unhandledRejection', e => console.error('[控制台] 未处理的 Promise 拒绝:', e?.stack || e));
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const readJson = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 
@@ -26,6 +36,7 @@ function startJob(steps) {
   const run = (i) => {
     if (i >= steps.length) { job.code = 0; job.finished_at = new Date().toISOString(); return; }
     const p = spawn(process.execPath, steps[i], { cwd: ROOT, env: process.env });
+    p.on('error', e => { job.log.push(`启动失败:${e.message}`); job.code = 1; job.finished_at = new Date().toISOString(); });
     const push = d => { for (const l of String(d).split(/\r?\n/)) if (l.trim()) job.log.push(l); if (job.log.length > 2000) job.log.splice(0, job.log.length - 2000); };
     p.stdout.on('data', push); p.stderr.on('data', push);
     p.on('close', code => { job.log.push(`— ${steps[i].join(' ')} 结束,退出码 ${code}`); if (code && i < steps.length - 1 && steps[i][0].includes('collect')) { /* 拉取有失败仍然继续计算 */ } run(i + 1); });
@@ -82,7 +93,7 @@ const routes = {
 };
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
-http.createServer(async (req, res) => {
+const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
   const send = (status, obj, type = 'application/json; charset=utf-8') => { res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store' }); res.end(type.startsWith('application/json') ? JSON.stringify(obj) : obj); };
   try {
@@ -96,5 +107,11 @@ http.createServer(async (req, res) => {
     const f = path.join(PUBLIC, url.pathname === '/' ? 'index.html' : path.normalize(url.pathname).replace(/^([/\\])+/, ''));
     if (f.startsWith(PUBLIC) && fs.existsSync(f) && fs.statSync(f).isFile()) return send(200, fs.readFileSync(f), MIME[path.extname(f)] || 'application/octet-stream');
     send(404, { error: 'not found' });
-  } catch (e) { send(500, { error: String(e.message || e) }); }
-}).listen(PORT, '127.0.0.1', () => console.log(`控制台:http://127.0.0.1:${PORT}  (数据目录 ${OUT_DIR})`));
+  } catch (e) { if (!res.headersSent) send(500, { error: String(e.message || e) }); else res.end(); }
+});
+server.on('clientError', (e, sock) => { try { sock.end('HTTP/1.1 400 Bad Request\r\n\r\n'); } catch {} });
+server.on('error', e => {
+  if (e.code === 'EADDRINUSE') { console.log(`端口 ${PORT} 已被占用:控制台可能已经开着,直接打开 ${URL_HOME}`); openBrowser(); setTimeout(() => process.exit(0), 500); }
+  else { console.error('[控制台] 服务出错:', e); process.exit(1); }
+});
+server.listen(PORT, '127.0.0.1', () => { console.log(`控制台:${URL_HOME}  (数据目录 ${OUT_DIR})`); openBrowser(); });

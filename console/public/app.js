@@ -10,16 +10,33 @@ const load = t => ({ levels: loadLevels, universe: loadUniverse, status: loadSta
 
 /* ---------- 价位与估值 ---------- */
 async function loadLevels() {
-  if (!$('#symSel').options.length) {
-    for (const u of universe.filter(u => ['company', 'etf'].includes(u.kind))) $('#symSel').add(new Option(`${u.symbol} ${u.name || ''}`, u.symbol));
-    $('#symSel').onchange = showSymbol;
+  const sel = $('#symSel'), want = universe.filter(u => ['company', 'etf'].includes(u.kind));
+  if (sel.options.length !== want.length) {   // 清单改过就重建下拉框
+    const keep = sel.value; sel.innerHTML = '';
+    for (const u of want) sel.add(new Option(`${u.symbol} ${u.name || ''}`, u.symbol));
+    if (keep && want.some(u => u.symbol === keep)) sel.value = keep;
   }
+  sel.onchange = showSymbol;
   showSymbol();
 }
+let symSeq = 0;   // 只渲染最后一次点击的结果(快速切换时旧请求后到,不能覆盖新的)
 async function showSymbol() {
   const s = $('#symSel').value; if (!s) return;
-  const { levels: L, valuation: V } = await api(`/api/symbol?s=${encodeURIComponent(s)}`);
-  if (!L) { $('#ladder').textContent = '还没有计算结果:去「运行」点「只重算」。'; return; }
+  const my = ++symSeq;
+  $('#symMeta').textContent = `${s} 读取中…`;
+  try {
+    const { levels: L, valuation: V } = await api(`/api/symbol?s=${encodeURIComponent(s)}&t=${Date.now()}`);
+    if (my !== symSeq) return;
+    renderSymbol(s, L, V);
+  } catch (e) {
+    if (my !== symSeq) return;
+    $('#symMeta').innerHTML = `<span class="warn">${s} 显示失败:${e.message}(数据可能正在写入或 G 盘正在同步,稍后再点一次)</span>`;
+    console.error(e);
+  }
+}
+function renderSymbol(s, L, V) {
+  $('#ladder').innerHTML = ''; $('#lvTable').innerHTML = ''; $('#valChart').innerHTML = ''; $('#valTable').innerHTML = '';
+  if (!L) { $('#symMeta').textContent = ''; $('#ladder').textContent = `${s} 还没有计算结果:去「运行」点「只重算」。`; return; }
   $('#symMeta').textContent = `现价 ${fmt(L.spot)} · 计算于 ${L.asof} · 期权 ${L.options ? `${L.options.asof}(OI:${{ eod: '收盘确认', mixed: '部分收盘', evening: '当晚读数' }[L.options.oi_basis]})` : '无'}`;
   drawLadder(L);
   $('#lvTable').innerHTML = '<tr><th>价位</th><th>距现价</th><th>类型</th><th>来源</th><th>强度</th><th>ΔOI</th></tr>' + L.levels.map(l =>

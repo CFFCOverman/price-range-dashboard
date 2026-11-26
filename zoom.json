@@ -2,7 +2,7 @@
  "zoom": "2.0",
  "generated": {
   "by": "skill-starmap/tools/zoomgen.py",
-  "at": "2026-11-25",
+  "at": "2026-11-26",
   "from": [
    "CHANGELOG.md",
    "LICENSE",
@@ -206,7 +206,7 @@
    "layer": 1,
    "kind": "dir",
    "title": "console · 控制台",
-   "role": "你:双击仓库根的 console.bat(或 npm run console),浏览器打开 （链接）",
+   "role": "你:双击仓库根的 console.bat(或 npm run console),服务起来后自动打开 （链接） G 盘还没挂好)会在 3 秒后自动重启,所以页面显示「拒绝连接」时等几秒刷新即可;关掉黑窗口才是真正停止。",
    "source": "console/README.md",
    "head": "console/README.md",
    "sections": [
@@ -386,6 +386,10 @@
     {
      "level": 2,
      "title": "2026-11-25 · 交接包 2(配合 Research OS 7.2.0)"
+    },
+    {
+     "level": 2,
+     "title": "2026-11-26 · 控制台修复"
     },
     {
      "level": 2,
@@ -1210,15 +1214,21 @@
   },
   {
    "from": "price-range-dashboard:CHANGELOG.md",
+   "to": "price-range-dashboard:console.bat",
+   "kind": "mention",
+   "source": "CHANGELOG.md:23"
+  },
+  {
+   "from": "price-range-dashboard:CHANGELOG.md",
    "to": "price-range-dashboard:tests/",
    "kind": "mention",
-   "source": "CHANGELOG.md:820"
+   "source": "CHANGELOG.md:825"
   },
   {
    "from": "price-range-dashboard:CHANGELOG.md",
    "to": "price-range-dashboard:package.json",
    "kind": "mention",
-   "source": "CHANGELOG.md:821"
+   "source": "CHANGELOG.md:826"
   },
   {
    "from": "price-range-dashboard",
