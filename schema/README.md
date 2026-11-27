@@ -1,7 +1,7 @@
 # schema · 数据存储类型(唯一出处)
 
 > 本文件定义 G 盘上每类数据**放在哪、长什么样、口径是什么**。代码与其他文档只引用这里的节名,不复述字段。
-> 数据目录由 `config/assets-path.txt` 指定(当前 `G:\My Drive\PriceRangeDashboard\Assets`),规则见 `collect/lib/paths.mjs`。
+> 数据目录由 `config/assets-path.txt` 指定,没写时自动识别 Google Drive(Windows `G:\My Drive\PriceRangeDashboard\Assets`;macOS `~/Library/CloudStorage/GoogleDrive-<账号>/My Drive/PriceRangeDashboard/Assets`),规则见 `collect/lib/paths.mjs`。
 
 ## 分区
 | 区 | 谁写 | 谁读 | 内容 |

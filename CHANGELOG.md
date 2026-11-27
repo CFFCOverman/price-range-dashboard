@@ -23,6 +23,12 @@ Author: Xuhao Chao · License: MIT
 - 「拒绝连接」:`console.bat` 原先在服务监听前就开浏览器;服务一旦退出(开机时 G 盘没挂好、端口被占、漏网异常)刷新也连不上。改为服务监听后再开浏览器,bat 循环在退出后 3 秒自动重启,端口已占用时只开浏览器,漏网异常只记日志不退出。
 - 切换标的不刷新:快速切换时旧请求后到会覆盖新结果,渲染中途报错会留下上一只的内容。改为只渲染最后一次请求、先清空再画、出错时在页面上提示;清单改过后下拉框自动重建。
 
+## 2026-11-27 · 抓取完自动开控制台;macOS 版本
+- `run-collect.bat` 跑完自动打开控制台(另开窗口;已开着时只打开浏览器)。
+- macOS:`run-collect.command`、`console.command`、`ops/login.command` 可在 Finder 双击;`ops/install-schedule-mac.sh` 注册 launchd 计划任务(时刻读 `params.run`),`run-scheduled.sh` 失败时发系统通知。
+- 数据目录自动识别:没有 `assets-path.txt` 时按系统找 Google Drive 标准位置;`assets-path.txt` 可写多行候选,取第一个存在的(Windows 与 Mac 可共用一份)。
+- 测试 +1(collect 共 20 项)。
+
 以下为重构前的历史版本。
 
 ## v18.0 (2026-08-06) —— 压力位引擎按持有期重写;一个偷看未来的期权墙;以及一次什么都没搜到的调参

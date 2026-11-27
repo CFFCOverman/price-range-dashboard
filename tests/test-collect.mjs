@@ -134,4 +134,18 @@ t('期权:旧单文件拆成按天文件、按保留期删、收盘 OI 回填', 
   const r = applyEodOi(rows, kept, new Map([['C100', 9.4], ['P100', 11]]), 'T');
   assert.equal(r.matched, 1); assert.equal(r.rows[0].call_oi_eod, 9); assert.equal(r.rows[1].call_oi_eod || '', '');
 });
+const P = await import('../collect/lib/paths.mjs');
+t('数据目录:assets-path 多行取第一个存在的;都不在就报错;没有文件时用自动识别的云盘位置', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prd-')), f = path.join(dir, 'ap.txt');
+  fs.writeFileSync(f, '# 注释\n' + path.join(dir, 'nope') + '\n' + dir + '\n');
+  assert.equal(P.resolveOutDir({}, [f], []), dir);
+  fs.writeFileSync(f, path.join(dir, 'nope') + '\n');
+  assert.throws(() => P.resolveOutDir({}, [f], []), /都不存在/);
+  assert.equal(P.resolveOutDir({}, [], [path.join(dir, 'x'), dir]), dir);
+  assert.equal(P.resolveOutDir({ FS_OUT: '/z' }, [f], []), '/z');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'home-'));
+  fs.mkdirSync(path.join(home, 'Library', 'CloudStorage', 'GoogleDrive-a@b.com'), { recursive: true });
+  assert.match(P.driveCandidates('darwin', home)[0], /GoogleDrive-a@b\.com[\\/]My Drive[\\/]PriceRangeDashboard[\\/]Assets$/);
+  assert.match(P.driveCandidates('win32')[0], /^G:\\My Drive\\PriceRangeDashboard\\Assets$/);
+});
 console.log(`collect 自检 ${n} 项全部通过`);

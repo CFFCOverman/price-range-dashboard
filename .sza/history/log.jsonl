@@ -96,3 +96,10 @@
 {"ts": "20261126T154533Z", "file": "console/public/app.js", "why": "控制台修复:启动竞态与崩溃后拒绝连接;切换标的不刷新(请求乱序、渲染报错)"}
 {"ts": "20261126T154533Z", "file": "console/README.md", "why": "控制台修复:启动竞态与崩溃后拒绝连接;切换标的不刷新(请求乱序、渲染报错)"}
 {"ts": "20261126T154533Z", "file": "CHANGELOG.md", "why": "控制台修复:启动竞态与崩溃后拒绝连接;切换标的不刷新(请求乱序、渲染报错)"}
+{"ts": "20261127T230140Z", "file": "run-collect.bat", "why": "抓取完自动开控制台;macOS 版本(自动识别云盘位置、.command 入口、launchd 计划任务)"}
+{"ts": "20261127T230140Z", "file": "collect/lib/paths.mjs", "why": "抓取完自动开控制台;macOS 版本(自动识别云盘位置、.command 入口、launchd 计划任务)"}
+{"ts": "20261127T230140Z", "file": "ops/README.md", "why": "抓取完自动开控制台;macOS 版本(自动识别云盘位置、.command 入口、launchd 计划任务)"}
+{"ts": "20261127T230140Z", "file": "README.md", "why": "抓取完自动开控制台;macOS 版本(自动识别云盘位置、.command 入口、launchd 计划任务)"}
+{"ts": "20261127T230140Z", "file": "schema/README.md", "why": "抓取完自动开控制台;macOS 版本(自动识别云盘位置、.command 入口、launchd 计划任务)"}
+{"ts": "20261127T230140Z", "file": "CHANGELOG.md", "why": "抓取完自动开控制台;macOS 版本(自动识别云盘位置、.command 入口、launchd 计划任务)"}
+{"ts": "20261127T230140Z", "file": "tests/test-collect.mjs", "why": "抓取完自动开控制台;macOS 版本(自动识别云盘位置、.command 入口、launchd 计划任务)"}

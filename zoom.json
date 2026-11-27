@@ -2,7 +2,7 @@
  "zoom": "2.0",
  "generated": {
   "by": "skill-starmap/tools/zoomgen.py",
-  "at": "2026-11-26",
+  "at": "2026-11-27",
   "from": [
    "CHANGELOG.md",
    "LICENSE",
@@ -37,6 +37,7 @@
    "config/params.json",
    "config/universe.seed.csv",
    "console.bat",
+   "console.command",
    "console/README.md",
    "console/public/app.css",
    "console/public/app.js",
@@ -44,9 +45,13 @@
    "console/server.mjs",
    "console/universe.mjs",
    "ops/README.md",
+   "ops/install-schedule-mac.sh",
    "ops/install-schedule.ps1",
    "ops/login.bat",
+   "ops/login.command",
    "ops/run-scheduled.ps1",
+   "ops/run-scheduled.sh",
+   "ops/uninstall-schedule-mac.sh",
    "ops/uninstall-schedule.ps1",
    "package-lock.json",
    "package.json",
@@ -56,6 +61,7 @@
    "process/run.mjs",
    "process/valuation.mjs",
    "run-collect.bat",
+   "run-collect.command",
    "schema/README.md",
    "tests/test-collect.mjs",
    "tests/test-parsers.mjs",
@@ -229,7 +235,7 @@
    "layer": 1,
    "kind": "dir",
    "title": "ops · 运维",
-   "role": "你做:装一次计划任务;登录过期时(会弹系统通知)双击 login.bat。",
+   "role": "你做:装一次计划任务;登录过期时(会弹系统通知)双击 login.bat(macOS:login.command)。",
    "source": "ops/README.md",
    "head": "ops/README.md",
    "sections": [
@@ -243,7 +249,11 @@
     },
     {
      "level": 2,
-     "title": "装"
+     "title": "装(Windows)"
+    },
+    {
+     "level": 2,
+     "title": "装(macOS)"
     }
    ],
    "defines": [
@@ -390,6 +400,10 @@
     {
      "level": 2,
      "title": "2026-11-26 · 控制台修复"
+    },
+    {
+     "level": 2,
+     "title": "2026-11-27 · 抓取完自动开控制台;macOS 版本"
     },
     {
      "level": 2,
@@ -663,7 +677,7 @@
    "layer": 3,
    "kind": "file",
    "title": "LICENSE",
-   "role": "文件:run-collect.bat(手动跑一轮:拉取到期项 → 计算 → 交接)· console.bat · package.json · package-lock.json(依赖锁定) · CHANGELOG.md · LICENSE · PRIVATE_DATA.md(哪些数据不能进 git)· zoom.hints.json(星图的手写边)· zoom.json(星图清单)· .sza/history/(改前快照,_repo/ 不进 git)。",
+   "role": "文件:run-collect.bat / run-collect.command(Windows / macOS 手动跑一轮:拉取到期项 → 计算 → 交接 → 自动打开控制台)· console.bat / console.command(控制台,退出自动重启)· package.json · package-lock.json(依赖锁定) · CHANGELOG.md · LICENSE · PRIVATE_DATA.md(哪些数据不能进 git)· zoom.hints.json(星图的手写边)· zoom.json(星图清单)· .sza/history/(改前快照,_repo/ 不进 git)。",
    "source": "LICENSE",
    "generated": true
   },
@@ -952,6 +966,14 @@
    "source": "console.bat"
   },
   {
+   "id": "price-range-dashboard:console.command",
+   "parent": "price-range-dashboard",
+   "layer": 3,
+   "kind": "file",
+   "title": "console.command",
+   "source": "console.command"
+  },
+  {
    "id": "price-range-dashboard:console/public/app.css",
    "parent": "price-range-dashboard:console/public/",
    "layer": 3,
@@ -995,6 +1017,15 @@
    "source": "console/universe.mjs"
   },
   {
+   "id": "price-range-dashboard:ops/install-schedule-mac.sh",
+   "parent": "price-range-dashboard:ops/",
+   "layer": 3,
+   "kind": "file",
+   "title": "install-schedule-mac.sh",
+   "role": "macOS:注册 / 撤掉两个 launchd 计划任务(`~/Library/LaunchAgents/com.pricerange.*`)",
+   "source": "ops/install-schedule-mac.sh"
+  },
+  {
    "id": "price-range-dashboard:ops/install-schedule.ps1",
    "parent": "price-range-dashboard:ops/",
    "layer": 3,
@@ -1013,6 +1044,15 @@
    "source": "ops/login.bat"
   },
   {
+   "id": "price-range-dashboard:ops/login.command",
+   "parent": "price-range-dashboard:ops/",
+   "layer": 3,
+   "kind": "file",
+   "title": "login.command",
+   "role": "macOS:开窗口登录 FactSet 一次",
+   "source": "ops/login.command"
+  },
+  {
    "id": "price-range-dashboard:ops/run-scheduled.ps1",
    "parent": "price-range-dashboard:ops/",
    "layer": 3,
@@ -1020,6 +1060,24 @@
    "title": "run-scheduled.ps1",
    "role": "计划任务调用的入口:`FS_HEADLESS=1` 跑 collect 再跑 process(拉取个别失败也照样计算),输出写 `ops/logs/`(留 30 天),失败时弹通知",
    "source": "ops/run-scheduled.ps1"
+  },
+  {
+   "id": "price-range-dashboard:ops/run-scheduled.sh",
+   "parent": "price-range-dashboard:ops/",
+   "layer": 3,
+   "kind": "file",
+   "title": "run-scheduled.sh",
+   "role": "macOS 计划任务调用的入口,做法同 `run-scheduled.ps1`,失败时发系统通知",
+   "source": "ops/run-scheduled.sh"
+  },
+  {
+   "id": "price-range-dashboard:ops/uninstall-schedule-mac.sh",
+   "parent": "price-range-dashboard:ops/",
+   "layer": 3,
+   "kind": "file",
+   "title": "uninstall-schedule-mac.sh",
+   "role": "macOS:注册 / 撤掉两个 launchd 计划任务(`~/Library/LaunchAgents/com.pricerange.*`)",
+   "source": "ops/uninstall-schedule-mac.sh"
   },
   {
    "id": "price-range-dashboard:ops/uninstall-schedule.ps1",
@@ -1138,8 +1196,17 @@
    "layer": 3,
    "kind": "file",
    "title": "run-collect.bat",
-   "role": "[ops/](ops/README.md):Windows 计划任务、登录",
+   "role": "[ops/](ops/README.md):计划任务(Windows / macOS)、登录",
    "source": "run-collect.bat"
+  },
+  {
+   "id": "price-range-dashboard:run-collect.command",
+   "parent": "price-range-dashboard",
+   "layer": 3,
+   "kind": "file",
+   "title": "run-collect.command",
+   "role": "[ops/](ops/README.md):计划任务(Windows / macOS)、登录",
+   "source": "run-collect.command"
   },
   {
    "id": "price-range-dashboard:tests/test-collect.mjs",
@@ -1220,15 +1287,45 @@
   },
   {
    "from": "price-range-dashboard:CHANGELOG.md",
+   "to": "price-range-dashboard:run-collect.bat",
+   "kind": "mention",
+   "source": "CHANGELOG.md:27"
+  },
+  {
+   "from": "price-range-dashboard:CHANGELOG.md",
+   "to": "price-range-dashboard:run-collect.command",
+   "kind": "mention",
+   "source": "CHANGELOG.md:28"
+  },
+  {
+   "from": "price-range-dashboard:CHANGELOG.md",
+   "to": "price-range-dashboard:console.command",
+   "kind": "mention",
+   "source": "CHANGELOG.md:28"
+  },
+  {
+   "from": "price-range-dashboard:CHANGELOG.md",
+   "to": "price-range-dashboard:ops/login.command",
+   "kind": "mention",
+   "source": "CHANGELOG.md:28"
+  },
+  {
+   "from": "price-range-dashboard:CHANGELOG.md",
+   "to": "price-range-dashboard:ops/install-schedule-mac.sh",
+   "kind": "mention",
+   "source": "CHANGELOG.md:28"
+  },
+  {
+   "from": "price-range-dashboard:CHANGELOG.md",
    "to": "price-range-dashboard:tests/",
    "kind": "mention",
-   "source": "CHANGELOG.md:825"
+   "source": "CHANGELOG.md:831"
   },
   {
    "from": "price-range-dashboard:CHANGELOG.md",
    "to": "price-range-dashboard:package.json",
    "kind": "mention",
-   "source": "CHANGELOG.md:826"
+   "source": "CHANGELOG.md:832"
   },
   {
    "from": "price-range-dashboard",
@@ -1249,7 +1346,7 @@
    "from": "price-range-dashboard",
    "to": "price-range-dashboard:CHANGELOG.md",
    "kind": "ref",
-   "source": "README.md:53"
+   "source": "README.md:54"
   },
   {
    "from": "price-range-dashboard:collect/",
@@ -1327,9 +1424,34 @@
   },
   {
    "from": "price-range-dashboard:ops/",
+   "to": "price-range-dashboard:collect/lib/paths.mjs",
+   "kind": "mention",
+   "source": "ops/README.md:30"
+  },
+  {
+   "from": "price-range-dashboard:ops/",
+   "to": "price-range-dashboard:config/assets-path.txt",
+   "kind": "mention",
+   "source": "ops/README.md:30"
+  },
+  {
+   "from": "price-range-dashboard:ops/",
+   "to": "price-range-dashboard:run-collect.command",
+   "kind": "mention",
+   "source": "ops/README.md:32"
+  },
+  {
+   "from": "price-range-dashboard:ops/",
+   "to": "price-range-dashboard:console.command",
+   "kind": "mention",
+   "source": "ops/README.md:32",
+   "n": 2
+  },
+  {
+   "from": "price-range-dashboard:ops/",
    "to": "price-range-dashboard:console.bat",
    "kind": "mention",
-   "source": "ops/README.md:25"
+   "source": "ops/README.md:35"
   },
   {
    "from": "price-range-dashboard:process/",
